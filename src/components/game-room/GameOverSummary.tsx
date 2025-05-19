@@ -1,21 +1,30 @@
 
 "use client";
 
-import { type GameRoom, type Player, Role } from "@/lib/types"; // Changed import
+import { type GameRoom, type Player, Role } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, ShieldX } from "lucide-react";
+import { ShieldCheck, ShieldX, RotateCcw } from "lucide-react"; // Added RotateCcw for Play Again
 
 type GameOverSummaryProps = {
   room: GameRoom;
   localPlayers: Player[];
   gameOverMessage: React.ReactNode;
   onReturnToLobby: () => void;
+  isHost: boolean; // Added isHost prop
+  onRestartGame: () => void; // Added onRestartGame prop
 };
 
-export function GameOverSummary({ room, localPlayers, gameOverMessage, onReturnToLobby }: GameOverSummaryProps) {
+export function GameOverSummary({ 
+  room, 
+  localPlayers, 
+  gameOverMessage, 
+  onReturnToLobby,
+  isHost,
+  onRestartGame
+}: GameOverSummaryProps) {
   return (
-    <div className="text-center p-6 bg-green-100 dark:bg-green-900 rounded-lg shadow">
-      <h3 className="text-2xl font-bold text-green-700 dark:text-green-300">游戏结束!</h3>
+    <div className="text-center p-6 bg-card rounded-lg shadow-lg border">
+      <h3 className="text-2xl font-bold text-primary">游戏结束!</h3>
       {gameOverMessage && (<p className="text-lg mt-2">{gameOverMessage}</p>)}
       {room.coachCandidateId && (
         <div className="mt-2 text-sm">
@@ -35,8 +44,14 @@ export function GameOverSummary({ room, localPlayers, gameOverMessage, onReturnT
         <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores?.undercoverWins || 0}</span>
       </div>
       <p className="text-muted-foreground mt-2">感谢您的参与！</p>
-      <Button variant="outline" onClick={onReturnToLobby} className="w-full mt-4 max-w-sm mx-auto">返回大厅</Button>
+      <div className="mt-4 space-y-2 sm:space-y-0 sm:flex sm:gap-2 sm:justify-center">
+        <Button variant="outline" onClick={onReturnToLobby} className="w-full sm:w-auto">返回大厅</Button>
+        {isHost && (
+          <Button onClick={onRestartGame} className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">
+            <RotateCcw className="mr-2 h-4 w-4" /> 再来一局
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
-
