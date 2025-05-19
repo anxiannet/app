@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Role } from "@/lib/types";
+import { type Role, Role } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, ShieldX } from "lucide-react";
 
