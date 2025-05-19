@@ -5,14 +5,14 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge"; // Added Badge import
-import { PlusCircle, Users, LogIn, CheckSquare } from "lucide-react"; // Added CheckSquare for joined badge
-import type { GameRoom, Player } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
+import { PlusCircle, Users, LogIn, CheckSquare } from "lucide-react";
+import { GameRoomStatus, type GameRoom, type Player } from "@/lib/types"; // Ensure GameRoomStatus is a value import
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
-import { cn } from "@/lib/utils"; // Added cn import for conditional styling
+import { cn } from "@/lib/utils";
 
 // Mock function to create a unique room ID
 const createRoomId = () => `room_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -27,17 +27,43 @@ export default function LobbyPage() {
   useEffect(() => {
     if (typeof window !== "undefined") {
       const mockRooms: GameRoom[] = [
-        { id: createRoomId(), name: "神秘大厦", players: [{id: "player1", name: "房主"} as Player], maxPlayers: 10, status: "waiting", hostId: "player1" },
-        { id: createRoomId(), name: "赛博劫案", players: [], maxPlayers: 10, status: "waiting", hostId: "player2" },
+        { id: createRoomId(), name: "神秘大厦", players: [{id: "player1", name: "房主"} as Player], maxPlayers: 10, status: GameRoomStatus.Waiting, hostId: "player1" },
+        { id: createRoomId(), name: "赛博劫案", players: [], maxPlayers: 10, status: GameRoomStatus.Waiting, hostId: "player2" },
       ];
-       // Retrieve rooms from localStorage or use mock
-      const storedRooms = localStorage.getItem("anxian-rooms");
-      if (storedRooms) {
-        setRooms(JSON.parse(storedRooms));
+      
+      let currentRooms: GameRoom[] = [];
+      const storedRoomsRaw = localStorage.getItem("anxian-rooms");
+      if (storedRoomsRaw) {
+        try {
+            currentRooms = JSON.parse(storedRoomsRaw);
+        } catch (e) {
+            console.error("Failed to parse rooms from localStorage, using mock.", e);
+            currentRooms = mockRooms;
+            localStorage.setItem("anxian-rooms", JSON.stringify(currentRooms));
+        }
       } else {
-        setRooms(mockRooms);
-        localStorage.setItem("anxian-rooms", JSON.stringify(mockRooms));
+        currentRooms = mockRooms;
+        localStorage.setItem("anxian-rooms", JSON.stringify(currentRooms));
       }
+
+      // Sorting logic
+      const statusPriority: { [key in GameRoomStatus]: number } = {
+        [GameRoomStatus.InProgress]: 1,
+        [GameRoomStatus.Waiting]: 2,
+        [GameRoomStatus.Finished]: 3,
+      };
+
+      currentRooms.sort((a, b) => {
+        // Sort by status priority
+        const statusDiff = statusPriority[a.status] - statusPriority[b.status];
+        if (statusDiff !== 0) {
+          return statusDiff;
+        }
+        // If status is the same, sort by number of players (descending)
+        return b.players.length - a.players.length;
+      });
+
+      setRooms(currentRooms);
     }
   }, []);
 
@@ -48,17 +74,30 @@ export default function LobbyPage() {
       return;
     }
     const newRoomId = createRoomId();
-    const newRoomName = `房间 ${rooms.length + 1}`; // Simple default name
+    const newRoomName = `房间 ${rooms.length + 1}`; 
     const newRoom: GameRoom = {
       id: newRoomId,
       name: newRoomName,
-      players: [], // Host will join on room page
+      players: [], 
       maxPlayers: 10, 
-      status: "waiting",
+      status: GameRoomStatus.Waiting,
       hostId: user.id,
     };
     
-    const updatedRooms = [...rooms, newRoom];
+    const updatedRooms = [newRoom, ...rooms]; // Add new room to the beginning
+
+     // Sorting logic - re-sort after adding a new room
+    const statusPriority: { [key in GameRoomStatus]: number } = {
+      [GameRoomStatus.InProgress]: 1,
+      [GameRoomStatus.Waiting]: 2,
+      [GameRoomStatus.Finished]: 3,
+    };
+    updatedRooms.sort((a, b) => {
+      const statusDiff = statusPriority[a.status] - statusPriority[b.status];
+      if (statusDiff !== 0) return statusDiff;
+      return b.players.length - a.players.length;
+    });
+
     setRooms(updatedRooms);
     if (typeof window !== "undefined") {
       localStorage.setItem("anxian-rooms", JSON.stringify(updatedRooms));
@@ -103,7 +142,7 @@ export default function LobbyPage() {
                   key={room.id} 
                   className={cn(
                     "hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1",
-                    isUserInRoom && "border-2 border-primary" // Highlight if user is in room
+                    isUserInRoom && "border-2 border-primary" 
                   )}
                 >
                   <CardHeader>
@@ -122,8 +161,13 @@ export default function LobbyPage() {
                       <Users className="mr-2 h-4 w-4" />
                       <span>{room.players.length} / {room.maxPlayers} 玩家</span>
                     </div>
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      状态: <span className={`ml-1 font-semibold ${room.status === 'waiting' ? 'text-yellow-500' : (room.status === 'in-progress' ? 'text-green-500' : 'text-red-500')}`}>{room.status}</span>
+                    <div className="flex items-center text-sm">
+                      状态: <Badge variant={room.status === GameRoomStatus.Waiting ? "outline" : room.status === GameRoomStatus.InProgress ? "default" : "secondary"} className={cn(
+                        "ml-1 font-semibold",
+                        room.status === GameRoomStatus.Waiting && "border-yellow-500 text-yellow-600",
+                        room.status === GameRoomStatus.InProgress && "bg-green-500 text-white",
+                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white"
+                      )}>{room.status.toUpperCase()}</Badge>
                     </div>
                     <Image 
                       src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`} 
@@ -151,4 +195,3 @@ export default function LobbyPage() {
     </div>
   );
 }
-

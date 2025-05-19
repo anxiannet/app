@@ -2,7 +2,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Play, UserPlus } from "lucide-react";
+import { Play, UserPlus, LogOut } from "lucide-react"; // Added LogOut for Return to Lobby
 
 type WaitingPhaseActionsProps = {
   isHost: boolean;
@@ -46,7 +46,9 @@ export function WaitingPhaseActions({
           )}
         </div>
       )}
-      <Button variant="outline" onClick={onReturnToLobby} className="w-full mt-4">返回大厅</Button>
+      <Button variant="outline" onClick={onReturnToLobby} className="w-full mt-4">
+        <LogOut className="mr-2 h-4 w-4" /> 返回大厅
+      </Button>
     </>
   );
 }

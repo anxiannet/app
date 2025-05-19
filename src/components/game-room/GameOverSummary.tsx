@@ -3,15 +3,15 @@
 
 import { type GameRoom, type Player, Role } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, ShieldX, RotateCcw } from "lucide-react"; // Added RotateCcw for Play Again
+import { ShieldCheck, ShieldX, RotateCcw, LogOut } from "lucide-react"; // Added LogOut for Return to Lobby
 
 type GameOverSummaryProps = {
   room: GameRoom;
   localPlayers: Player[];
   gameOverMessage: React.ReactNode;
   onReturnToLobby: () => void;
-  isHost: boolean; // Added isHost prop
-  onRestartGame: () => void; // Added onRestartGame prop
+  isHost: boolean; 
+  onRestartGame: () => void; 
 };
 
 export function GameOverSummary({ 
@@ -45,7 +45,9 @@ export function GameOverSummary({
       </div>
       <p className="text-muted-foreground mt-2">感谢您的参与！</p>
       <div className="mt-4 space-y-2 sm:space-y-0 sm:flex sm:gap-2 sm:justify-center">
-        <Button variant="outline" onClick={onReturnToLobby} className="w-full sm:w-auto">返回大厅</Button>
+        <Button variant="outline" onClick={onReturnToLobby} className="w-full sm:w-auto">
+          <LogOut className="mr-2 h-4 w-4" /> 返回大厅
+        </Button>
         {isHost && (
           <Button onClick={onRestartGame} className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">
             <RotateCcw className="mr-2 h-4 w-4" /> 再来一局
