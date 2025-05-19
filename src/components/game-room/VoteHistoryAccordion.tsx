@@ -4,9 +4,10 @@
 import type { GameRoom, Player, Role, VoteHistoryEntry } from "@/lib/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { History, ThumbsUp, ThumbsDown } from "lucide-react";
+import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GameRoomStatus } from "@/lib/types";
+import { Badge } from "@/components/ui/badge";
 
 type VoteHistoryAccordionProps = {
   room: GameRoom;
@@ -30,8 +31,8 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
         </AccordionTrigger>
         <AccordionContent>
           <ScrollArea className="h-[300px] pr-4">
-            <Accordion 
-              type="multiple" 
+            <Accordion
+              type="multiple"
               className="w-full"
               defaultValue={defaultOpenRound}
             >
@@ -39,11 +40,11 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                 .map(roundNum => {
                   const roundVotes = room.fullVoteHistory!.filter(vh => vh.round === roundNum);
                   const missionForRound = room.missionHistory?.find(m => m.round === roundNum);
-                  
+
                   if (roundVotes.length === 0 && !missionForRound) return null;
-                  
+
                   const attemptCountText = roundVotes.length > 0 ? `（${roundVotes.length}次组队）` : '';
-                  
+
                   let missionOutcomeText = '';
                   if (missionForRound) {
                       missionOutcomeText = missionForRound.outcome === 'success' ? ' - 比赛成功' : (missionForRound.outcome === 'fail' ? ' - 比赛失败' : '');
@@ -62,12 +63,12 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
 
                   return (
                     <AccordionItem value={`round-${roundNum}`} key={`round-history-${roundNum}`}>
-                      <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 场比赛记录{attemptCountText}{missionOutcomeText}</AccordionTrigger>
+                      <AccordionTrigger className="text-md font-medium hover:no-underline text-left">第 {roundNum} 场比赛记录{attemptCountText}{missionOutcomeText}</AccordionTrigger>
                       <AccordionContent>
                         {roundVotes.length > 0 ? roundVotes.map((voteEntry, attemptIdx) => {
                           const captain = localPlayers.find(p => p.id === voteEntry.captainId);
                           const captainDisplay = captain ? `${captain.name}${room.status === GameRoomStatus.Finished && captain.role ? ` (${captain.role})` : ''}` : '未知';
-                          
+
                           const proposedTeamDisplay = voteEntry.proposedTeamIds.map(id => {
                               const player = localPlayers.find(p => p.id === id);
                               return player ? `${player.name}${room.status === GameRoomStatus.Finished && player.role ? ` (${player.role})` : ''}` : '未知';
@@ -77,7 +78,7 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                               <div key={`round-${roundNum}-attempt-${attemptIdx}`} className="mb-4 p-3 border rounded-md bg-muted/20">
                               <p className="font-semibold text-sm">第 {voteEntry.attemptNumberInRound} 次组队尝试 (队长: {captainDisplay})</p>
                               <p className="text-xs mt-1">提议队伍: {proposedTeamDisplay}</p>
-                              <p className="text-xs mt-1">投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
+                              <p className="text-xs mt-1">队伍投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
                               <ul className="mt-2 space-y-1 text-xs list-disc list-inside pl-2">
                                   {voteEntry.votes.map(vote => {
                                   const voter = localPlayers.find(p => p.id === vote.playerId);
@@ -92,8 +93,37 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                               </div>
                           );
                         }) : (
-                          missionForRound && <p className="text-sm text-muted-foreground">本场比赛直接判定: {missionForRound.outcome === 'success' ? '成功' : '失败'}</p>
+                          missionForRound && <p className="text-sm text-muted-foreground">本轮无有效组队投票。</p>
                         )}
+
+                        {missionForRound && room.status === GameRoomStatus.Finished && missionForRound.cardPlays && missionForRound.cardPlays.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-dashed">
+                            <p className="font-semibold text-sm mb-2">比赛牌局详情 (出战队员: {missionForRound.teamPlayerIds.map(id => localPlayers.find(p=>p.id===id)?.name || '未知').join(', ')}):</p>
+                            <ul className="space-y-1 text-xs">
+                              {missionForRound.cardPlays.map((play, playIdx) => {
+                                const player = localPlayers.find(p => p.id === play.playerId);
+                                const playerDisplay = player ? `${player.name} (${player.role || '未知角色'})` : '未知玩家';
+                                return (
+                                  <li key={`mission-play-${roundNum}-${playIdx}`} className="flex items-center">
+                                    {playerDisplay}:
+                                    {play.card === 'success' ?
+                                      <Badge variant="outline" className="ml-2 border-green-500 text-green-600"><ShieldCheck className="mr-1 h-3 w-3"/> 成功</Badge> :
+                                      <Badge variant="destructive" className="ml-2"><ShieldX className="mr-1 h-3 w-3"/> 破坏</Badge>
+                                    }
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        )}
+                         {missionForRound && missionForRound.outcome === 'fail' && (!missionForRound.cardPlays || missionForRound.cardPlays.length === 0) && room.status === GameRoomStatus.Finished && (
+                            <p className="text-sm text-muted-foreground mt-2">比赛失败，但未记录具体牌局信息。</p>
+                        )}
+                        {missionForRound && missionForRound.outcome === 'success' && (!missionForRound.cardPlays || missionForRound.cardPlays.length === 0) && room.status === GameRoomStatus.Finished && (
+                            <p className="text-sm text-muted-foreground mt-2">比赛成功，但未记录具体牌局信息。</p>
+                        )}
+
+
                       </AccordionContent>
                     </AccordionItem>
                   );
