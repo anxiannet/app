@@ -246,6 +246,7 @@ export default function GameRoomPage() {
     toast({ title: `第 ${room.currentRound} 轮任务结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
 
   }, [room, localPlayers, toast]);
+  
 
   // Effect to process mission actions once all human players on mission have acted
   useEffect(() => {
@@ -603,8 +604,11 @@ export default function GameRoomPage() {
           </div>
            {room.status === GameRoomStatus.InProgress && (
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
-              {room.currentRound !== undefined && room.totalRounds !== undefined && <div className="flex items-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> 比赛场次: {room.currentRound} / {room.totalRounds}</div>}
-              {room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && <div className="flex items-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> 本轮队长: {room.captainChangesThisRound + 1} / {room.maxCaptainChangesPerRound}</div>}
+              {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
+                <p>
+                  第{room.currentRound}场比赛，第{room.captainChangesThisRound + 1}次组队
+                </p>
+              )}
               {room.currentPhase && <div className="flex items-center"><ListChecks className="mr-2 h-4 w-4 text-purple-500" /> 当前阶段: {getPhaseDescription(room.currentPhase)}</div>}
                {room.teamScores && (
                 <div className="flex items-center gap-4">
@@ -704,7 +708,7 @@ export default function GameRoomPage() {
 
                 {room.currentPhase === 'team_selection' && !isVirtualCaptain && (
                   <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-center">组建任务队伍 (回合 {room.currentRound})</h3>
+                    <h3 className="text-lg font-semibold text-center">组建任务队伍</h3>
                     <p className="text-center text-muted-foreground">本回合任务需要 <span className="font-bold text-primary">{requiredPlayersForCurrentMission}</span> 名玩家。{isHumanCaptain ? "请选择队员：" : "等待队长选择队员..."}</p>
                     {isHumanCaptain && (<div className="space-y-2 max-h-60 overflow-y-auto p-2 border rounded-md">
                         {localPlayers.map(p => (<div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded">
@@ -715,11 +719,12 @@ export default function GameRoomPage() {
 
                 {room.currentPhase === 'team_voting' && (
                     <div className="space-y-3">
-                        <div className="mb-4 text-center text-sm text-muted-foreground space-y-1 p-2 bg-background/50 rounded-md border">
-                           {room.currentRound !== undefined && room.totalRounds !== undefined && <div className="flex items-center justify-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> 比赛场次: {room.currentRound} / {room.totalRounds}</div>}
-                           {room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && <div className="flex items-center justify-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> 本轮队长: {room.captainChangesThisRound + 1} / {room.maxCaptainChangesPerRound}</div>}
+                        <div className="mb-2 text-center text-sm text-muted-foreground p-2 bg-background/50 rounded-md border">
+                           {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
+                             <p>第{room.currentRound}场比赛，第{room.captainChangesThisRound + 1}次组队</p>
+                           )}
                         </div>
-                        <h3 className="text-lg font-semibold text-center">为队伍投票 (回合 {room.currentRound})</h3>
+                        <h3 className="text-lg font-semibold text-center">为队伍投票</h3>
                         <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{localPlayers.find(p=>p.id === room.currentCaptainId)?.name}</span> 提议以下队伍执行任务:</p>
                         <ul className="text-center font-medium list-disc list-inside bg-muted/30 p-2 rounded-md">{(room.selectedTeamForMission || []).map(playerId => localPlayers.find(p=>p.id === playerId)?.name || '未知玩家').join(', ')}</ul>
                         {votesToDisplay.length > 0 && (<p className="text-xs text-center text-muted-foreground">已投票: {votesToDisplay.filter(v => v.vote === 'approve').length} 同意, {votesToDisplay.filter(v => v.vote === 'reject').length} 拒绝. ({localPlayers.filter(p => !votesToDisplay.some(v => v.playerId === p.id)).length} 人未投票)</p>)}
@@ -778,6 +783,9 @@ export default function GameRoomPage() {
                  <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
               </div>)}
             {room.status === GameRoomStatus.Waiting && (
+              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
+            )}
+             {room.status === GameRoomStatus.Finished && (
               <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
             )}
           </CardContent>
