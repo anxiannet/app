@@ -4,11 +4,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { type PlayerGameRecord, Role, type VoteHistoryEntry } from "@/lib/types";
+import { type PlayerGameRecord, Role, type VoteHistoryEntry, type Mission, type MissionCardPlay } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon } from "lucide-react";
+import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon, CheckCircle2, XCircle } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -50,8 +50,15 @@ export default function GameHistoryPage() {
       const storedRecordsRaw = localStorage.getItem(historyKey);
       if (storedRecordsRaw) {
         const parsedRecords: PlayerGameRecord[] = JSON.parse(storedRecordsRaw);
-        parsedRecords.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
-        setGameRecords(parsedRecords);
+        // Ensure missionHistory and fullVoteHistory are arrays
+        const validatedRecords = parsedRecords.map(record => ({
+            ...record,
+            missionHistory: Array.isArray(record.missionHistory) ? record.missionHistory : [],
+            fullVoteHistory: Array.isArray(record.fullVoteHistory) ? record.fullVoteHistory : [],
+            playersInGame: Array.isArray(record.playersInGame) ? record.playersInGame : [],
+        }));
+        validatedRecords.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
+        setGameRecords(validatedRecords);
       }
     } catch (e) {
       console.error("Failed to load game history from localStorage:", e);
@@ -146,6 +153,52 @@ export default function GameHistoryPage() {
                       </ul>
                     </AccordionContent>
                   </AccordionItem>
+
+                  {record.missionHistory && record.missionHistory.length > 0 && (
+                     <AccordionItem value="mission-history-for-record">
+                        <AccordionTrigger className="text-sm hover:no-underline">
+                            <ListChecks className="mr-2 h-4 w-4 text-muted-foreground" /> 查看本局比赛详情
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <ScrollArea className="max-h-[250px] pr-2">
+                                <div className="space-y-3">
+                                {record.missionHistory.map((mission, missionIdx) => (
+                                    <div key={`mission-${record.gameInstanceId}-${mission.round}-${missionIdx}`} className="p-2 border rounded-md bg-background text-xs">
+                                        <p className="font-semibold">第 {mission.round} 场比赛: 
+                                            <span className={cn("ml-1", mission.outcome === 'success' ? 'text-green-600' : 'text-red-500')}>
+                                            {mission.outcome === 'success' ? '比赛成功' : '比赛失败'}
+                                            </span>
+                                            {mission.outcome === 'fail' && ` (${mission.failCardsPlayed} 张破坏牌)`}
+                                        </p>
+                                        <p className="mt-1">出战队伍:</p>
+                                        <ul className="list-disc list-inside pl-2">
+                                            {mission.teamPlayerIds.map(playerId => {
+                                                const player = record.playersInGame.find(p => p.id === playerId);
+                                                return (
+                                                    <li key={`mission-${mission.round}-player-${playerId}`}>
+                                                        {player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家'}
+                                                        {mission.cardPlays.find(cp => cp.playerId === playerId)?.card === 'fail' && (
+                                                            <Badge variant="destructive" className="ml-1 text-xs px-1 py-0">破坏</Badge>
+                                                        )}
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                         {mission.outcome === 'fail' && mission.cardPlays.filter(cp => cp.card === 'fail').length > 0 && (
+                                            <p className="mt-1">破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
+                                                const player = record.playersInGame.find(p => p.id === cp.playerId);
+                                                return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
+                                            }).join(', ')}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                                </div>
+                            </ScrollArea>
+                        </AccordionContent>
+                     </AccordionItem>
+                  )}
+
                   {record.fullVoteHistory && record.fullVoteHistory.length > 0 && (
                     <AccordionItem value="vote-history-for-record">
                         <AccordionTrigger className="text-sm hover:no-underline">
@@ -154,20 +207,16 @@ export default function GameHistoryPage() {
                         <AccordionContent>
                             <ScrollArea className="h-[200px] pr-2">
                                 {record.fullVoteHistory.reduce((acc, vh) => acc.includes(vh.round) ? acc : [...acc, vh.round], [] as number[])
-                                .sort((a,b) => a - b) // Ensure rounds are sorted numerically
+                                .sort((a,b) => a - b) 
                                 .map(roundNum => {
                                     const roundVotes = record.fullVoteHistory!.filter(vh => vh.round === roundNum);
                                     if (roundVotes.length === 0) return null;
                                     
-                                    const missionForRound = record.playersInGame.length > 0 ? // Placeholder for mission outcome if not directly stored
-                                        (record.finalScores.teamMemberWins + record.finalScores.undercoverWins >= roundNum ? "已进行" : "未进行") : "未知";
-
                                     return (
                                         <Accordion key={`record-${record.gameInstanceId}-round-${roundNum}`} type="single" collapsible className="mb-2">
                                         <AccordionItem value={`round-detail-${roundNum}`}>
                                             <AccordionTrigger className="text-xs font-medium hover:no-underline p-2 bg-muted/50 rounded-t-md">
                                             第 {roundNum} 场比赛记录 ({roundVotes.length}次组队)
-                                            {/* Simplified mission outcome display for history */}
                                             </AccordionTrigger>
                                             <AccordionContent className="p-2 border border-t-0 rounded-b-md">
                                             {roundVotes.map((voteEntry, attemptIdx) => {
@@ -219,3 +268,4 @@ export default function GameHistoryPage() {
     </div>
   );
 }
+

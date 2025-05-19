@@ -9,7 +9,7 @@ import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Us
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Added Card and CardContent
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // New Component Imports
 import { RoomHeader } from "@/components/game-room/RoomHeader";
@@ -204,15 +204,20 @@ export default function GameRoomPage() {
         if (finalRoomState.captainChangesThisRound && finalRoomState.maxCaptainChangesPerRound && finalRoomState.captainChangesThisRound >= finalRoomState.maxCaptainChangesPerRound) {
              winningFaction = Role.Undercover;
              gameSummaryMessage = "卧底阵营胜利! (由于队伍连续5次组队失败)";
-        } else if (undercoverMissionWins > teamMemberMissionWins) {
-            winningFaction = Role.Undercover;
-            gameSummaryMessage = "卧底阵营胜利! (比赛结束时胜场较多)";
-        } else if (teamMemberMissionWins > undercoverMissionWins) {
-            winningFaction = Role.TeamMember;
-            gameSummaryMessage = `战队阵营胜利! (比赛结束时胜场较多)`;
-        } else {
-            winningFaction = 'Draw'; 
-            gameSummaryMessage = "游戏平局!";
+        } else if (finalRoomState.currentRound && finalRoomState.totalRounds && finalRoomState.currentRound >= finalRoomState.totalRounds) {
+           if (undercoverMissionWins > teamMemberMissionWins) {
+               winningFaction = Role.Undercover;
+               gameSummaryMessage = "卧底阵营胜利! (比赛结束时胜场较多)";
+           } else if (teamMemberMissionWins > undercoverMissionWins) {
+               winningFaction = Role.TeamMember;
+               gameSummaryMessage = `战队阵营胜利! (比赛结束时胜场较多)`;
+           } else {
+               winningFaction = 'Draw'; 
+               gameSummaryMessage = "游戏平局!";
+           }
+        } else { // Should ideally not be reached if game logic is correct
+             winningFaction = 'Draw'; 
+             gameSummaryMessage = "游戏平局! (未知原因)";
         }
     }
 
@@ -247,6 +252,7 @@ export default function GameRoomPage() {
           assassinationSucceeded: finalRoomState.coachCandidateId === actualCoach.id,
         } : undefined,
         fullVoteHistory: finalRoomState.fullVoteHistory ? [...finalRoomState.fullVoteHistory] : [],
+        missionHistory: finalRoomState.missionHistory ? [...finalRoomState.missionHistory] : [],
       };
 
       try {
@@ -282,7 +288,8 @@ export default function GameRoomPage() {
     let missionSuccessful: boolean;
 
     // Special rule for 7+ players in round 4 (index 3 for 0-indexed missionPlayerCounts)
-    if (localPlayers.length >= 7 && room.currentRound === 4) { // Round numbers are 1-based
+    // Round numbers in UI are 1-based, currentRound in state is 1-based.
+    if (localPlayers.length >= 7 && room.currentRound === 4) { 
       missionSuccessful = failCardsPlayed < 2;
     } else {
       missionSuccessful = failCardsPlayed < 1;
@@ -353,7 +360,8 @@ export default function GameRoomPage() {
     if (currentCaptain && currentCaptain.id.startsWith("virtual_")) {
       // Simple AI: Propose self and then fill randomly
       const performVirtualCaptainTeamProposal = () => {
-        if (!room.currentRound || !room.missionPlayerCounts || !localPlayers.length) return;
+        if (!room.currentRound || !room.missionPlayerCounts || !localPlayers.length || (room.captainChangesThisRound  || 0) >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) return;
+
 
         const requiredPlayers = room.missionPlayerCounts[room.currentRound -1];
         let proposedTeamIds: string[] = [];
@@ -663,7 +671,7 @@ export default function GameRoomPage() {
     }
 
     // Standard win conditions (3 wins for a faction or all rounds completed)
-    if (room.teamScores.undercoverWins >= 3 || room.currentRound >= room.totalRounds) {
+    if (room.teamScores.undercoverWins >= 3 || (room.currentRound >= room.totalRounds && room.teamScores.teamMemberWins < 3) ) {
       finalRoomStateForRecord = { ...room, status: GameRoomStatus.Finished, currentPhase: 'game_over' };
       saveGameRecordForAllPlayers(finalRoomStateForRecord, localPlayers);
       // Toast will be shown by GameOverSummary or gameSummaryMessage in history
@@ -722,13 +730,10 @@ export default function GameRoomPage() {
     let toastDescription = "";
 
     if (selectedCoachCandidate === actualCoach.id) {
-      // Undercovers win by assassination
-      // Team Member wins are effectively nullified, but Undercover score stays as is from missions
       finalTeamScores.teamMemberWins = Math.min(finalTeamScores.teamMemberWins, (Math.ceil((room.totalRounds || TOTAL_ROUNDS_PER_GAME)/2))-1 ); 
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
     } else {
-      // Team Members win (assassination failed)
       toastTitle = "指认失败！战队方获胜！";
       const wronglyAccusedPlayer = localPlayers.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
@@ -799,7 +804,7 @@ export default function GameRoomPage() {
         }
     }
     router.push("/");
-  }, [room, user, router, toast, setRoom, setLocalPlayers]); // Ensure all dependencies are listed
+  }, [room, user, router, toast]);
 
   const handleRestartGame = () => {
     if (!room || !user || room.hostId !== user.id) {
@@ -940,11 +945,15 @@ export default function GameRoomPage() {
     } else if (room.captainChangesThisRound && room.maxCaptainChangesPerRound && room.captainChangesThisRound >= room.maxCaptainChangesPerRound) {
       // This condition implies 5 failed team proposals in a round
       gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (由于队伍连续5次组队失败)</span>;
-    } else if (undercoverMissionWins > teamMemberMissionWins) { // Game ended due to max rounds, Undercovers had more wins
-        gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (比赛结束时胜场较多)</span>;
-    } else if (teamMemberMissionWins > undercoverMissionWins) { // Game ended due to max rounds, Team Members had more wins
-        gameOverMessageNode = <span className="text-green-600">战队阵营胜利! (比赛结束时胜场较多)</span>;
-    } else { // Draw or other unhandled game end state
+    } else if (room.currentRound && room.totalRounds && room.currentRound >= room.totalRounds) { // Game ended due to max rounds
+        if (undercoverMissionWins > teamMemberMissionWins) {
+            gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (比赛结束时胜场较多)</span>;
+        } else if (teamMemberMissionWins > undercoverMissionWins) {
+            gameOverMessageNode = <span className="text-green-600">战队阵营胜利! (比赛结束时胜场较多)</span>;
+        } else {
+             gameOverMessageNode = <span className="text-foreground">游戏平局! (比分 {teamMemberMissionWins} : {undercoverMissionWins})</span>;
+        }
+    } else { // Draw or other unhandled game end state (should be rare)
       gameOverMessageNode = <span className="text-foreground">游戏平局! (比分 {teamMemberMissionWins} : {undercoverMissionWins})</span>;
     }
   }

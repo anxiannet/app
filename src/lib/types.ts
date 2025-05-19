@@ -108,6 +108,7 @@ export type PlayerGameRecord = {
     wasTargetCoach: boolean;
     assassinationSucceeded: boolean;
   };
-  fullVoteHistory?: VoteHistoryEntry[]; // Added this line
+  fullVoteHistory?: VoteHistoryEntry[];
+  missionHistory?: Mission[]; // Added this line
 };
 
