@@ -141,7 +141,7 @@ export default function GameHistoryPage() {
                         <Users className="mr-2 h-4 w-4 text-muted-foreground" /> 查看当局玩家 ({record.playersInGame.length}人)
                     </AccordionTrigger>
                     <AccordionContent>
-                      <ScrollArea className="max-h-40"> {/* Removed overflow-y-auto here */}
+                      <ScrollArea className="max-h-40">
                         <ul className="space-y-1 text-xs pl-2">
                           {record.playersInGame.map(p => (
                             <li key={p.id} className="flex items-center justify-between p-1 rounded hover:bg-muted/50">
@@ -156,7 +156,7 @@ export default function GameHistoryPage() {
                     </AccordionContent>
                   </AccordionItem>
 
-                  {(record.missionHistory && record.missionHistory.length > 0) || (record.fullVoteHistory && record.fullVoteHistory.length > 0) && (
+                  {(record.missionHistory && record.missionHistory.length > 0) || (record.fullVoteHistory && record.fullVoteHistory.length > 0) ? (
                      <AccordionItem value="game-details-for-record">
                         <AccordionTrigger className="text-sm hover:no-underline">
                             <ListChecks className="mr-2 h-4 w-4 text-muted-foreground" /> 查看本局详细记录
@@ -257,7 +257,7 @@ export default function GameHistoryPage() {
                             )}
                         </AccordionContent>
                      </AccordionItem>
-                  )}
+                  ) : null}
                 </Accordion>
               </CardContent>
             </Card>
@@ -270,4 +270,3 @@ export default function GameHistoryPage() {
     </div>
   );
 }
-
