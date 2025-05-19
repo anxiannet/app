@@ -24,12 +24,18 @@ export enum GameRoomStatus {
 
 export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
 
+export type MissionCardPlay = {
+  playerId: string;
+  card: 'success' | 'fail';
+};
+
 export type Mission = {
   round: number;
   captainId: string;
   teamPlayerIds: string[];
   outcome: MissionOutcome;
   failCardsPlayed: number;
+  cardPlays: MissionCardPlay[]; // Added to store all card plays for the mission
 };
 
 export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'coach_assassination' | 'game_over';
@@ -37,11 +43,6 @@ export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_executio
 export type PlayerVote = {
   playerId: string;
   vote: 'approve' | 'reject';
-};
-
-export type MissionCardPlay = {
-  playerId: string;
-  card: 'success' | 'fail';
 };
 
 export type VoteHistoryEntry = {
@@ -80,7 +81,7 @@ export type GameRoom = {
     undercoverWins: number;
   };
   missionHistory?: Mission[];
-  fullVoteHistory?: VoteHistoryEntry[]; // Added for detailed vote logging
+  fullVoteHistory?: VoteHistoryEntry[];
 
   missionPlayerCounts?: number[];
   coachCandidateId?: string;
