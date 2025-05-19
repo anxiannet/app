@@ -93,7 +93,7 @@ export default function GameHistoryPage() {
       <ScrollArea className="h-[calc(100vh-20rem)]">
         <div className="space-y-6 pr-4">
           {gameRecords.map((record) => (
-            <Card key={record.gameId + record.playedAt} className="shadow-lg hover:shadow-xl transition-shadow">
+            <Card key={record.gameInstanceId + record.playedAt} className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-2xl text-primary">{record.roomName}</CardTitle>
@@ -151,7 +151,7 @@ export default function GameHistoryPage() {
                 </Accordion>
               </CardContent>
               <CardFooter>
-                <Button variant="link" onClick={() => router.push(`/rooms/${record.gameId}`)} className="text-xs p-0 h-auto">
+                <Button variant="link" onClick={() => router.push(`/rooms/${record.roomId}`)} className="text-xs p-0 h-auto">
                   (仅供参考) 查看房间原始信息
                 </Button>
               </CardFooter>
