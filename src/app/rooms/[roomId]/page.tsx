@@ -490,10 +490,10 @@ export default function GameRoomPage() {
       const humanUndercovers = localPlayers.filter(p => p.role === Role.Undercover && !p.id.startsWith("virtual_"));
       if (humanUndercovers.length > 0) {
         setRoom(prev => prev ? { ...prev, currentPhase: 'coach_assassination' } : null);
-        toast({ title: "队员方胜利在望!", description: "卧底现在有一次指认教练的机会来反败为胜。" });
+        toast({ title: "战队方胜利在望!", description: "卧底现在有一次指认教练的机会来反败为胜。" });
         return;
       } else {
-        toast({ title: "队员方获胜!", description: "卧底方无力回天。" });
+        toast({ title: "战队方获胜!", description: "卧底方无力回天。" });
         setRoom(prev => prev ? { ...prev, status: GameRoomStatus.Finished, currentPhase: 'game_over' } : null);
         return;
       }
@@ -551,12 +551,11 @@ export default function GameRoomPage() {
     let toastDescription = "";
 
     if (selectedCoachCandidate === actualCoach.id) {
-      //臥底勝場不變
       finalTeamScores.teamMemberWins = Math.min(finalTeamScores.teamMemberWins, (Math.ceil((room.totalRounds || TOTAL_ROUNDS_PER_GAME)/2))-1 ); 
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
     } else {
-      toastTitle = "指认失败！队员方获胜！";
+      toastTitle = "指认失败！战队方获胜！";
       const wronglyAccusedPlayer = localPlayers.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
     }
@@ -634,21 +633,23 @@ export default function GameRoomPage() {
 
   let gameOverMessage;
   if (room.status === GameRoomStatus.Finished) {
-    if (room.coachCandidateId && localPlayers.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
+    const actualCoachWasIdentified = room.coachCandidateId && localPlayers.find(p => p.id === room.coachCandidateId && p.role === Role.Coach);
+    const coachIdentificationAttempted = !!room.coachCandidateId;
+    const teamMemberMissionWins = room.teamScores?.teamMemberWins || 0;
+    const undercoverMissionWins = room.teamScores?.undercoverWins || 0;
+
+    if (actualCoachWasIdentified) {
       gameOverMessage = <span className="text-destructive">卧底阵营胜利! (通过指认教练)</span>;
-    } else if (room.teamScores) {
-      if (room.teamScores.teamMemberWins > room.teamScores.undercoverWins && (!room.coachCandidateId || (room.coachCandidateId && !localPlayers.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) ) ) {
-        gameOverMessage = <span className="text-green-600">队员阵营胜利!</span>;
-      } else if (room.teamScores.undercoverWins > room.teamScores.teamMemberWins) {
+    } else if (undercoverMissionWins >= 3 && undercoverMissionWins > teamMemberMissionWins) { 
         gameOverMessage = <span className="text-destructive">卧底阵营胜利!</span>;
-      } else if (room.teamScores.teamMemberWins === room.teamScores.undercoverWins && room.coachCandidateId && !localPlayers.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
-         gameOverMessage = <span className="text-green-600">队员阵营胜利! (指认失败)</span>;
-      }
-       else {
-        gameOverMessage = <span className="text-foreground">游戏结束! (比分 {room.teamScores.teamMemberWins} : {room.teamScores.undercoverWins})</span>;
-      }
-    } else {
-      gameOverMessage = <span className="text-foreground">游戏结束!</span>;
+    } else if (teamMemberMissionWins >=3 && (!coachIdentificationAttempted || (coachIdentificationAttempted && !actualCoachWasIdentified))) {
+        gameOverMessage = <span className="text-green-600">战队阵营胜利!</span>; 
+        if (coachIdentificationAttempted && !actualCoachWasIdentified) {
+            gameOverMessage = <span className="text-green-600">战队阵营胜利! (指认失败)</span>;
+        }
+    }
+     else { 
+      gameOverMessage = <span className="text-foreground">游戏结束! (比分 {teamMemberMissionWins} : {undercoverMissionWins})</span>;
     }
   }
 
@@ -666,13 +667,13 @@ export default function GameRoomPage() {
           </div>
            {room.status === GameRoomStatus.InProgress && (
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
-              {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
+               {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
                  <p>第{room.currentRound}场比赛，第{room.captainChangesThisRound + 1}次组队</p>
               )}
               {room.currentPhase && <div className="flex items-center"><ListChecks className="mr-2 h-4 w-4 text-purple-500" /> 当前阶段: {getPhaseDescription(room.currentPhase)}</div>}
                {room.teamScores && (
                 <div className="flex items-center gap-4">
-                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 队员胜场: {room.teamScores.teamMemberWins}</span>
+                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 战队胜场: {room.teamScores.teamMemberWins}</span>
                   <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores.undercoverWins}</span>
                 </div>
               )}
@@ -895,7 +896,7 @@ export default function GameRoomPage() {
                     </div>
                 )}
                 <div className="flex items-center gap-4 justify-center mt-2">
-                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 队员胜场: {room.teamScores?.teamMemberWins || 0}</span>
+                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 战队胜场: {room.teamScores?.teamMemberWins || 0}</span>
                   <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores?.undercoverWins || 0}</span>
                 </div>
                 <p className="text-muted-foreground mt-2">感谢您的参与！</p>
@@ -914,9 +915,10 @@ export default function GameRoomPage() {
                           .map(roundNum => {
                             const roundVotes = room.fullVoteHistory!.filter(vh => vh.round === roundNum);
                             if (roundVotes.length === 0) return null;
+                            const attemptCountText = roundVotes.length > 0 ? `（${roundVotes.length}次组队）` : '';
                             return (
                               <AccordionItem value={`round-${roundNum}`} key={`round-history-${roundNum}`}>
-                                <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 场比赛记录（{roundVotes.length}次组队）</AccordionTrigger>
+                                <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 场比赛记录{attemptCountText}</AccordionTrigger>
                                 <AccordionContent>
                                   {roundVotes.map((voteEntry, attemptIdx) => {
                                     const captain = localPlayers.find(p => p.id === voteEntry.captainId);
