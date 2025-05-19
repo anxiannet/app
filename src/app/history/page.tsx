@@ -4,11 +4,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { type PlayerGameRecord, Role } from "@/lib/types";
+import { type PlayerGameRecord, Role, type VoteHistoryEntry } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info } from "lucide-react";
+import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -50,13 +50,11 @@ export default function GameHistoryPage() {
       const storedRecordsRaw = localStorage.getItem(historyKey);
       if (storedRecordsRaw) {
         const parsedRecords: PlayerGameRecord[] = JSON.parse(storedRecordsRaw);
-        // Sort by playedAt descending (most recent first)
         parsedRecords.sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime());
         setGameRecords(parsedRecords);
       }
     } catch (e) {
       console.error("Failed to load game history from localStorage:", e);
-      // Optionally, show a toast to the user
     }
     setIsLoading(false);
   }, [user, authLoading, router]);
@@ -66,7 +64,7 @@ export default function GameHistoryPage() {
   }
 
   if (!user) {
-    return null; // Should be redirected by useEffect
+    return null; 
   }
 
   if (gameRecords.length === 0) {
@@ -93,7 +91,7 @@ export default function GameHistoryPage() {
       <ScrollArea className="h-[calc(100vh-20rem)]">
         <div className="space-y-6 pr-4">
           {gameRecords.map((record) => (
-            <Card key={record.gameInstanceId + record.playedAt} className="shadow-lg hover:shadow-xl transition-shadow">
+            <Card key={record.gameInstanceId} className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-2xl text-primary">{record.roomName}</CardTitle>
@@ -126,11 +124,11 @@ export default function GameHistoryPage() {
                 {record.coachAssassinationAttempt && (
                   <div className="text-xs p-2 border border-dashed rounded-md bg-muted/30">
                     <p className="font-semibold flex items-center"><Info className="mr-1 h-3 w-3"/>教练指认环节:</p>
-                    <p>目标: {record.coachAssassinationAttempt.targetPlayerName}</p>
+                    <p>目标: {record.coachAssassinationAttempt.targetPlayerName} ({getRoleChineseName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role || Role.TeamMember )})</p>
                     <p>结果: {record.coachAssassinationAttempt.assassinationSucceeded ? "指认成功 (卧底胜利)" : "指认失败 (战队胜利)"}</p>
                   </div>
                 )}
-                <Accordion type="single" collapsible className="w-full">
+                <Accordion type="multiple" collapsible className="w-full">
                   <AccordionItem value="players-in-game">
                     <AccordionTrigger className="text-sm hover:no-underline">
                         <Users className="mr-2 h-4 w-4 text-muted-foreground" /> 查看当局玩家 ({record.playersInGame.length}人)
@@ -148,9 +146,68 @@ export default function GameHistoryPage() {
                       </ul>
                     </AccordionContent>
                   </AccordionItem>
+                  {record.fullVoteHistory && record.fullVoteHistory.length > 0 && (
+                    <AccordionItem value="vote-history-for-record">
+                        <AccordionTrigger className="text-sm hover:no-underline">
+                            <HistoryIcon className="mr-2 h-4 w-4 text-muted-foreground" /> 查看本局详细投票
+                        </AccordionTrigger>
+                        <AccordionContent>
+                            <ScrollArea className="h-[200px] pr-2">
+                                {Array.from({ length: record.fullVoteHistory.reduce((max, vh) => Math.max(max, vh.round), 0) }, (_, i) => i + 1)
+                                .map(roundNum => {
+                                    const roundVotes = record.fullVoteHistory!.filter(vh => vh.round === roundNum);
+                                    if (roundVotes.length === 0) return null;
+                                    
+                                    const missionForRound = record.playersInGame.length > 0 ? // Placeholder for mission outcome if not directly stored
+                                        (record.finalScores.teamMemberWins + record.finalScores.undercoverWins >= roundNum ? "已进行" : "未进行") : "未知";
+
+                                    return (
+                                        <Accordion key={`record-${record.gameInstanceId}-round-${roundNum}`} type="single" collapsible className="mb-2">
+                                        <AccordionItem value={`round-detail-${roundNum}`}>
+                                            <AccordionTrigger className="text-xs font-medium hover:no-underline p-2 bg-muted/50 rounded-t-md">
+                                            第 {roundNum} 场比赛记录 ({roundVotes.length}次组队)
+                                            {/* Simplified mission outcome display for history */}
+                                            </AccordionTrigger>
+                                            <AccordionContent className="p-2 border border-t-0 rounded-b-md">
+                                            {roundVotes.map((voteEntry, attemptIdx) => {
+                                                const captain = record.playersInGame.find(p => p.id === voteEntry.captainId);
+                                                const captainDisplay = captain ? `${captain.name} (${getRoleChineseName(captain.role)})` : '未知';
+
+                                                const proposedTeamDisplay = voteEntry.proposedTeamIds.map(id => {
+                                                    const player = record.playersInGame.find(p => p.id === id);
+                                                    return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知';
+                                                }).join(', ');
+
+                                                return (
+                                                <div key={`record-${record.gameInstanceId}-round-${roundNum}-attempt-${attemptIdx}`} className="mb-3 p-2 border rounded-md bg-background text-xs">
+                                                    <p className="font-semibold">第 {voteEntry.attemptNumberInRound} 次组队 (队长: {captainDisplay})</p>
+                                                    <p className="mt-1">提议队伍: {proposedTeamDisplay}</p>
+                                                    <p className="mt-1">投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
+                                                    <ul className="mt-1.5 space-y-0.5 list-disc list-inside pl-1">
+                                                    {voteEntry.votes.map(vote => {
+                                                        const voter = record.playersInGame.find(p => p.id === vote.playerId);
+                                                        const voterDisplay = voter ? `${voter.name} (${getRoleChineseName(voter.role)})` : '未知玩家';
+                                                        return (
+                                                        <li key={`vote-${record.gameInstanceId}-${voteEntry.round}-${voteEntry.attemptNumberInRound}-${vote.playerId}`}>
+                                                            {voterDisplay}: {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
+                                                        </li>
+                                                        );
+                                                    })}
+                                                    </ul>
+                                                </div>
+                                                );
+                                            })}
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                        </Accordion>
+                                    );
+                                })}
+                            </ScrollArea>
+                        </AccordionContent>
+                    </AccordionItem>
+                  )}
                 </Accordion>
               </CardContent>
-              {/* CardFooter with the link has been removed */}
             </Card>
           ))}
         </div>
