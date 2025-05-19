@@ -13,13 +13,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Blank]: number, [Role.Civilian]: number } } = {
-  5: { [Role.Undercover]: 1, [Role.Blank]: 1, [Role.Civilian]: 3 },
-  6: { [Role.Undercover]: 2, [Role.Blank]: 1, [Role.Civilian]: 3 },
-  7: { [Role.Undercover]: 2, [Role.Blank]: 1, [Role.Civilian]: 4 },
-  8: { [Role.Undercover]: 2, [Role.Blank]: 2, [Role.Civilian]: 4 },
-  9: { [Role.Undercover]: 3, [Role.Blank]: 2, [Role.Civilian]: 4 },
-  10: { [Role.Undercover]: 3, [Role.Blank]: 2, [Role.Civilian]: 5 },
+const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: number, [Role.TeamMember]: number } } = {
+  5: { [Role.Undercover]: 2, [Role.Coach]: 1, [Role.TeamMember]: 2 },
+  6: { [Role.Undercover]: 2, [Role.Coach]: 1, [Role.TeamMember]: 3 },
+  7: { [Role.Undercover]: 3, [Role.Coach]: 1, [Role.TeamMember]: 3 },
+  8: { [Role.Undercover]: 3, [Role.Coach]: 1, [Role.TeamMember]: 4 },
+  9: { [Role.Undercover]: 3, [Role.Coach]: 1, [Role.TeamMember]: 5 },
+  10: { [Role.Undercover]: 4, [Role.Coach]: 1, [Role.TeamMember]: 5 },
 };
 
 const MIN_PLAYERS_TO_START = 5;
@@ -102,13 +102,11 @@ export default function GameRoomPage() {
         rolesToAssign.push(role as Role);
       }
     });
-    // Ensure rolesToAssign matches playerCount, filling with Civilians if necessary
-    // This handles cases where config might be for fewer players than actual playerCount (e.g. playerCount > 10)
+    
     while(rolesToAssign.length < playerCount) {
-        rolesToAssign.push(Role.Civilian);
+        rolesToAssign.push(Role.TeamMember); // Default fill with TeamMember
     }
-    // If rolesToAssign is more than playerCount (e.g. using a config for 10 players for a 9 player game), trim it.
-    // This shouldn't happen if playerCount is a key in ROLES_CONFIG.
+    
     rolesToAssign = rolesToAssign.slice(0, playerCount);
 
 
@@ -220,8 +218,8 @@ export default function GameRoomPage() {
   const getRoleIcon = (role?: Role) => {
     switch (role) {
       case Role.Undercover: return <Swords className="h-4 w-4 text-destructive" />;
-      case Role.Civilian: return <Shield className="h-4 w-4 text-green-500" />;
-      case Role.Blank: return <HelpCircle className="h-4 w-4 text-yellow-500" />;
+      case Role.TeamMember: return <Shield className="h-4 w-4 text-green-500" />;
+      case Role.Coach: return <HelpCircle className="h-4 w-4 text-yellow-500" />;
       default: return null;
     }
   };
@@ -248,11 +246,11 @@ export default function GameRoomPage() {
       {currentUserRole && room.status === GameRoomStatus.InProgress && (
         <Alert variant="default" className="bg-accent/20 border-accent text-accent-foreground">
           <Info className="h-5 w-5 text-accent" />
-          <AlertTitle className="font-semibold">Your Role: {currentUserRole}</AlertTitle>
+          <AlertTitle className="font-semibold">你的角色: {currentUserRole}</AlertTitle>
           <AlertDescription>
-            {currentUserRole === Role.Undercover && "Your mission is to deceive others and achieve your secret objective."}
-            {currentUserRole === Role.Civilian && "Work with fellow civilians to identify the undercover agents."}
-            {currentUserRole === Role.Blank && "You have no specific information. Try to figure out what's happening!"}
+            {currentUserRole === Role.Undercover && "你的任务是隐藏自己的身份，误导其他队员，并达成秘密目标。"}
+            {currentUserRole === Role.TeamMember && "作为一名普通队员，你需要找出队伍中的卧底，并完成队伍的目标。"}
+            {currentUserRole === Role.Coach && "作为教练，你并不清楚自己的词语，但你需要通过观察和引导，帮助队员找出卧底。"}
           </AlertDescription>
         </Alert>
       )}
@@ -260,7 +258,7 @@ export default function GameRoomPage() {
       <div className="grid md:grid-cols-3 gap-6">
         <Card className="md:col-span-1">
           <CardHeader>
-            <CardTitle className="flex items-center"><Users className="mr-2 h-6 w-6 text-primary" /> Players ({localPlayers.length}/{room.maxPlayers})</CardTitle>
+            <CardTitle className="flex items-center"><Users className="mr-2 h-6 w-6 text-primary" /> 玩家 ({localPlayers.length}/{room.maxPlayers})</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="space-y-3">
@@ -289,12 +287,12 @@ export default function GameRoomPage() {
 
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle className="text-primary">Game Controls</CardTitle>
+            <CardTitle className="text-primary">游戏控制</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {room.status === GameRoomStatus.Waiting && (
               <>
-                <p className="text-muted-foreground">Waiting for the host to start the game...</p>
+                <p className="text-muted-foreground">等待主持人开始游戏...</p>
                 {isHost && (
                   <div className="space-y-2">
                     <Button 
@@ -302,11 +300,11 @@ export default function GameRoomPage() {
                       disabled={!canStartGame}
                       className="w-full bg-green-500 hover:bg-green-600 text-white transition-transform hover:scale-105 active:scale-95"
                     >
-                      <Play className="mr-2 h-5 w-5" /> Start Game
+                      <Play className="mr-2 h-5 w-5" /> 开始游戏
                     </Button>
                     {!canStartGame && (localPlayers.length < MIN_PLAYERS_TO_START || localPlayers.length > room.maxPlayers) && (
                       <p className="text-sm text-destructive text-center">
-                        Need {MIN_PLAYERS_TO_START}-{room.maxPlayers} players to start. Currently {localPlayers.length}.
+                        需要 {MIN_PLAYERS_TO_START}-{room.maxPlayers} 名玩家才能开始. 当前 {localPlayers.length} 名.
                       </p>
                     )}
                      <Button 
@@ -315,10 +313,10 @@ export default function GameRoomPage() {
                       variant="outline"
                       className="w-full transition-transform hover:scale-105 active:scale-95"
                     >
-                      <UserPlus className="mr-2 h-5 w-5" /> Add Virtual Player
+                      <UserPlus className="mr-2 h-5 w-5" /> 添加虚拟玩家
                     </Button>
                     {!canAddVirtualPlayer && localPlayers.length >= room.maxPlayers && (
-                         <p className="text-sm text-destructive text-center">Room is full.</p>
+                         <p className="text-sm text-destructive text-center">房间已满.</p>
                     )}
                   </div>
                 )}
@@ -327,29 +325,29 @@ export default function GameRoomPage() {
             {room.status === GameRoomStatus.InProgress && (
               <>
                 <div className="text-center p-4 bg-secondary/30 rounded-md">
-                  <p className="text-lg font-semibold">Current Captain:</p>
+                  <p className="text-lg font-semibold">当前队长:</p>
                   <p className="text-2xl text-accent">
                     {localPlayers.find(p => p.id === room.currentCaptainId)?.name || "Unknown"}
                   </p>
                 </div>
-                <p className="text-muted-foreground">Game is in progress. Follow captain's instructions or perform actions.</p>
+                <p className="text-muted-foreground">游戏进行中。听从队长指示或执行行动。</p>
                 {user.id === room.currentCaptainId && (
-                  <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">Perform Captain Action (Placeholder)</Button>
+                  <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">执行队长行动 (占位)</Button>
                 )}
                 <Button 
                   onClick={handleNextTurn}
                   variant="outline" 
                   className="w-full transition-transform hover:scale-105 active:scale-95"
                 >
-                  Next Turn (Simulate)
+                  下一回合 (模拟)
                 </Button>
               </>
             )}
             {room.status === GameRoomStatus.Finished && (
-              <p className="text-lg font-semibold text-center text-green-600">Game Finished! (Placeholder)</p>
+              <p className="text-lg font-semibold text-center text-green-600">游戏结束! (占位)</p>
             )}
              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">
-                Back to Lobby
+                返回大厅
             </Button>
           </CardContent>
         </Card>

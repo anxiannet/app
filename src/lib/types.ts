@@ -5,9 +5,9 @@ export type User = {
 };
 
 export enum Role {
-  Civilian = "Civilian",
-  Undercover = "Undercover",
-  Blank = "Blank",
+  TeamMember = "队员",
+  Undercover = "卧底",
+  Coach = "教练",
 }
 
 export type Player = User & {
