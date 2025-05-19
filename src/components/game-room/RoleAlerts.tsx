@@ -18,7 +18,7 @@ export function RoleAlerts({ currentUserRole, roomStatus, knownUndercoversByCoac
     return null;
   }
 
-  const coachDescription = "作为教练，你并不清楚自己的词语，但你需要通过观察和引导，帮助队员找出卧底。";
+  // const coachDescription = "作为教练，你并不清楚自己的词语，但你需要通过观察和引导，帮助队员找出卧底。"; // Removed this line
   const knownUndercoversText = knownUndercoversByCoach.length > 0 ? `你已洞察到以下玩家是卧底: ${knownUndercoversByCoach.map(u => u.name).join(', ')}。` : "";
 
   return (
@@ -29,18 +29,9 @@ export function RoleAlerts({ currentUserRole, roomStatus, knownUndercoversByCoac
         <AlertDescription>
           {currentUserRole === Role.Undercover && "你的任务是隐藏自己的身份，误导其他队员，并达成秘密目标。"}
           {currentUserRole === Role.TeamMember && "作为一名普通队员，你需要找出队伍中的卧底，并完成队伍的目标。"}
-          {currentUserRole === Role.Coach && `${coachDescription} ${knownUndercoversText}`.trim()}
+          {currentUserRole === Role.Coach && knownUndercoversText.trim()}
         </AlertDescription>
       </Alert>
-
-      {/* The separate alert for known undercovers by coach is now merged above. */}
-      {/* {currentUserRole === Role.Coach && knownUndercoversByCoach.length > 0 && (
-        <Alert variant="default" className="bg-primary/10 border-primary/30 text-primary mt-4">
-          <Eye className="h-5 w-5 text-primary" />
-          <AlertTitle className="font-semibold">你知道的卧底</AlertTitle>
-          <AlertDescription>作为教练，你已洞察到以下玩家是卧底: {knownUndercoversByCoach.map(u => u.name).join(', ')}。</AlertDescription>
-        </Alert>
-      )} */}
 
       {currentUserRole === Role.Undercover && (
         <>
@@ -63,3 +54,4 @@ export function RoleAlerts({ currentUserRole, roomStatus, knownUndercoversByCoac
     </>
   );
 }
+
