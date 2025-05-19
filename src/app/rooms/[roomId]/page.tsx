@@ -196,10 +196,10 @@ export default function GameRoomPage() {
             winningFaction = Role.TeamMember;
             gameSummaryMessage = `战队阵营胜利! (教练指认失败: ${targetedPlayer?.name || '被指认者'} 不是教练。实际教练: ${actualCoach.name})`;
         }
-    } else if (undercoverMissionWins >= 3) {
+    } else if (undercoverMissionWins >= 3 && undercoverMissionWins > teamMemberMissionWins) {
         winningFaction = Role.Undercover;
         gameSummaryMessage = "卧底阵营胜利! (通过完成比赛)";
-    } else if (teamMemberMissionWins >= 3) {
+    } else if (teamMemberMissionWins >= 3 && teamMemberMissionWins > undercoverMissionWins) {
         winningFaction = Role.TeamMember;
         gameSummaryMessage = "战队阵营胜利! (通过完成比赛)";
     } else { // Game ended due to max rounds or forced end without 3 mission wins
@@ -591,7 +591,36 @@ export default function GameRoomPage() {
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
       const virtualPlayers = localPlayers.filter(p => p.id.startsWith("virtual_"));
       const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => {
-        return { playerId: vp.id, vote: 'approve' }; 
+        // Simple AI: Undercovers try to reject if team has no other undercovers, otherwise approve. Coach approves good teams. Team members approve.
+        // This is a placeholder for more complex AI voting later
+        let aiVote: 'approve' | 'reject' = 'approve';
+        const proposedTeamHasUndercover = room.selectedTeamForMission?.some(teamPlayerId => {
+            const teamPlayer = localPlayers.find(p => p.id === teamPlayerId);
+            return teamPlayer?.role === Role.Undercover;
+        });
+
+        if (vp.role === Role.Undercover) {
+            const aiIsOnTeam = room.selectedTeamForMission?.includes(vp.id);
+            const otherUndercoversOnTeam = room.selectedTeamForMission?.filter(teamPlayerId => {
+                const teamPlayer = localPlayers.find(p => p.id === teamPlayerId);
+                return teamPlayer?.role === Role.Undercover && teamPlayer.id !== vp.id;
+            }).length || 0;
+
+            if (!aiIsOnTeam && !otherUndercoversOnTeam && proposedTeamHasUndercover) { // Another UC is on, I'm not, good.
+                 aiVote = 'approve';
+            } else if (aiIsOnTeam && otherUndercoversOnTeam === 0 && (room.selectedTeamForMission?.length || 0) > 2) { // I'm the only UC, and team is not tiny
+                 aiVote = 'approve'; // Risky but try to get on
+            } else if (!proposedTeamHasUndercover) { // No UCs on team, bad for us
+                 aiVote = 'reject';
+            } else {
+                 aiVote = 'approve'; // Default or complex situation
+            }
+
+        } else if (vp.role === Role.Coach) {
+            aiVote = proposedTeamHasUndercover ? 'reject' : 'approve';
+        }
+        // TeamMember AI default to approve for now
+        return { playerId: vp.id, vote: aiVote }; 
       });
       updatedVotes = [...updatedVotes, ...virtualPlayerVotes];
       setRoom(prevRoom => prevRoom ? {...prevRoom, teamVotes: updatedVotes} : null); 
@@ -740,6 +769,10 @@ export default function GameRoomPage() {
           const roomIndex = storedRooms.findIndex(r => r.id === room.id);
           if (roomIndex !== -1) {
             storedRooms[roomIndex].players = updatedPlayersList;
+             // If host leaves, and room becomes empty, it should be cleaned up by lobby logic
+            if (updatedPlayersList.length === 0) {
+                storedRooms = storedRooms.filter(r => r.id !== room.id);
+            }
             localStorage.setItem("anxian-rooms", JSON.stringify(storedRooms));
           }
         } catch (e) {
@@ -750,6 +783,19 @@ export default function GameRoomPage() {
       setRoom(prevRoom => prevRoom ? { ...prevRoom, players: updatedPlayersList } : null);
 
       toast({ title: "已离开房间", description: `您已离开房间 ${roomNameForToast}。` });
+    } else if (isUserHost) {
+        // If host leaves, consider cleaning up the room from localStorage
+        const storedRoomsRaw = localStorage.getItem("anxian-rooms");
+        if (storedRoomsRaw) {
+            try {
+                let storedRooms: GameRoom[] = JSON.parse(storedRoomsRaw);
+                storedRooms = storedRooms.filter(r => r.id !== room.id);
+                localStorage.setItem("anxian-rooms", JSON.stringify(storedRooms));
+                toast({ title: "已解散并离开房间", description: `您已解散并离开房间 ${roomNameForToast}。`});
+            } catch (e) {
+                console.error("Failed to update localStorage on host leave:", e);
+            }
+        }
     }
     router.push("/");
   }, [room, user, router, toast, setRoom, setLocalPlayers]); 
@@ -899,7 +945,13 @@ export default function GameRoomPage() {
 
   return (
     <div className="space-y-6">
-      <RoomHeader room={room} localPlayers={localPlayers} getPhaseDescription={getPhaseDescription} />
+      <RoomHeader 
+        room={room} 
+        localPlayers={localPlayers} 
+        getPhaseDescription={getPhaseDescription}
+        isHost={isHost}
+        onForceEndGame={handleForceEndGame}
+      />
 
       <RoleAlerts
         currentUserRole={currentUserRole}
@@ -948,20 +1000,6 @@ export default function GameRoomPage() {
                   <p className="text-lg ">当前队长:</p><p className="text-2xl text-accent">{localPlayers.find(p => p.id === room.currentCaptainId)?.name || "Unknown"}</p>
                 </div>
                 
-                {isHost && (
-                  <div className="flex justify-end mt-2 mb-4">
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={handleForceEndGame}
-                      className="transition-transform hover:scale-105 active:scale-95"
-                    >
-                      <XOctagon className="mr-1 h-4 w-4" />
-                      强制结束游戏
-                    </Button>
-                  </div>
-                )}
-
                 {room.currentPhase === 'team_selection' && (
                     <TeamSelectionControls
                         isVirtualCaptain={isVirtualCaptain}
