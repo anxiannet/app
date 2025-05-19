@@ -1,12 +1,11 @@
 
 "use client";
 
-import type { GameRoom, Player, Role, VoteHistoryEntry } from "@/lib/types";
+import { type GameRoom, type Player, Role, type VoteHistoryEntry, GameRoomStatus } from "@/lib/types"; // Changed import
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GameRoomStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 
 type VoteHistoryAccordionProps = {
@@ -53,7 +52,7 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                               .filter(play => play.card === 'fail')
                               .map(play => {
                                   const player = localPlayers.find(p => p.id === play.playerId);
-                                  return player ? player.name : '未知玩家';
+                                  return player ? player.name : '未知玩家'; // Role removed here as per previous request
                               });
                           if (saboteurs.length > 0) {
                               missionOutcomeText += ` (破坏者: ${saboteurs.join(', ')})`;
@@ -146,3 +145,4 @@ function getRoleName(role: Role): string {
     default: return "未知角色";
   }
 }
+
