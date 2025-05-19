@@ -1,4 +1,5 @@
 
+
 export type User = {
   id: string;
   name: string;
@@ -40,6 +41,14 @@ export type PlayerVote = {
   vote: 'approve' | 'reject';
 };
 
+// Stripped-down Player type for AI, only revealing roles based on game rules for the AI's perspective
+export type PlayerPerspective = {
+  id: string;
+  name: string;
+  role?: Role; // Role is only included if the AI is allowed to know it (e.g., Coach sees Undercover, Undercover sees other Undercovers)
+  isCaptain?: boolean;
+};
+
 export type GameRoom = {
   id: string;
   name: string;
@@ -73,3 +82,4 @@ export type GameRoom = {
   missionPlayerCounts?: number[]; // e.g. [2,3,2,3,3] for 5 players
   // missionFailRequirements?: number[]; // e.g. [1,1,1,2,1] for when 2 fail cards are needed
 };
+

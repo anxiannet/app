@@ -1,19 +1,21 @@
 
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote } from "@/lib/types";
+import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote, type PlayerPerspective } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Repeat, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Repeat, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, Brain } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { decideVirtualPlayerVote, type VirtualPlayerVoteInput } from "@/ai/flows/decide-virtual-player-action-flow";
 
 const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: number, [Role.TeamMember]: number } } = {
   5: { [Role.Undercover]: 2, [Role.Coach]: 1, [Role.TeamMember]: 2 },
@@ -55,6 +57,7 @@ export default function GameRoomPage() {
 
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAiVoting, setIsAiVoting] = useState(false);
   const [localPlayers, setLocalPlayers] = useState<Player[]>([]);
   const [selectedMissionTeam, setSelectedMissionTeam] = useState<string[]>([]); // IDs of players selected by captain
 
@@ -159,7 +162,7 @@ export default function GameRoomPage() {
 
     setRoom(prevRoom => {
       if (!prevRoom) return null;
-      const updatedRoom: GameRoom = {
+      const updatedRoomData: GameRoom = {
         ...prevRoom,
         players: updatedPlayers,
         status: GameRoomStatus.InProgress,
@@ -177,7 +180,7 @@ export default function GameRoomPage() {
       };
       setLocalPlayers(updatedPlayers);
       setSelectedMissionTeam([]);
-      return updatedRoom;
+      return updatedRoomData;
     });
     toast({ title: "Game Started!", description: `Roles assigned. Round 1, Team Selection. ${updatedPlayers[firstCaptainIndex].name} is the first captain.` });
   };
@@ -229,9 +232,9 @@ export default function GameRoomPage() {
     const updatedPlayers = [...localPlayers, newVirtualPlayer];
     setRoom(prevRoom => {
       if (!prevRoom) return null;
-      const updatedRoom = { ...prevRoom, players: updatedPlayers };
+      const updatedRoomData = { ...prevRoom, players: updatedPlayers };
       setLocalPlayers(updatedPlayers);
-      return updatedRoom;
+      return updatedRoomData;
     });
     toast({ title: "Virtual Player Added", description: `${virtualPlayerName} has joined the room.` });
   };
@@ -315,14 +318,14 @@ export default function GameRoomPage() {
         toast({ title: "Team Rejected!", description: `Passing captaincy to ${newCaptainName}.` });
         setRoom(prevRoom => {
           if (!prevRoom) return null;
-          const updatedPlayers = prevRoom.players.map(p => ({
+          const updatedPlayersData = prevRoom.players.map(p => ({
             ...p,
             isCaptain: p.id === newCaptainId,
           }));
-          setLocalPlayers(updatedPlayers);
+          setLocalPlayers(updatedPlayersData);
           return {
             ...prevRoom,
-            players: updatedPlayers,
+            players: updatedPlayersData,
             currentCaptainId: newCaptainId,
             captainChangesThisRound: newCaptainChangesThisRound,
             currentPhase: 'team_selection',
@@ -335,9 +338,9 @@ export default function GameRoomPage() {
     }
   };
   
-  const handlePlayerVote = (vote: 'approve' | 'reject') => {
-    if (!room || !user || room.currentPhase !== 'team_voting' || !room.players) {
-      toast({ title: "Error", description: "Cannot vote at this time.", variant: "destructive" });
+ const handlePlayerVote = async (vote: 'approve' | 'reject') => {
+    if (!room || !user || room.currentPhase !== 'team_voting' || !room.players || isAiVoting) {
+      toast({ title: "Error", description: "Cannot vote at this time or AI is voting.", variant: "destructive" });
       return;
     }
 
@@ -349,23 +352,81 @@ export default function GameRoomPage() {
 
     const newVote: PlayerVote = { playerId: user.id, vote };
     let updatedVotes = [...(room.teamVotes || []), newVote];
+    setRoom(prevRoom => ({ ...prevRoom, teamVotes: updatedVotes } as GameRoom)); // Update state to show player's vote immediately
+    toast({title: "Vote Cast", description: `You voted to ${vote}. Waiting for other players.`})
 
-    // Simulate virtual player votes if this is the last real player voting
     const realPlayers = room.players.filter(p => !p.id.startsWith("virtual_"));
-    const realPlayersWhoVoted = updatedVotes.filter(v => realPlayers.some(rp => rp.id === v.playerId));
+    const realPlayersWhoVotedIds = new Set(updatedVotes.filter(v => realPlayers.some(rp => rp.id === v.playerId)).map(v => v.playerId));
 
-    if (realPlayersWhoVoted.length === realPlayers.length) {
+    // Check if all real players have voted
+    if (realPlayersWhoVotedIds.size === realPlayers.length) {
+      setIsAiVoting(true);
+      toast({ title: "AI Thinking...", description: "Virtual players are now voting." });
+
       const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
-      virtualPlayers.forEach(vp => {
-        if (!updatedVotes.some(v => v.playerId === vp.id)) {
-          updatedVotes.push({ playerId: vp.id, vote: 'approve' }); // Virtual players always approve for now
+      const aiVotePromises = virtualPlayers.map(async (vp) => {
+        if (!vp.role || !room.currentRound || !room.totalRounds || room.captainChangesThisRound === undefined || !room.maxCaptainChangesPerRound || !room.missionPlayerCounts || !room.selectedTeamForMission || !room.teamScores || !room.currentCaptainId || !room.currentPhase) {
+            console.error("Skipping AI vote for virtual player due to missing game state:", vp.name);
+            return { playerId: vp.id, vote: 'approve' as 'approve' | 'reject' }; // Default to approve if critical info missing
+        }
+
+        // Construct player perspectives for AI
+        const allPlayersPerspective: PlayerPerspective[] = room.players.map(p => {
+            let revealedRole: Role | undefined = undefined;
+            if (vp.role === Role.Coach && p.role === Role.Undercover) {
+                revealedRole = p.role;
+            } else if (vp.role === Role.Undercover && p.role === Role.Undercover) {
+                revealedRole = p.role;
+            } else if (p.id === vp.id) { // AI knows its own role
+                 revealedRole = vp.role;
+            }
+            // TeamMembers don't know other specific roles beyond their own
+            return { id: p.id, name: p.name, role: revealedRole, isCaptain: p.isCaptain };
+        });
+        
+        const missionHistoryPerspective = room.missionHistory?.map(mh => ({
+            ...mh,
+            team: mh.team.map(member => ({
+                id: member.id, 
+                name: member.name,
+                // Role in mission history is not revealed to AI unless it's their own faction or Coach's knowledge
+                role: (vp.role === Role.Coach && member.role === Role.Undercover) || (vp.role === Role.Undercover && member.role === Role.Undercover) || member.id === vp.id ? member.role : undefined
+            }))
+        })) || [];
+
+
+        const aiInput: VirtualPlayerVoteInput = {
+          virtualPlayer: { id: vp.id, name: vp.name, role: vp.role },
+          gameContext: {
+            currentRound: room.currentRound,
+            totalRounds: room.totalRounds,
+            captainChangesThisRound: room.captainChangesThisRound,
+            maxCaptainChangesPerRound: room.maxCaptainChangesPerRound,
+            missionPlayerCounts: room.missionPlayerCounts,
+            proposedTeamPlayerIds: room.selectedTeamForMission,
+            allPlayers: allPlayersPerspective,
+            missionHistory: missionHistoryPerspective,
+            teamScores: room.teamScores,
+            currentCaptainId: room.currentCaptainId,
+            currentPhase: room.currentPhase,
+          }
+        };
+        try {
+          const aiDecision = await decideVirtualPlayerVote(aiInput);
+          console.log(`AI (${vp.name}, ${vp.role}) voted: ${aiDecision.decision}. Reasoning: ${aiDecision.reasoning}`);
+          return { playerId: vp.id, vote: aiDecision.decision };
+        } catch (error) {
+          console.error(`Error getting AI vote for ${vp.name}:`, error);
+          return { playerId: vp.id, vote: 'approve' as 'approve' | 'reject' }; // Fallback vote
         }
       });
-      setRoom(prevRoom => ({ ...prevRoom, teamVotes: updatedVotes } as GameRoom)); // Update state to show virtual votes if needed
+
+      const aiVotes = await Promise.all(aiVotePromises);
+      updatedVotes = [...updatedVotes, ...aiVotes];
+      
+      setRoom(prevRoom => ({ ...prevRoom, teamVotes: updatedVotes } as GameRoom));
       processTeamVotes(updatedVotes);
-    } else {
-       setRoom(prevRoom => ({ ...prevRoom, teamVotes: updatedVotes } as GameRoom));
-       toast({title: "Vote Cast", description: `You voted to ${vote}. Waiting for other players.`})
+      setIsAiVoting(false);
     }
   };
 
@@ -512,11 +573,11 @@ export default function GameRoomPage() {
                         <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
                         <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
                       </Avatar>
-                      <span className="font-medium">{p.name} {isCurrentUser && "(You)"}</span>
+                      <span className="font-medium">{p.name} {isCurrentUser && "(You)"} {p.id.startsWith("virtual_") && <Brain className="inline-block h-4 w-4 ml-1 text-blue-500" title="AI Player"/>}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                        {playerVote && (
-                        <Badge variant={playerVote === 'approve' ? 'default' : 'destructive'} className="bg-opacity-70">
+                        <Badge variant={playerVote === 'approve' ? 'default' : 'destructive'} className={`bg-opacity-70 ${playerVote === 'approve' ? 'bg-green-500' : 'bg-red-500'}`}>
                           {playerVote === 'approve' ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
                         </Badge>
                       )}
@@ -644,7 +705,7 @@ export default function GameRoomPage() {
                             </p>
                         )}
 
-                        {!hasUserVotedOnCurrentTeam && !user.id.startsWith("virtual_") ? (
+                        {!hasUserVotedOnCurrentTeam && !user.id.startsWith("virtual_") && !isAiVoting ? (
                             <div className="flex gap-4 justify-center">
                                 <Button onClick={() => handlePlayerVote('approve')} className="bg-green-500 hover:bg-green-600 text-white">
                                     <ThumbsUp className="mr-2 h-5 w-5"/> 同意
@@ -656,7 +717,8 @@ export default function GameRoomPage() {
                         ) : (
                            !user.id.startsWith("virtual_") && <p className="text-center text-green-600 font-semibold">你已投票: {room.teamVotes?.find(v=>v.playerId === user.id)?.vote === 'approve' ? '同意' : '拒绝'}</p>
                         )}
-                         {realPlayersVotedCount < realPlayersCount && <p className="text-sm text-center text-muted-foreground">等待其他玩家投票...</p>}
+                         {realPlayersVotedCount < realPlayersCount && !isAiVoting && <p className="text-sm text-center text-muted-foreground">等待其他玩家投票...</p>}
+                         {isAiVoting && <p className="text-sm text-center text-blue-500 flex items-center justify-center"><Brain className="mr-2 h-5 w-5 animate-pulse" /> AI 正在投票...</p>}
                     </div>
                 )}
 
