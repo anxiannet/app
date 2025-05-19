@@ -200,7 +200,6 @@ export default function GameRoomPage() {
 
     if (humanPlayersOnMission.length === 0 && missionTeamPlayerIds.length > 0) { 
       // If only virtual players are on the mission, auto-resolve.
-      // This assumes virtual players' actions are decided in finalizeAndRevealMissionOutcome
       const timer = setTimeout(() => finalizeAndRevealMissionOutcome(), 1000); 
       return () => clearTimeout(timer);
     }
@@ -743,7 +742,7 @@ export default function GameRoomPage() {
               {localPlayers.map((p) => {
                 const isCurrentUser = p.id === user.id;
                 const playerVote = (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_execution' || room.currentPhase === 'coach_assassination' || room.currentPhase === 'game_over' || room.currentPhase === 'mission_reveal') ? votesToDisplay.find(v => v.playerId === p.id)?.vote : undefined;
-                const missionCardPlayInfo = (room.currentPhase === 'mission_reveal' || room.status === GameRoomStatus.Finished) && room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays.find(cp => cp.playerId === p.id);
+                const missionCardPlayInfo = (room.currentPhase === 'mission_reveal' || room.status === GameRoomStatus.Finished) && room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id);
                 const missionCardPlayed = missionCardPlayInfo?.card;
 
                 return (
