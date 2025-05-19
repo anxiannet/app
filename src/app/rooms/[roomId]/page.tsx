@@ -9,6 +9,7 @@ import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Us
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Added Card and CardContent
 
 // New Component Imports
 import { RoomHeader } from "@/components/game-room/RoomHeader";
@@ -262,7 +263,6 @@ export default function GameRoomPage() {
       }
     });
   }, []);
-
 
   const finalizeAndRevealMissionOutcome = useCallback(() => {
     if (!room || !room.selectedTeamForMission || !localPlayers || !room.teamScores || room.currentRound === undefined) return;
