@@ -162,9 +162,9 @@ export default function GameHistoryPage() {
                             <ListChecks className="mr-2 h-4 w-4 text-muted-foreground" /> 查看本局详细记录
                         </AccordionTrigger>
                         <AccordionContent>
-                            {record.fullVoteHistory && record.fullVoteHistory.length > 0 && (
+                            {(record.fullVoteHistory && record.fullVoteHistory.length > 0) && (
                                 <section>
-                                    <h4 className="text-xs font-semibold mb-2 mt-4 text-muted-foreground">详细投票记录:</h4>
+                                    {/* Removed h4 title "详细投票记录:" */}
                                     <ScrollArea className="h-[300px] pr-4">
                                         <Accordion type="multiple" className="w-full">
                                             {Array.from(new Set(record.fullVoteHistory.map(vh => vh.round))).sort((a, b) => a - b)
