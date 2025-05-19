@@ -138,17 +138,46 @@ export default function GameRoomPage() {
         if (!room.currentRound || !room.missionPlayerCounts) return;
         
         const requiredPlayers = room.missionPlayerCounts[room.currentRound -1];
-        let proposedTeamIds: string[] = [currentCaptain.id];
+        let proposedTeamIds: string[] = [currentCaptain.id]; // Captain is always on their own team
         const otherPlayers = localPlayers.filter(p => p.id !== currentCaptain.id);
-        const shuffledOtherPlayers = otherPlayers.sort(() => 0.5 - Math.random());
-        for (let i = 0; proposedTeamIds.length < requiredPlayers && i < shuffledOtherPlayers.length; i++) {
-            proposedTeamIds.push(shuffledOtherPlayers[i].id);
+        
+        // Simple logic: try to pick non-Undercover players if Coach, or include Undercovers if Undercover
+        let potentialTeammates = [...otherPlayers];
+        if (currentCaptain.role === Role.Coach) {
+            potentialTeammates = otherPlayers.filter(p => p.role !== Role.Undercover);
+        } else if (currentCaptain.role === Role.Undercover) {
+            // Try to include another undercover if possible, or fill with others
+            const fellowUndercovers = otherPlayers.filter(p => p.role === Role.Undercover);
+            const teamMembers = otherPlayers.filter(p => p.role === Role.TeamMember || p.role === Role.Coach);
+            potentialTeammates = [...fellowUndercovers, ...teamMembers]; // Prioritize fellow undercovers
         }
-        if (proposedTeamIds.length < requiredPlayers) { // Fallback
-            const allPlayerIds = localPlayers.map(p => p.id).sort(() => 0.5 - Math.random());
-            proposedTeamIds = allPlayerIds.slice(0, requiredPlayers);
+        
+        const shuffledPotentialTeammates = potentialTeammates.sort(() => 0.5 - Math.random());
+
+        for (let i = 0; proposedTeamIds.length < requiredPlayers && i < shuffledPotentialTeammates.length; i++) {
+            proposedTeamIds.push(shuffledPotentialTeammates[i].id);
         }
+        // If still not enough players (e.g. coach trying to avoid too many undercovers), fill randomly from remaining
+        if (proposedTeamIds.length < requiredPlayers) {
+            const remainingPlayers = localPlayers.filter(p => !proposedTeamIds.includes(p.id))
+                                                .sort(() => 0.5 - Math.random());
+            for (let i = 0; proposedTeamIds.length < requiredPlayers && i < remainingPlayers.length; i++) {
+                proposedTeamIds.push(remainingPlayers[i].id);
+            }
+        }
+         // Final fallback: if logic somehow fails, just pick first N players including self
+        if (proposedTeamIds.length < requiredPlayers) {
+            proposedTeamIds = localPlayers.map(p => p.id).sort(() => 0.5 - Math.random()).slice(0, requiredPlayers);
+            if (!proposedTeamIds.includes(currentCaptain.id) && proposedTeamIds.length === requiredPlayers) {
+                proposedTeamIds[0] = currentCaptain.id; // Ensure captain is on the team
+            } else if (!proposedTeamIds.includes(currentCaptain.id)) {
+                proposedTeamIds.push(currentCaptain.id);
+            }
+        }
+
+
         proposedTeamIds = proposedTeamIds.slice(0, requiredPlayers);
+
 
         const proposedTeamNames = proposedTeamIds.map(id => localPlayers.find(p=>p.id === id)?.name || 'Unknown').join(', ');
         setRoom(prevRoom => {
@@ -190,7 +219,7 @@ export default function GameRoomPage() {
     if (humanActionsRecorded === humanPlayersOnMission.length && humanPlayersOnMission.length > 0) {
       finalizeAndRevealMissionOutcome();
     }
-  }, [room, localPlayers, user]);
+  }, [room, localPlayers, user, finalizeAndRevealMissionOutcome]);
 
 
   const assignRolesAndCaptain = () => {
@@ -291,7 +320,7 @@ export default function GameRoomPage() {
     setSelectedMissionTeam(prevSelected => checked ? [...prevSelected, playerId] : prevSelected.filter(id => id !== playerId));
   };
 
-  const processTeamVotes = (currentVotes: PlayerVote[]) => {
+  const processTeamVotes = useCallback((currentVotes: PlayerVote[]) => {
     if (!room || !user || !room.players || !room.teamScores) return;
     const approveVotes = currentVotes.filter(v => v.vote === 'approve').length;
     const rejectVotes = currentVotes.filter(v => v.vote === 'reject').length;
@@ -301,14 +330,14 @@ export default function GameRoomPage() {
       setRoom(prevRoom => {
         if (!prevRoom) return null;
         return {
-          ...prevRoom, currentPhase: 'mission_execution', teamVotes: currentVotes, // Keep votes for record
-          captainChangesThisRound: 0, // Reset as team was approved
-          missionCardPlaysForCurrentMission: [], // Initialize for new mission
+          ...prevRoom, currentPhase: 'mission_execution', teamVotes: currentVotes, 
+          captainChangesThisRound: 0, 
+          missionCardPlaysForCurrentMission: [], 
           humanUndercoverCardChoice: null,
         };
       });
-      setHumanUndercoverCardChoice(null); // Reset local state for human undercover
-       // Auto-add success cards for human TeamMembers/Coaches on mission
+      setHumanUndercoverCardChoice(null); 
+      
       const currentSelectedTeam = room.selectedTeamForMission || [];
       const autoPlays: MissionCardPlay[] = [];
       currentSelectedTeam.forEach(playerId => {
@@ -320,7 +349,6 @@ export default function GameRoomPage() {
       if (autoPlays.length > 0) {
         setRoom(prev => prev ? {...prev, missionCardPlaysForCurrentMission: [...(prev.missionCardPlaysForCurrentMission || []), ...autoPlays]} : null);
       }
-
 
     } else {
       let newCaptainChangesThisRound = (room.captainChangesThisRound || 0) + 1;
@@ -353,7 +381,7 @@ export default function GameRoomPage() {
         setSelectedMissionTeam([]);
       }
     }
-  };
+  }, [room, user, localPlayers, toast]);
   
  const handlePlayerVote = (vote: 'approve' | 'reject') => {
     if (!room || !user || room.currentPhase !== 'team_voting' || !room.players) {
@@ -370,9 +398,32 @@ export default function GameRoomPage() {
 
     const realPlayers = room.players.filter(p => !p.id.startsWith("virtual_"));
     const realPlayersWhoVotedIds = new Set(updatedVotes.filter(v => realPlayers.some(rp => rp.id === v.playerId)).map(v => v.playerId));
+    
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
       const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
-      const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => ({ playerId: vp.id, vote: 'approve' })); // Simplified: AI always approves
+      const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => {
+        // Simple AI for voting:
+        // Coach: Approves if no known undercovers on team. Rejects if known undercovers on team.
+        // Undercover: Approves if an undercover is on team. Rejects if only good guys.
+        // TeamMember: Generally approves unless it's very late in rejections.
+        let aiVote: 'approve' | 'reject' = 'approve';
+        const proposedTeamPlayerObjects = room.selectedTeamForMission?.map(id => room.players.find(p => p.id === id)).filter(Boolean) as Player[] || [];
+
+        if (vp.role === Role.Coach) {
+            const undercoversOnTeam = proposedTeamPlayerObjects.some(p => p.role === Role.Undercover);
+            if (undercoversOnTeam) aiVote = 'reject'; else aiVote = 'approve';
+        } else if (vp.role === Role.Undercover) {
+            const undercoversOnTeam = proposedTeamPlayerObjects.some(p => p.role === Role.Undercover);
+            if (undercoversOnTeam) aiVote = 'approve'; else aiVote = 'reject';
+             // If this is the 4th rejection, approve to avoid losing
+            if ((room.captainChangesThisRound || 0) >= MAX_CAPTAIN_CHANGES_PER_ROUND - 2) aiVote = 'approve';
+        } else { // TeamMember AI
+            // Generally approve unless many rejections already
+            if ((room.captainChangesThisRound || 0) >= MAX_CAPTAIN_CHANGES_PER_ROUND - 2) aiVote = 'approve';
+            // Could add more complex logic here based on mission history if desired
+        }
+        return { playerId: vp.id, vote: aiVote };
+      });
       updatedVotes = [...updatedVotes, ...virtualPlayerVotes];
       setRoom(prevRoom => prevRoom ? {...prevRoom, teamVotes: updatedVotes} : null);
       processTeamVotes(updatedVotes);
@@ -406,7 +457,6 @@ export default function GameRoomPage() {
 
     let finalPlays: MissionCardPlay[] = [...(room.missionCardPlaysForCurrentMission || [])];
     
-    // Simulate virtual player actions
     room.selectedTeamForMission.forEach(playerId => {
       const player = localPlayers.find(p => p.id === playerId);
       if (player && player.id.startsWith("virtual_") && !finalPlays.some(fp => fp.playerId === playerId)) {
@@ -446,6 +496,7 @@ export default function GameRoomPage() {
         currentPhase: 'mission_reveal',
         missionOutcomeForDisplay: outcome,
         failCardsPlayedForDisplay: failCardsPlayed,
+        missionCardPlaysForCurrentMission: finalPlays, // Store final plays including virtual ones for display
       };
     });
     toast({ title: `第 ${room.currentRound} 轮任务结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
@@ -538,6 +589,7 @@ export default function GameRoomPage() {
   const realPlayersCount = localPlayers.filter(p => !p.id.startsWith("virtual_")).length;
   const realPlayersVotedCount = room.teamVotes?.filter(v => localPlayers.find(p => p.id === v.playerId && !p.id.startsWith("virtual_"))).length || 0;
   const votesToDisplay = room.teamVotes || [];
+  const missionPlaysToDisplay = room.missionCardPlaysForCurrentMission || [];
 
   return (
     <div className="space-y-6">
@@ -602,7 +654,7 @@ export default function GameRoomPage() {
               {localPlayers.map((p) => {
                 const isCurrentUser = p.id === user.id;
                 const playerVote = (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_execution' || room.currentPhase === 'game_over' || room.currentPhase === 'mission_reveal') ? votesToDisplay.find(v => v.playerId === p.id)?.vote : undefined;
-                const missionCardPlay = room.currentPhase === 'mission_reveal' && room.missionCardPlaysForCurrentMission?.find(play => play.playerId === p.id)?.card;
+                const missionCardPlay = room.currentPhase === 'mission_reveal' && missionPlaysToDisplay.find(play => play.playerId === p.id)?.card;
                 return (
                   <li key={p.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-md shadow-sm">
                     <div className="flex items-center">
@@ -664,6 +716,10 @@ export default function GameRoomPage() {
 
                 {room.currentPhase === 'team_voting' && (
                     <div className="space-y-3">
+                        <div className="mb-4 text-center text-sm text-muted-foreground space-y-1 p-2 bg-background/50 rounded-md border">
+                           {room.currentRound !== undefined && room.totalRounds !== undefined && <div className="flex items-center justify-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> 比赛场次: {room.currentRound} / {room.totalRounds}</div>}
+                           {room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && <div className="flex items-center justify-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> 本轮队长: {room.captainChangesThisRound + 1} / {room.maxCaptainChangesPerRound}</div>}
+                        </div>
                         <h3 className="text-lg font-semibold text-center">为队伍投票 (回合 {room.currentRound})</h3>
                         <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{localPlayers.find(p=>p.id === room.currentCaptainId)?.name}</span> 提议以下队伍执行任务:</p>
                         <ul className="text-center font-medium list-disc list-inside bg-muted/30 p-2 rounded-md">{(room.selectedTeamForMission || []).map(playerId => localPlayers.find(p=>p.id === playerId)?.name || '未知玩家').join(', ')}</ul>
