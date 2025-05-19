@@ -450,6 +450,8 @@ export default function GameRoomPage() {
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
       const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
       const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => {
+        // Simple AI: Virtual players always approve for now
+        // In a real scenario, this would be a call to an AI decision flow
         return { playerId: vp.id, vote: 'approve' };
       });
       updatedVotes = [...updatedVotes, ...virtualPlayerVotes];
@@ -549,6 +551,7 @@ export default function GameRoomPage() {
     let toastDescription = "";
 
     if (selectedCoachCandidate === actualCoach.id) {
+      //臥底勝場不變
       finalTeamScores.teamMemberWins = Math.min(finalTeamScores.teamMemberWins, (Math.ceil((room.totalRounds || TOTAL_ROUNDS_PER_GAME)/2))-1 ); 
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
@@ -631,14 +634,14 @@ export default function GameRoomPage() {
 
   let gameOverMessage;
   if (room.status === GameRoomStatus.Finished) {
-    if (room.coachCandidateId && room.players.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
+    if (room.coachCandidateId && localPlayers.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
       gameOverMessage = <span className="text-destructive">卧底阵营胜利! (通过指认教练)</span>;
     } else if (room.teamScores) {
-      if (room.teamScores.teamMemberWins > room.teamScores.undercoverWins && (!room.coachCandidateId || (room.coachCandidateId && !room.players.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) ) ) {
+      if (room.teamScores.teamMemberWins > room.teamScores.undercoverWins && (!room.coachCandidateId || (room.coachCandidateId && !localPlayers.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) ) ) {
         gameOverMessage = <span className="text-green-600">队员阵营胜利!</span>;
       } else if (room.teamScores.undercoverWins > room.teamScores.teamMemberWins) {
         gameOverMessage = <span className="text-destructive">卧底阵营胜利!</span>;
-      } else if (room.teamScores.teamMemberWins === room.teamScores.undercoverWins && room.coachCandidateId && !room.players.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
+      } else if (room.teamScores.teamMemberWins === room.teamScores.undercoverWins && room.coachCandidateId && !localPlayers.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
          gameOverMessage = <span className="text-green-600">队员阵营胜利! (指认失败)</span>;
       }
        else {
@@ -747,7 +750,7 @@ export default function GameRoomPage() {
                         <Badge variant="outline" className="flex items-center gap-1 border-muted-foreground text-muted-foreground">{getRoleIcon(p.role)} {p.role}</Badge>
                       )}
 
-                      {p.id === room.currentCaptainId && room.status === GameRoomStatus.InProgress && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
+                      {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
                     </div>
                   </li>);})}</ul></CardContent>
         </Card>
@@ -913,7 +916,7 @@ export default function GameRoomPage() {
                             if (roundVotes.length === 0) return null;
                             return (
                               <AccordionItem value={`round-${roundNum}`} key={`round-history-${roundNum}`}>
-                                <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 轮投票记录</AccordionTrigger>
+                                <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 场比赛记录（{roundVotes.length}次组队）</AccordionTrigger>
                                 <AccordionContent>
                                   {roundVotes.map((voteEntry, attemptIdx) => {
                                     const captain = localPlayers.find(p => p.id === voteEntry.captainId);
