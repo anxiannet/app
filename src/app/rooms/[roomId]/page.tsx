@@ -14,15 +14,15 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Blank]: number, [Role.Civilian]: number } } = {
-  3: { [Role.Undercover]: 1, [Role.Blank]: 0, [Role.Civilian]: 2 },
-  4: { [Role.Undercover]: 1, [Role.Blank]: 0, [Role.Civilian]: 3 },
   5: { [Role.Undercover]: 1, [Role.Blank]: 1, [Role.Civilian]: 3 },
   6: { [Role.Undercover]: 2, [Role.Blank]: 1, [Role.Civilian]: 3 },
   7: { [Role.Undercover]: 2, [Role.Blank]: 1, [Role.Civilian]: 4 },
   8: { [Role.Undercover]: 2, [Role.Blank]: 2, [Role.Civilian]: 4 },
+  9: { [Role.Undercover]: 3, [Role.Blank]: 2, [Role.Civilian]: 4 },
+  10: { [Role.Undercover]: 3, [Role.Blank]: 2, [Role.Civilian]: 5 },
 };
 
-const MIN_PLAYERS_TO_START = 3;
+const MIN_PLAYERS_TO_START = 5;
 
 export default function GameRoomPage() {
   const params = useParams();
@@ -91,9 +91,9 @@ export default function GameRoomPage() {
   }, [roomId, user, authLoading, router, toast, updateLocalStorageRooms]);
 
   const assignRolesAndCaptain = () => {
-    if (!room || room.players.length < MIN_PLAYERS_TO_START) return;
+    if (!room || localPlayers.length < MIN_PLAYERS_TO_START) return;
 
-    const playerCount = room.players.length;
+    const playerCount = localPlayers.length;
     const config = ROLES_CONFIG[playerCount] || ROLES_CONFIG[Math.max(...Object.keys(ROLES_CONFIG).map(Number))]; 
 
     let rolesToAssign: Role[] = [];
@@ -102,13 +102,19 @@ export default function GameRoomPage() {
         rolesToAssign.push(role as Role);
       }
     });
+    // Ensure rolesToAssign matches playerCount, filling with Civilians if necessary
+    // This handles cases where config might be for fewer players than actual playerCount (e.g. playerCount > 10)
     while(rolesToAssign.length < playerCount) {
         rolesToAssign.push(Role.Civilian);
     }
+    // If rolesToAssign is more than playerCount (e.g. using a config for 10 players for a 9 player game), trim it.
+    // This shouldn't happen if playerCount is a key in ROLES_CONFIG.
+    rolesToAssign = rolesToAssign.slice(0, playerCount);
+
 
     rolesToAssign = rolesToAssign.sort(() => Math.random() - 0.5); 
 
-    const updatedPlayers = room.players.map((player, index) => ({
+    const updatedPlayers = localPlayers.map((player, index) => ({
       ...player,
       role: rolesToAssign[index],
       isCaptain: false,
@@ -134,8 +140,12 @@ export default function GameRoomPage() {
       toast({ title: "Not Authorized", description: "Only the host can start the game.", variant: "destructive" });
       return;
     }
-    if (room.players.length < MIN_PLAYERS_TO_START) {
-      toast({ title: "Not Enough Players", description: `Need at least ${MIN_PLAYERS_TO_START} players to start. Currently ${room.players.length}.`, variant: "destructive" });
+    if (localPlayers.length < MIN_PLAYERS_TO_START) {
+      toast({ title: "Not Enough Players", description: `Need at least ${MIN_PLAYERS_TO_START} players to start. Currently ${localPlayers.length}.`, variant: "destructive" });
+      return;
+    }
+    if (localPlayers.length > room.maxPlayers) {
+      toast({ title: "Too Many Players", description: `This room is configured for a maximum of ${room.maxPlayers} players. Currently ${localPlayers.length}.`, variant: "destructive" });
       return;
     }
     assignRolesAndCaptain();
@@ -158,7 +168,7 @@ export default function GameRoomPage() {
     const newVirtualPlayer: Player = {
       id: virtualPlayerId,
       name: virtualPlayerName,
-      avatarUrl: `https://placehold.co/100x100.png?text=${virtualPlayerName.charAt(0)}P`, // VP for Virtual Player
+      avatarUrl: `https://placehold.co/100x100.png?text=V${virtualPlayerCount + 1}`,
       isCaptain: false,
     };
 
@@ -175,12 +185,13 @@ export default function GameRoomPage() {
   };
 
   const handleNextTurn = () => {
-    if (!room || !room.currentCaptainId || room.status !== GameRoomStatus.InProgress) return;
+    if (!room || !room.currentCaptainId || room.status !== GameRoomStatus.InProgress || !room.players) return;
 
-    const currentPlayerIndex = room.players.findIndex(p => p.id === room.currentCaptainId);
+    const currentPlayers = room.players;
+    const currentPlayerIndex = currentPlayers.findIndex(p => p.id === room.currentCaptainId);
     if (currentPlayerIndex === -1) return;
 
-    const updatedPlayers = room.players.map(p => ({ ...p, isCaptain: false }));
+    const updatedPlayers = currentPlayers.map(p => ({ ...p, isCaptain: false }));
     const nextCaptainIndex = (currentPlayerIndex + 1) % updatedPlayers.length;
     updatedPlayers[nextCaptainIndex].isCaptain = true;
     
@@ -217,7 +228,7 @@ export default function GameRoomPage() {
 
   const isHost = user.id === room.hostId;
   const canAddVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length < room.maxPlayers;
-  const canStartGame = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length >= MIN_PLAYERS_TO_START;
+  const canStartGame = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length >= MIN_PLAYERS_TO_START && localPlayers.length <= room.maxPlayers;
 
 
   return (
@@ -230,7 +241,7 @@ export default function GameRoomPage() {
               {room.status.toUpperCase()}
             </Badge>
           </CardTitle>
-          <CardDescription>Room ID: {room.id} | Host: {room.players.find(p=>p.id === room.hostId)?.name || 'Unknown'}</CardDescription>
+          <CardDescription>Room ID: {room.id} | Host: {localPlayers.find(p=>p.id === room.hostId)?.name || 'Unknown'}</CardDescription>
         </CardHeader>
       </Card>
 
@@ -293,8 +304,10 @@ export default function GameRoomPage() {
                     >
                       <Play className="mr-2 h-5 w-5" /> Start Game
                     </Button>
-                    {!canStartGame && localPlayers.length < MIN_PLAYERS_TO_START && (
-                      <p className="text-sm text-destructive text-center">Need at least {MIN_PLAYERS_TO_START} players to start.</p>
+                    {!canStartGame && (localPlayers.length < MIN_PLAYERS_TO_START || localPlayers.length > room.maxPlayers) && (
+                      <p className="text-sm text-destructive text-center">
+                        Need {MIN_PLAYERS_TO_START}-{room.maxPlayers} players to start. Currently {localPlayers.length}.
+                      </p>
                     )}
                      <Button 
                       onClick={handleAddVirtualPlayer} 
@@ -344,5 +357,3 @@ export default function GameRoomPage() {
     </div>
   );
 }
-
-    

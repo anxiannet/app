@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -50,7 +51,7 @@ export default function LobbyPage() {
       id: newRoomId,
       name: newRoomName,
       players: [], // Host will join on room page
-      maxPlayers: 6, // Default max players
+      maxPlayers: 10, // Default max players updated to 10
       status: "waiting",
       hostId: user.id,
     };
