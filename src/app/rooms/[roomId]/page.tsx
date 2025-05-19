@@ -8,7 +8,7 @@ import { type GameRoom, type Player, Role, GameRoomStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Repeat, UsersRound } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,6 +23,8 @@ const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: 
 };
 
 const MIN_PLAYERS_TO_START = 5;
+const TOTAL_ROUNDS_PER_GAME = 5;
+const MAX_CAPTAIN_CHANGES_PER_ROUND = 5;
 
 const COMMON_CHINESE_NAMES = [
   "李明", "王伟", "张芳", "刘秀英", "陈静", "杨勇", "赵敏", "黄强", "周杰", "吴秀兰",
@@ -43,7 +45,8 @@ export default function GameRoomPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [localPlayers, setLocalPlayers] = useState<Player[]>([]);
 
-  const updateLocalStorageRooms = useCallback((updatedRoom: GameRoom) => {
+  const updateLocalStorageRooms = useCallback((updatedRoom: GameRoom | null) => {
+    if (!updatedRoom) return;
     const storedRoomsRaw = localStorage.getItem("anxian-rooms");
     if (storedRoomsRaw) {
       const storedRooms: GameRoom[] = JSON.parse(storedRoomsRaw);
@@ -74,9 +77,9 @@ export default function GameRoomPage() {
            const newPlayer: Player = { ...user, isCaptain: false };
            currentRoom.players.push(newPlayer);
            playerExists = true;
-           updateLocalStorageRooms(currentRoom); 
+           // updateLocalStorageRooms is called by setRoom's effect
         } else if (!playerExists && currentRoom.status !== GameRoomStatus.Waiting) {
-          toast({ title: "Game in Progress", description: "Cannot join a game that has already started or is finished.", variant: "destructive" });
+          toast({ title: "Game in Progress or Finished", description: "Cannot join a game that has already started or is finished.", variant: "destructive" });
           router.push("/");
           return;
         } else if (!playerExists && currentRoom.players.length >= currentRoom.maxPlayers) {
@@ -85,7 +88,7 @@ export default function GameRoomPage() {
           return;
         }
         
-        setRoom(currentRoom);
+        setRoom(prevRoom => ({ ...prevRoom, ...currentRoom }));
         setLocalPlayers(currentRoom.players);
       } else {
         toast({ title: "Room not found", description: "The requested game room does not exist.", variant: "destructive" });
@@ -96,7 +99,12 @@ export default function GameRoomPage() {
       router.push("/");
     }
     setIsLoading(false);
-  }, [roomId, user, authLoading, router, toast, updateLocalStorageRooms]);
+  }, [roomId, user, authLoading, router, toast]);
+
+  useEffect(() => {
+    updateLocalStorageRooms(room);
+  }, [room, updateLocalStorageRooms]);
+
 
   const assignRolesAndCaptain = () => {
     if (!room || localPlayers.length < MIN_PLAYERS_TO_START) return;
@@ -116,8 +124,6 @@ export default function GameRoomPage() {
     }
     
     rolesToAssign = rolesToAssign.slice(0, playerCount);
-
-
     rolesToAssign = rolesToAssign.sort(() => Math.random() - 0.5); 
 
     const updatedPlayers = localPlayers.map((player, index) => ({
@@ -129,16 +135,22 @@ export default function GameRoomPage() {
     const firstCaptainIndex = Math.floor(Math.random() * updatedPlayers.length);
     updatedPlayers[firstCaptainIndex].isCaptain = true;
 
-    const updatedRoom = {
-      ...room,
-      players: updatedPlayers,
-      status: GameRoomStatus.InProgress,
-      currentCaptainId: updatedPlayers[firstCaptainIndex].id,
-    };
-    setRoom(updatedRoom);
-    setLocalPlayers(updatedPlayers);
-    updateLocalStorageRooms(updatedRoom);
-    toast({ title: "Game Started!", description: "Roles assigned and first captain selected." });
+    setRoom(prevRoom => {
+      if (!prevRoom) return null;
+      const updatedRoom = {
+        ...prevRoom,
+        players: updatedPlayers,
+        status: GameRoomStatus.InProgress,
+        currentCaptainId: updatedPlayers[firstCaptainIndex].id,
+        currentRound: 1,
+        totalRounds: TOTAL_ROUNDS_PER_GAME,
+        captainChangesThisRound: 0,
+        maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND,
+      };
+      setLocalPlayers(updatedPlayers);
+      return updatedRoom;
+    });
+    toast({ title: "Game Started!", description: `Roles assigned. Round 1 begins. ${updatedPlayers[firstCaptainIndex].name} is the first captain.` });
   };
   
   const handleStartGame = () => {
@@ -186,38 +198,81 @@ export default function GameRoomPage() {
     };
 
     const updatedPlayers = [...localPlayers, newVirtualPlayer];
-    const updatedRoom = {
-      ...room,
-      players: updatedPlayers,
-    };
-
-    setRoom(updatedRoom);
-    setLocalPlayers(updatedPlayers);
-    updateLocalStorageRooms(updatedRoom);
+    setRoom(prevRoom => {
+      if (!prevRoom) return null;
+      const updatedRoom = { ...prevRoom, players: updatedPlayers };
+      setLocalPlayers(updatedPlayers);
+      return updatedRoom;
+    });
     toast({ title: "Virtual Player Added", description: `${virtualPlayerName} has joined the room.` });
   };
 
   const handleNextTurn = () => {
-    if (!room || !room.currentCaptainId || room.status !== GameRoomStatus.InProgress || !room.players) return;
+    if (!room || !room.currentCaptainId || room.status !== GameRoomStatus.InProgress || !room.players || !user) return;
+    if (user.id !== room.currentCaptainId && user.id !== room.hostId) {
+      // Allowing host to advance turn for simulation purposes, or if captain is stuck
+      // In a real game, only current captain might do this, or a voting system.
+      // For now, this also allows host to cycle through for testing.
+       // toast({ title: "Not Your Turn", description: "Only the current captain or host can advance the turn.", variant: "destructive" });
+       // return;
+    }
 
-    const currentPlayers = room.players;
-    const currentPlayerIndex = currentPlayers.findIndex(p => p.id === room.currentCaptainId);
-    if (currentPlayerIndex === -1) return;
 
-    const updatedPlayers = currentPlayers.map(p => ({ ...p, isCaptain: false }));
-    const nextCaptainIndex = (currentPlayerIndex + 1) % updatedPlayers.length;
-    updatedPlayers[nextCaptainIndex].isCaptain = true;
-    
-    const updatedRoom = {
-      ...room,
-      players: updatedPlayers,
-      currentCaptainId: updatedPlayers[nextCaptainIndex].id,
-    };
-    setRoom(updatedRoom);
-    setLocalPlayers(updatedPlayers);
-    updateLocalStorageRooms(updatedRoom);
-    toast({ title: "Next Turn", description: `${updatedPlayers[nextCaptainIndex].name} is now the captain.`});
+    setRoom(prevRoom => {
+      if (!prevRoom || !prevRoom.players || prevRoom.currentCaptainId === undefined || prevRoom.captainChangesThisRound === undefined || prevRoom.currentRound === undefined || prevRoom.maxCaptainChangesPerRound === undefined || prevRoom.totalRounds === undefined) return prevRoom;
+
+      let newCaptainChangesThisRound = prevRoom.captainChangesThisRound + 1;
+      let newCurrentRound = prevRoom.currentRound;
+      let gameFinished = false;
+      let newStatus = prevRoom.status;
+      let toastMessage = "";
+
+      const currentPlayers = prevRoom.players;
+      let currentPlayerIndex = currentPlayers.findIndex(p => p.id === prevRoom.currentCaptainId);
+      if (currentPlayerIndex === -1) currentPlayerIndex = 0; // Should not happen
+
+      let nextCaptainIndex = (currentPlayerIndex + 1) % currentPlayers.length;
+      
+      if (newCaptainChangesThisRound >= prevRoom.maxCaptainChangesPerRound) {
+        // Max captain changes reached for this round
+        if (newCurrentRound >= prevRoom.totalRounds) {
+          // Game over
+          gameFinished = true;
+          newStatus = GameRoomStatus.Finished;
+          toastMessage = "Game Over! All rounds completed.";
+          toast({ title: "Game Over", description: "All rounds completed." });
+        } else {
+          // Next round
+          newCurrentRound++;
+          newCaptainChangesThisRound = 0; // Reset for new round
+          // Captain continues from next player in sequence for the new round
+          toastMessage = `Round ${newCurrentRound} started! ${currentPlayers[nextCaptainIndex].name} is the new captain.`;
+          toast({ title: `Round ${newCurrentRound} Started!`, description: `${currentPlayers[nextCaptainIndex].name} is the captain.` });
+        }
+      } else {
+        // Continue current round, just change captain
+        toastMessage = `${currentPlayers[nextCaptainIndex].name} is now the captain.`;
+        toast({ title: "Next Captain", description: `${currentPlayers[nextCaptainIndex].name} is now the captain.`});
+      }
+
+      const updatedPlayers = currentPlayers.map((p, index) => ({
+        ...p,
+        isCaptain: !gameFinished && index === nextCaptainIndex,
+      }));
+      
+      const updatedRoomState: GameRoom = {
+        ...prevRoom,
+        players: updatedPlayers,
+        status: newStatus,
+        currentCaptainId: gameFinished ? undefined : updatedPlayers[nextCaptainIndex].id,
+        currentRound: newCurrentRound,
+        captainChangesThisRound: newCaptainChangesThisRound,
+      };
+      setLocalPlayers(updatedPlayers);
+      return updatedRoomState;
+    });
   };
+
 
   if (isLoading || authLoading) {
     return <div className="text-center py-10">Loading room...</div>;
@@ -243,26 +298,35 @@ export default function GameRoomPage() {
   const canAddVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length < room.maxPlayers;
   const canStartGame = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length >= MIN_PLAYERS_TO_START && localPlayers.length <= room.maxPlayers;
 
-  const knownUndercoversByCoach = currentUserRole === Role.Coach 
+  const knownUndercoversByCoach = currentUserRole === Role.Coach && room.status === GameRoomStatus.InProgress
     ? localPlayers.filter(p => p.role === Role.Undercover) 
     : [];
-  const fellowUndercovers = currentUserRole === Role.Undercover 
+  const fellowUndercovers = currentUserRole === Role.Undercover && room.status === GameRoomStatus.InProgress
     ? localPlayers.filter(p => p.role === Role.Undercover && p.id !== user.id) 
     : [];
-  const isSoleUndercover = currentUserRole === Role.Undercover && localPlayers.filter(p => p.role === Role.Undercover).length === 1;
-
+  const isSoleUndercover = currentUserRole === Role.Undercover && room.status === GameRoomStatus.InProgress && localPlayers.filter(p => p.role === Role.Undercover).length === 1;
 
   return (
     <div className="space-y-6">
       <Card className="shadow-xl">
         <CardHeader>
-          <CardTitle className="text-3xl text-primary flex items-center justify-between">
-            {room.name}
-            <Badge variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"} className={room.status === GameRoomStatus.Waiting ? "border-yellow-500 text-yellow-500" : room.status === GameRoomStatus.InProgress ? "bg-green-500" : "bg-gray-500"}>
+          <div className="flex justify-between items-start">
+            <div>
+              <CardTitle className="text-3xl text-primary flex items-center">
+                {room.name}
+              </CardTitle>
+              <CardDescription>Room ID: {room.id} | Host: {localPlayers.find(p=>p.id === room.hostId)?.name || 'Unknown'}</CardDescription>
+            </div>
+            <Badge variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"} className={`ml-auto ${room.status === GameRoomStatus.Waiting ? "border-yellow-500 text-yellow-500" : room.status === GameRoomStatus.InProgress ? "bg-green-500 text-white" : "bg-gray-500 text-white"}`}>
               {room.status.toUpperCase()}
             </Badge>
-          </CardTitle>
-          <CardDescription>Room ID: {room.id} | Host: {localPlayers.find(p=>p.id === room.hostId)?.name || 'Unknown'}</CardDescription>
+          </div>
+           {room.status === GameRoomStatus.InProgress && room.currentRound !== undefined && room.totalRounds !== undefined && room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && (
+            <div className="mt-2 text-sm text-muted-foreground space-y-1">
+              <div className="flex items-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> Round: {room.currentRound} / {room.totalRounds}</div>
+              <div className="flex items-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> Captain Changes: {room.captainChangesThisRound} / {room.maxCaptainChangesPerRound}</div>
+            </div>
+          )}
         </CardHeader>
       </Card>
 
@@ -402,20 +466,28 @@ export default function GameRoomPage() {
                   </p>
                 </div>
                 <p className="text-muted-foreground">游戏进行中。听从队长指示或执行行动。</p>
-                {user.id === room.currentCaptainId && (
+                {/* 
+                  // Placeholder for captain-specific actions
+                  {user.id === room.currentCaptainId && (
                   <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">执行队长行动 (占位)</Button>
-                )}
+                )} 
+                */}
                 <Button 
                   onClick={handleNextTurn}
                   variant="outline" 
                   className="w-full transition-transform hover:scale-105 active:scale-95"
+                  //  Allow host to advance for easier testing/simulation
+                  //  disabled={user.id !== room.currentCaptainId && !isHost}
                 >
-                  下一回合 (模拟)
+                  下一回合 / 移交队长 (模拟)
                 </Button>
               </>
             )}
             {room.status === GameRoomStatus.Finished && (
-              <p className="text-lg font-semibold text-center text-green-600">游戏结束! (占位)</p>
+              <div className="text-center p-6 bg-green-100 dark:bg-green-900 rounded-lg shadow">
+                <h3 className="text-2xl font-bold text-green-700 dark:text-green-300">游戏结束!</h3>
+                <p className="text-muted-foreground mt-2">所有回合已完成。感谢您的参与！</p>
+              </div>
             )}
              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">
                 返回大厅
@@ -426,3 +498,4 @@ export default function GameRoomPage() {
     </div>
   );
 }
+

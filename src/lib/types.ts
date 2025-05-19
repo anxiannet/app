@@ -1,3 +1,4 @@
+
 export type User = {
   id: string;
   name: string;
@@ -15,7 +16,6 @@ export type Player = User & {
   isCaptain?: boolean;
 };
 
-// Changed from type alias to enum
 export enum GameRoomStatus {
   Waiting = "waiting",
   InProgress = "in-progress",
@@ -27,7 +27,14 @@ export type GameRoom = {
   name: string;
   players: Player[];
   maxPlayers: number;
-  status: GameRoomStatus; // This will now correctly refer to the enum
+  status: GameRoomStatus;
   currentCaptainId?: string;
   hostId: string;
+  // New properties for multi-round gameplay
+  currentRound?: number;
+  totalRounds?: number;
+  captainChangesThisRound?: number;
+  maxCaptainChangesPerRound?: number;
+  // gameWinner?: Role | null; // Keeping it simple for now, winner determination is complex
 };
+
