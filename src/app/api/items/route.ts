@@ -1,6 +1,6 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { db } from '@/lib/firebase-admin'; // Adjust path as necessary
+import { db, admin } from '@/lib/firebase-admin'; // Adjust path as necessary
 
 // Define a type for our item for better type safety
 type Item = {

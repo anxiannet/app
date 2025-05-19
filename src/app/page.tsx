@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -13,133 +13,96 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-
-// Mock function to create a unique room ID
-const createRoomId = () => `room_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+import { db } from "@/lib/firebase"; // Firebase client SDK
+import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, Timestamp } from "firebase/firestore";
 
 export default function LobbyPage() {
   const [rooms, setRooms] = useState<GameRoom[]>([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(true);
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
-  // Effect to load/mock rooms (client-side only)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const mockRooms: GameRoom[] = [
-        { id: createRoomId(), name: "神秘大厦", players: [{id: "player1", name: "房主"} as Player], maxPlayers: 10, status: GameRoomStatus.Waiting, hostId: "player1" },
-        { id: createRoomId(), name: "赛博劫案", players: [], maxPlayers: 10, status: GameRoomStatus.Waiting, hostId: "player2" },
-      ];
-      
-      let currentRooms: GameRoom[] = [];
-      const storedRoomsRaw = localStorage.getItem("anxian-rooms");
-      let roomsWereModified = false;
+    if (authLoading) return;
 
-      if (storedRoomsRaw) {
-        try {
-            const parsedRooms: GameRoom[] = JSON.parse(storedRoomsRaw);
-            
-            // Filter out empty rooms
-            const activeRooms = parsedRooms.filter(room => room.players && room.players.length > 0);
-            if (activeRooms.length < parsedRooms.length) {
-              localStorage.setItem("anxian-rooms", JSON.stringify(activeRooms));
-              roomsWereModified = true;
-            }
-            currentRooms = activeRooms;
+    setIsLoadingRooms(true);
+    const roomsCollection = collection(db, "rooms");
+    // We can add more complex queries here, e.g., to filter by status on the server-side if needed
+    // For now, client-side filtering for finished and sorting.
+    const q = query(roomsCollection, orderBy("createdAt", "desc"));
 
-        } catch (e) {
-            console.error("Failed to parse rooms from localStorage, using mock.", e);
-            currentRooms = mockRooms.filter(room => room.players && room.players.length > 0);
-            localStorage.setItem("anxian-rooms", JSON.stringify(currentRooms));
-            roomsWereModified = true;
-        }
-      } else {
-        currentRooms = mockRooms.filter(room => room.players && room.players.length > 0);
-        localStorage.setItem("anxian-rooms", JSON.stringify(currentRooms));
-        roomsWereModified = true;
-      }
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let fetchedRooms: GameRoom[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        // Ensure players array exists, default to empty if undefined from Firestore
+        players: doc.data().players || [], 
+      } as GameRoom));
 
       // Filter out finished rooms for display
-      const displayableRooms = currentRooms.filter(room => room.status !== GameRoomStatus.Finished);
+      fetchedRooms = fetchedRooms.filter(room => room.status !== GameRoomStatus.Finished && room.players.length > 0);
 
       // Sorting logic
       const statusPriority: { [key in GameRoomStatus]: number } = {
         [GameRoomStatus.InProgress]: 1,
         [GameRoomStatus.Waiting]: 2,
-        [GameRoomStatus.Finished]: 3, // Will be filtered out before display but kept for sorting completeness
+        [GameRoomStatus.Finished]: 3, 
       };
 
-      displayableRooms.sort((a, b) => {
-        // Sort by status priority
+      fetchedRooms.sort((a, b) => {
         const statusDiff = statusPriority[a.status] - statusPriority[b.status];
-        if (statusDiff !== 0) {
-          return statusDiff;
-        }
-        // If status is the same, sort by number of players (descending)
-        return b.players.length - a.players.length;
+        if (statusDiff !== 0) return statusDiff;
+        return (b.players?.length || 0) - (a.players?.length || 0);
       });
 
-      setRooms(displayableRooms);
-    }
-  }, []);
+      setRooms(fetchedRooms);
+      setIsLoadingRooms(false);
+    }, (error) => {
+      console.error("Error fetching rooms from Firestore:", error);
+      toast({ title: "获取房间失败", description: "无法从服务器加载房间列表。", variant: "destructive" });
+      setIsLoadingRooms(false);
+    });
 
-  const handleCreateRoom = () => {
+    return () => unsubscribe(); // Cleanup listener on component unmount
+  }, [authLoading, toast]);
+
+  const handleCreateRoom = async () => {
     if (!user) {
-      toast({ title: "Login Required", description: "请先登录再创建房间。", variant: "destructive" });
-      router.push("/login");
+      toast({ title: "需要登录", description: "请先登录再创建房间。", variant: "destructive" });
+      router.push("/login?redirect=/");
       return;
     }
-    const newRoomId = createRoomId();
-    const newRoomName = `房间 ${rooms.length + 1}`; 
-    const newRoom: GameRoom = {
-      id: newRoomId,
+
+    const newRoomName = `房间 ${Math.floor(Math.random() * 1000) + 1}`; // More unique default name
+    const newRoomData: Omit<GameRoom, "id"> = { // Omit id as Firestore generates it
       name: newRoomName,
-      players: [], // Initially empty, host will join on redirect
-      maxPlayers: 10, 
+      players: [{ ...user }], // Host is the first player
+      maxPlayers: 10,
       status: GameRoomStatus.Waiting,
       hostId: user.id,
+      createdAt: serverTimestamp() as Timestamp, // Use serverTimestamp for consistent time
+      // Initialize other GameRoom fields as needed for a new room
+      teamScores: { teamMemberWins: 0, undercoverWins: 0 },
+      missionHistory: [],
+      fullVoteHistory: [],
+      missionPlayerCounts: [], // Will be set when game starts
+      totalRounds: 5,
+      maxCaptainChangesPerRound: 5,
     };
-    
-    const currentRoomsRaw = localStorage.getItem("anxian-rooms");
-    let allRooms: GameRoom[] = [];
-    if (currentRoomsRaw) {
-        try {
-            allRooms = JSON.parse(currentRoomsRaw);
-        } catch (e) {
-            console.error("Failed to parse existing rooms, starting fresh.", e);
-        }
+
+    try {
+      const docRef = await addDoc(collection(db, "rooms"), newRoomData);
+      toast({ title: "房间已创建", description: `房间 "${newRoomName}" 创建成功！` });
+      router.push(`/rooms/${docRef.id}`);
+    } catch (error) {
+      console.error("Error creating room in Firestore:", error);
+      toast({ title: "创建房间失败", description: "无法在服务器上创建房间。", variant: "destructive" });
     }
-    
-    const updatedRooms = [newRoom, ...allRooms]; 
-
-     // Sorting logic - re-sort after adding a new room
-    const statusPriority: { [key in GameRoomStatus]: number } = {
-      [GameRoomStatus.InProgress]: 1,
-      [GameRoomStatus.Waiting]: 2,
-      [GameRoomStatus.Finished]: 3,
-    };
-    updatedRooms.sort((a, b) => {
-      const statusDiff = statusPriority[a.status] - statusPriority[b.status];
-      if (statusDiff !== 0) return statusDiff;
-      return b.players.length - a.players.length;
-    });
-    
-    // Before setting to state, filter out finished and empty for display
-    const displayableUpdatedRooms = updatedRooms
-        .filter(room => room.players && room.players.length > 0 || room.id === newRoomId) // keep the new room even if "empty" for a moment
-        .filter(room => room.status !== GameRoomStatus.Finished);
-
-    setRooms(displayableUpdatedRooms); // Update UI immediately with potentially displayable rooms
-
-    if (typeof window !== "undefined") {
-      // Save all rooms (including potentially new empty one that user will join) to localStorage
-      localStorage.setItem("anxian-rooms", JSON.stringify(updatedRooms));
-    }
-    router.push(`/rooms/${newRoomId}`);
   };
 
-  if (authLoading) {
-    return <div className="text-center py-10">加载认证信息...</div>;
+  if (authLoading || isLoadingRooms) {
+    return <div className="text-center py-10">加载房间列表...</div>;
   }
 
   return (
@@ -152,8 +115,8 @@ export default function LobbyPage() {
           解开谜团，揭露隐藏，赢取胜利。
         </p>
         <div className="mt-8">
-          <Button 
-            size="lg" 
+          <Button
+            size="lg"
             onClick={handleCreateRoom}
             className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
           >
@@ -170,17 +133,14 @@ export default function LobbyPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
-              // This check is technically redundant here due to filtering, but safe
-              if (room.status === GameRoomStatus.Finished || room.players.length === 0) {
-                return null; 
-              }
+              // Filtering of finished rooms is now done in useEffect
 
               return (
-                <Card 
-                  key={room.id} 
+                <Card
+                  key={room.id}
                   className={cn(
                     "hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1",
-                    isUserInRoom && "border-2 border-primary" 
+                    isUserInRoom && "border-2 border-primary"
                   )}
                 >
                   <CardHeader>
@@ -200,26 +160,25 @@ export default function LobbyPage() {
                       <span>{room.players.length} / {room.maxPlayers} 玩家</span>
                     </div>
                     <div className="flex items-center text-sm">
-                      状态: <Badge variant={room.status === GameRoomStatus.Waiting ? "outline" : room.status === GameRoomStatus.InProgress ? "default" : "secondary"} className={cn(
+                      状态: <Badge variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"} className={cn(
                         "ml-1 font-semibold",
                         room.status === GameRoomStatus.Waiting && "border-yellow-500 text-yellow-600",
                         room.status === GameRoomStatus.InProgress && "bg-green-500 text-white",
-                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white" // Should not be displayed
                       )}>{room.status.toUpperCase()}</Badge>
                     </div>
-                    <Image 
-                      src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`} 
+                    <Image
+                      src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}
                       alt={room.name}
                       width={600}
                       height={400}
                       className="rounded-md mt-2 aspect-video object-cover"
-                      data-ai-hint="game concept art" 
+                      data-ai-hint="game concept art"
                     />
                   </CardContent>
                   <CardFooter>
                     <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95">
                       <Link href={`/rooms/${room.id}`}>
-                        <LogIn className="mr-2 h-4 w-4" /> 
+                        <LogIn className="mr-2 h-4 w-4" />
                         {isUserInRoom ? "返回房间" : "加入房间"}
                       </Link>
                     </Button>
@@ -233,4 +192,3 @@ export default function LobbyPage() {
     </div>
   );
 }
-

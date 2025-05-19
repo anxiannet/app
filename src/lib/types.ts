@@ -1,4 +1,6 @@
 
+import type { Timestamp } from "firebase/firestore";
+
 export type User = {
   id: string;
   name: string;
@@ -13,7 +15,7 @@ export enum Role {
 
 export type Player = User & {
   role?: Role;
-  isCaptain?: boolean;
+  // isCaptain removed, use GameRoom.currentCaptainId
 };
 
 export enum GameRoomStatus {
@@ -55,15 +57,16 @@ export type VoteHistoryEntry = {
 };
 
 export type GameRoom = {
-  id: string; // Persistent Room ID
+  id: string; // Firestore document ID
   name: string;
   players: Player[];
   maxPlayers: number;
   status: GameRoomStatus;
-  currentCaptainId?: string;
   hostId: string;
-  currentGameInstanceId?: string; // Unique ID for the current game instance
+  createdAt: Timestamp; // Added for Firestore
 
+  currentGameInstanceId?: string;
+  currentCaptainId?: string;
   currentRound?: number;
   totalRounds?: number;
   captainChangesThisRound?: number;
@@ -88,12 +91,11 @@ export type GameRoom = {
   coachCandidateId?: string;
 };
 
-// For Game History
 export type WinningFactionType = Role.TeamMember | Role.Undercover | 'Draw' | null;
 
 export type PlayerGameRecord = {
-  gameInstanceId: string; // Unique ID for this specific game session
-  roomId: string; // ID of the persistent room where the game was played
+  gameInstanceId: string;
+  roomId: string;
   roomName: string;
   playedAt: string; // ISO date string
   myRole: Role;
@@ -109,6 +111,5 @@ export type PlayerGameRecord = {
     assassinationSucceeded: boolean;
   };
   fullVoteHistory?: VoteHistoryEntry[];
-  missionHistory?: Mission[]; // Added this line
+  missionHistory?: Mission[];
 };
-
