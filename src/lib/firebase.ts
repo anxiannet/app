@@ -22,13 +22,13 @@ let db: Firestore;
 if (typeof window !== "undefined") { // Only run on client
   if (!getApps().length) {
     // Log the configuration object that will be used
-    console.log("Firebase Config about to be used by client:", JSON.stringify(firebaseConfig, null, 2));
+    console.log("Firebase Config about to be used by client (CHECK apiKey HERE):", JSON.stringify(firebaseConfig, null, 2));
 
     // Pre-initialization checks
     if (!firebaseConfig.apiKey) {
       console.error(
-        "Firebase Initialization Error: NEXT_PUBLIC_FIREBASE_API_KEY is missing or undefined in the configuration object. " +
-        "Please ensure it is correctly set in your .env.local file and that your Next.js development server has been restarted after changes to .env.local."
+        "CRITICAL Firebase Initialization Error: NEXT_PUBLIC_FIREBASE_API_KEY is MISSING or UNDEFINED in the configuration object. " +
+        "ACTION REQUIRED: Please ensure it is correctly set in your .env.local file (in the project root) AND that your Next.js development server has been RESTARTED after any changes to .env.local."
       );
     } else if (firebaseConfig.apiKey.includes("AIza") && firebaseConfig.apiKey.length < 20) { // Basic check for common placeholder prefixes or very short keys
       console.warn(
