@@ -179,7 +179,7 @@ export default function GameRoomPage() {
         currentPhase: 'mission_reveal',
         missionOutcomeForDisplay: outcome,
         failCardsPlayedForDisplay: failCardsPlayed,
-        missionCardPlaysForCurrentMission: finalPlays, // Ensure virtual player plays are stored for display
+        missionCardPlaysForCurrentMission: finalPlays, 
       };
     });
     toast({ title: `第 ${room.currentRound} 轮任务结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
@@ -197,12 +197,11 @@ export default function GameRoomPage() {
       return player && !player.id.startsWith("virtual_");
     });
 
-    if (humanPlayersOnMission.length === 0 && missionTeamPlayerIds.length > 0) { // All AI on mission
-      const timer = setTimeout(() => finalizeAndRevealMissionOutcome(), 1000); // Small delay for AI "action"
+    if (humanPlayersOnMission.length === 0 && missionTeamPlayerIds.length > 0) { 
+      const timer = setTimeout(() => finalizeAndRevealMissionOutcome(), 1000); 
       return () => clearTimeout(timer);
     }
     
-    // Check if all human players on the mission have acted
     const humanActionsRecorded = room.missionCardPlaysForCurrentMission?.filter(play => humanPlayersOnMission.includes(play.playerId)).length || 0;
 
     if (humanActionsRecorded === humanPlayersOnMission.length && humanPlayersOnMission.length > 0) {
@@ -217,21 +216,17 @@ export default function GameRoomPage() {
     }
     const currentCaptain = localPlayers.find(p => p.id === room.currentCaptainId);
     if (currentCaptain && currentCaptain.id.startsWith("virtual_")) {
-      // Simple AI for team proposal: picks self and random others
       const performVirtualCaptainTeamProposal = () => {
-        toast({ title: "虚拟队长行动中", description: `${currentCaptain.name} 正在选择队伍...` });
         if (!room.currentRound || !room.missionPlayerCounts) return;
 
         const requiredPlayers = room.missionPlayerCounts[room.currentRound -1];
-        let proposedTeamIds: string[] = [currentCaptain.id]; // Captain always includes self
+        let proposedTeamIds: string[] = [currentCaptain.id]; 
         const otherPlayers = localPlayers.filter(p => p.id !== currentCaptain.id);
         
-        // Simple random selection from remaining players
         const shuffledOtherPlayers = otherPlayers.sort(() => 0.5 - Math.random());
         for (let i = 0; proposedTeamIds.length < requiredPlayers && i < shuffledOtherPlayers.length; i++) {
             proposedTeamIds.push(shuffledOtherPlayers[i].id);
         }
-        // Ensure correct number of players
         proposedTeamIds = proposedTeamIds.slice(0, requiredPlayers);
 
         const proposedTeamNames = proposedTeamIds.map(id => localPlayers.find(p=>p.id === id)?.name || 'Unknown').join(', ');
@@ -241,12 +236,12 @@ export default function GameRoomPage() {
             ...prevRoom,
             selectedTeamForMission: proposedTeamIds,
             currentPhase: 'team_voting',
-            teamVotes: [], // Reset votes for the new proposal
+            teamVotes: [], 
           };
         });
         toast({ title: "虚拟队伍已提议", description: `${currentCaptain.name} 提议: ${proposedTeamNames}` });
       };
-      const timer = setTimeout(performVirtualCaptainTeamProposal, 1500); // Simulate AI thinking time
+      const timer = setTimeout(performVirtualCaptainTeamProposal, 1500); 
       return () => clearTimeout(timer);
     }
   }, [room, user, localPlayers, toast]);
@@ -260,7 +255,7 @@ export default function GameRoomPage() {
     Object.entries(config).forEach(([role, count]) => {
       for (let i = 0; i < count; i++) rolesToAssign.push(role as Role);
     });
-    while(rolesToAssign.length < playerCount) rolesToAssign.push(Role.TeamMember); // Fill remaining with TeamMember
+    while(rolesToAssign.length < playerCount) rolesToAssign.push(Role.TeamMember); 
     rolesToAssign = rolesToAssign.slice(0, playerCount).sort(() => Math.random() - 0.5);
 
     const updatedPlayers = localPlayers.map((player, index) => ({
@@ -280,7 +275,7 @@ export default function GameRoomPage() {
         missionCardPlaysForCurrentMission: [], missionOutcomeForDisplay: undefined, failCardsPlayedForDisplay: undefined,
         teamScores: { teamMemberWins: 0, undercoverWins: 0 }, missionHistory: [], missionPlayerCounts: missionPlayerCounts,
         coachCandidateId: undefined,
-        fullVoteHistory: [], // Initialize fullVoteHistory
+        fullVoteHistory: [], 
       };
       setLocalPlayers(updatedPlayers);
       setSelectedMissionTeam([]);
@@ -396,7 +391,7 @@ export default function GameRoomPage() {
         setRoom(prev => prev ? {...prev, missionCardPlaysForCurrentMission: [...(prev.missionCardPlaysForCurrentMission || []), ...autoPlays]} : null);
       }
 
-    } else { // Team Rejected
+    } else { 
       let newCaptainChangesThisRound = (room.captainChangesThisRound || 0) + 1;
       if (newCaptainChangesThisRound >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) {
         toast({ title: "队伍被拒绝5次!", description: "卧底阵营获胜!", variant: "destructive" });
@@ -450,8 +445,6 @@ export default function GameRoomPage() {
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
       const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
       const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => {
-        // Simple AI: Virtual players always approve for now
-        // In a real scenario, this would be a call to an AI decision flow
         return { playerId: vp.id, vote: 'approve' };
       });
       updatedVotes = [...updatedVotes, ...virtualPlayerVotes];
@@ -668,7 +661,7 @@ export default function GameRoomPage() {
            {room.status === GameRoomStatus.InProgress && (
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
                {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
-                 <p>第{room.currentRound}场比赛，第{room.captainChangesThisRound + 1}次组队</p>
+                 <p>第 {room.currentRound} 场比赛，第 {room.captainChangesThisRound + 1} 次组队</p>
               )}
               {room.currentPhase && <div className="flex items-center"><ListChecks className="mr-2 h-4 w-4 text-purple-500" /> 当前阶段: {getPhaseDescription(room.currentPhase)}</div>}
                {room.teamScores && (
@@ -793,7 +786,7 @@ export default function GameRoomPage() {
                     <div className="space-y-3">
                         <div className="mb-2 text-center text-sm text-muted-foreground p-2 bg-background/50 rounded-md border">
                            {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
-                             <p>第{room.currentRound}场比赛，第{room.captainChangesThisRound + 1}次组队</p>
+                             <p>第 {room.currentRound} 场比赛，第 {room.captainChangesThisRound + 1} 次组队</p>
                            )}
                         </div>
                         <h3 className="text-lg font-semibold text-center">为队伍投票</h3>
@@ -910,7 +903,11 @@ export default function GameRoomPage() {
                   </AccordionTrigger>
                   <AccordionContent>
                     <ScrollArea className="h-[300px] pr-4">
-                      <Accordion type="multiple" className="w-full">
+                       <Accordion 
+                          type="multiple" 
+                          className="w-full"
+                          defaultValue={room.status === GameRoomStatus.InProgress && room.currentRound ? [`round-${room.currentRound}`] : undefined}
+                        >
                         {Array.from({ length: room.totalRounds || TOTAL_ROUNDS_PER_GAME }, (_, i) => i + 1)
                           .map(roundNum => {
                             const roundVotes = room.fullVoteHistory!.filter(vh => vh.round === roundNum);
