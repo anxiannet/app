@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -12,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User as UserIcon } from "lucide-react";
+import { LogOut, User as UserIcon, History } from "lucide-react"; // Added History icon
 import { Skeleton } from "./ui/skeleton";
 
 export function AuthButton() {
@@ -45,18 +46,25 @@ export function AuthButton() {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{user.name}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              Player ID: {user.id}
+              玩家 ID: {user.id}
             </p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="cursor-pointer">
+          <Link href="/history">
+            <History className="mr-2 h-4 w-4" />
+            <span>游戏记录</span>
+          </Link>
+        </DropdownMenuItem>
         {/* <DropdownMenuItem>
           <UserIcon className="mr-2 h-4 w-4" />
           <span>Profile</span>
         </DropdownMenuItem> */}
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive">
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
+          <span>退出登录</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

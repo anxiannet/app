@@ -35,7 +35,7 @@ export type Mission = {
   teamPlayerIds: string[];
   outcome: MissionOutcome;
   failCardsPlayed: number;
-  cardPlays: MissionCardPlay[]; // Added to store all card plays for the mission
+  cardPlays: MissionCardPlay[];
 };
 
 export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'coach_assassination' | 'game_over';
@@ -84,5 +84,26 @@ export type GameRoom = {
   fullVoteHistory?: VoteHistoryEntry[];
 
   missionPlayerCounts?: number[];
-  coachCandidateId?: string;
+  coachCandidateId?: string; // ID of the player targeted in coach assassination
+};
+
+// For Game History
+export type WinningFactionType = Role.TeamMember | Role.Undercover | 'Draw' | null;
+
+export type PlayerGameRecord = {
+  gameId: string;
+  roomName: string;
+  playedAt: string; // ISO date string
+  myRole: Role;
+  gameOutcome: 'win' | 'loss' | 'draw';
+  winningFaction: WinningFactionType;
+  gameSummaryMessage: string; // e.g., "战队阵营胜利! (通过指认教练)"
+  finalScores: { teamMemberWins: number; undercoverWins: number };
+  playersInGame: Array<{ id: string; name: string; role: Role }>;
+  coachAssassinationAttempt?: {
+    targetPlayerId: string;
+    targetPlayerName: string;
+    wasTargetCoach: boolean;
+    assassinationSucceeded: boolean; // true if Undercover won due to this
+  };
 };
