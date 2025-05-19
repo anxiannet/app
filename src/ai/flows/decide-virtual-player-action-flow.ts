@@ -73,15 +73,19 @@ Team Members and Coaches win if 3 missions succeed. Undercovers win if 3 mission
 
 Current Game State:
 - Round: {{gameContext.currentRound}} of {{gameContext.totalRounds}}
-- Captain: {{#each gameContext.allPlayers}}{{#if isCaptain}}{{name}}{{/if}}{{/each}} (ID: {{gameContext.currentCaptainId}})
+- Captain: {{#with (findPlayerById gameContext.allPlayers gameContext.currentCaptainId)}}{{name}}{{else}}Unknown (ID: {{gameContext.currentCaptainId}}){{/with}} (ID: {{gameContext.currentCaptainId}})
 - Captaincy changes this round: {{gameContext.captainChangesThisRound}} (Max: {{gameContext.maxCaptainChangesPerRound}})
-- Mission Player Counts (for rounds 1-5): {{#each gameContext.missionPlayerCounts}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
+- Mission Player Counts (for rounds 1-{{gameContext.totalRounds}}): {{#each gameContext.missionPlayerCounts}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}
 - Current Team Scores: Team Members {{gameContext.teamScores.teamMemberWins}}, Undercovers {{gameContext.teamScores.undercoverWins}}
 
 A team has been proposed by the current captain for the mission in round {{gameContext.currentRound}}.
 The proposed team members are:
-{{#each gameContext.proposedTeamPlayerIds}}
-- {{#with (lookup ../gameContext.allPlayers @index)}}{{name}} (ID: {{id}}){{/with}}
+{{#each gameContext.proposedTeamPlayerIds as |playerId|}}
+  {{#with (findPlayerById ../gameContext.allPlayers playerId) as |player|}}
+- {{player.name}} (ID: {{player.id}})
+  {{else}}
+- Unknown Player (ID: {{playerId}})
+  {{/with}}
 {{/each}}
 
 All Players in the game (Your role, {{virtualPlayer.role}}, means you might know others' roles):
@@ -92,7 +96,7 @@ All Players in the game (Your role, {{virtualPlayer.role}}, means you might know
 Mission History (if any):
 {{#if gameContext.missionHistory}}
 {{#each gameContext.missionHistory}}
-- Round {{round}}: Captain {{lookup ../../gameContext.allPlayers (findIndex ../../gameContext.allPlayers "id" captainId).name}}. Team: {{#each team}}{{name}}{{#unless @last}}, {{/unless}}{{/each}}. Outcome: {{outcome}}.
+- Round {{round}}: Captain {{#with (findPlayerById ../../gameContext.allPlayers captainId)}}{{name}}{{else}}Unknown (ID: {{captainId}}){{/with}}. Team: {{#each team}}{{#with (findPlayerById ../../../gameContext.allPlayers id)}}{{name}}{{else}}Unknown (ID: {{id}}){{/with}}{{#unless @last}}, {{/unless}}{{/each}}. Outcome: {{outcome}}.
 {{/each}}
 {{else}}
 No missions have occurred yet.
@@ -148,12 +152,6 @@ const virtualPlayerVoteFlow = ai.defineFlow(
     outputSchema: VirtualPlayerVoteOutputSchema,
   },
   async (input) => {
-    // Helper for Handlebars: findIndex
-    (globalThis as any).Handlebars?.registerHelper('findIndex', (array: any[], key: string, value: any) => {
-        return array.findIndex(item => item[key] === value);
-    });
-
-
     const {output} = await prompt(input);
     // Ensure there is a default reasonable output if AI fails
     if (!output || !output.decision) {
@@ -166,16 +164,29 @@ const virtualPlayerVoteFlow = ai.defineFlow(
 
 // Register Handlebars helpers if not already registered (idempotent)
 if (typeof (globalThis as any).Handlebars !== 'undefined') {
-    (globalThis as any).Handlebars.registerHelper('lookup', function(obj: any, index: any) {
-        return obj && obj[index];
-    });
-    (globalThis as any).Handlebars.registerHelper('eq', function (a: any, b: any) {
-        return a === b;
-    });
-     (globalThis as any).Handlebars.registerHelper('findIndex', (array: any[], key: string, value: any) => {
-        return array.findIndex(item => item[key] === value);
-    });
+    const Handlebars = (globalThis as any).Handlebars;
+    if (!Handlebars.helpers.lookup) {
+        Handlebars.registerHelper('lookup', function(obj: any, index: any) {
+            return obj && obj[index];
+        });
+    }
+    if (!Handlebars.helpers.eq) {
+        Handlebars.registerHelper('eq', function (a: any, b: any) {
+            return a === b;
+        });
+    }
+    if (!Handlebars.helpers.findIndex) {
+        Handlebars.registerHelper('findIndex', (array: any[], key: string, value: any) => {
+            return array.findIndex(item => item[key] === value);
+        });
+    }
+    if (!Handlebars.helpers.findPlayerById) {
+        Handlebars.registerHelper('findPlayerById', (players: PlayerPerspective[], playerId: string) => {
+            return players.find(p => p.id === playerId);
+        });
+    }
 } else {
     console.warn("Handlebars not available globally for AI prompt templating.");
 }
 
+    
