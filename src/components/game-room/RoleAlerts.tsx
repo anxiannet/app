@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { Player, Role } from "@/lib/types";
+import { type Player, Role } from "@/lib/types"; // Changed: Role is now a value import
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Info, Eye, Users } from "lucide-react";
 import { GameRoomStatus } from "@/lib/types";
