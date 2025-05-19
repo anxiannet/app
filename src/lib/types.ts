@@ -1,5 +1,4 @@
 
-
 export type User = {
   id: string;
   name: string;
@@ -23,15 +22,14 @@ export enum GameRoomStatus {
   Finished = "finished",
 }
 
-export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
+export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged'; // 'sabotaged' can be used if explicitly revealing sabotage
 
 export type Mission = {
   round: number;
   captainId: string;
-  team: Player[]; // Store full player objects or just IDs
+  teamPlayerIds: string[]; // Store player IDs
   outcome: MissionOutcome;
-  failCardsPlayed?: number; // Optional: for missions needing >1 fail card
-  // sabotagedBy?: string[]; // Optional: if you want to reveal saboteurs later
+  failCardsPlayed: number; 
 };
 
 export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'game_over';
@@ -41,7 +39,10 @@ export type PlayerVote = {
   vote: 'approve' | 'reject';
 };
 
-// PlayerPerspective removed as it was primarily for AI
+export type MissionCardPlay = {
+  playerId: string;
+  card: 'success' | 'fail';
+};
 
 export type GameRoom = {
   id: string;
@@ -52,27 +53,24 @@ export type GameRoom = {
   currentCaptainId?: string;
   hostId: string;
 
-  // Multi-round gameplay
   currentRound?: number;
-  totalRounds?: number; // Typically 5
+  totalRounds?: number; 
   captainChangesThisRound?: number;
-  maxCaptainChangesPerRound?: number; // Typically 5
+  maxCaptainChangesPerRound?: number;
 
-  // Mission and phase tracking
   currentPhase?: GameRoomPhase;
-  selectedTeamForMission?: string[]; // Array of player IDs
-  teamVotes?: PlayerVote[]; // For team voting phase
-  // playersOnMission?: string[]; // IDs of players actually on the mission
-  // missionSuccessCards?: number;
-  // missionFailCards?: number;
+  selectedTeamForMission?: string[]; 
+  teamVotes?: PlayerVote[];
+  
+  missionCardPlaysForCurrentMission?: MissionCardPlay[];
+  missionOutcomeForDisplay?: MissionOutcome;
+  failCardsPlayedForDisplay?: number;
   
   teamScores?: {
-    teamMemberWins: number; // Missions succeeded by team members
-    undercoverWins: number; // Missions sabotaged by undercover
+    teamMemberWins: number; 
+    undercoverWins: number; 
   };
   missionHistory?: Mission[];
   
-  // Configuration for current game instance (derived from player count)
-  missionPlayerCounts?: number[]; // e.g. [2,3,2,3,3] for 5 players
-  // missionFailRequirements?: number[]; // e.g. [1,1,1,2,1] for when 2 fail cards are needed
+  missionPlayerCounts?: number[];
 };
