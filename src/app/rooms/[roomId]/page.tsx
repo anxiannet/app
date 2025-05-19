@@ -38,13 +38,15 @@ const MIN_PLAYERS_TO_START = 5;
 const TOTAL_ROUNDS_PER_GAME = 5;
 const MAX_CAPTAIN_CHANGES_PER_ROUND = 5; 
 
-const COMMON_CHINESE_NAMES = [
-  "李明", "王伟", "张芳", "刘秀英", "陈静", "杨勇", "赵敏", "黄强", "周杰", "吴秀兰",
-  "徐雷", "孙艳", "胡波", "朱琳", "高翔", "林娜", "郑军", "何平", "马超", "宋丹",
-  "小红", "大山", "思思", "阿强", "文文", "乐乐", "聪聪", "萌萌", "飞飞", "静静",
-  "李娜", "张伟", "王芳", "刘洋", "陈勇", "杨静", "赵强", "黄秀英", "周敏", "吴雷",
-  "徐艳", "孙波", "胡琳", "朱翔", "高娜", "林军", "郑平", "何超", "马丹", "宋杰"
+const HONOR_OF_KINGS_HERO_NAMES = [
+  "亚瑟", "安琪拉", "白起", "不知火舞", "妲己", "狄仁杰", "典韦", "貂蝉", "东皇太一", "盾山",
+  "伽罗", "关羽", "后羿", "花木兰", "黄忠", "铠", "兰陵王", "老夫子", "廉颇", "刘邦",
+  "刘备", "刘禅", "鲁班七号", "吕布", "马可波罗", "芈月", "米莱狄", "明世隐", "墨子", "哪吒",
+  "娜可露露", "盘古", "裴擒虎", "公孙离", "上官婉儿", "沈梦溪", "孙膑", "孙尚香", "孙悟空", "王昭君",
+  "夏侯惇", "项羽", "小乔", "杨戬", "杨玉环", "瑶", "弈星", "虞姬", "元歌", "云中君",
+  "张飞", "张良", "赵云", "甄姬", "钟馗", "钟无艳", "周瑜", "庄周", "诸葛亮", "阿轲"
 ];
+
 
 export default function GameRoomPage() {
   const params = useParams();
@@ -331,7 +333,7 @@ export default function GameRoomPage() {
       toast({ title: "房间已满", description: "无法添加更多玩家，房间已满。", variant: "destructive" }); return;
     }
     const existingVirtualPlayerNames = localPlayers.filter(p => p.id.startsWith("virtual_")).map(p => p.name);
-    const availableNames = COMMON_CHINESE_NAMES.filter(name => !existingVirtualPlayerNames.includes(name));
+    const availableNames = HONOR_OF_KINGS_HERO_NAMES.filter(name => !existingVirtualPlayerNames.includes(name));
     if (availableNames.length === 0) {
       toast({ title: "错误", description: "没有更多可用的虚拟玩家名称。", variant: "destructive" }); return;
     }
@@ -605,9 +607,7 @@ export default function GameRoomPage() {
            {room.status === GameRoomStatus.InProgress && (
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
               {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
-                <p>
-                  第{room.currentRound}场比赛，第{room.captainChangesThisRound + 1}次组队
-                </p>
+                 <p>第{room.currentRound}场比赛，第{room.captainChangesThisRound + 1}次组队</p>
               )}
               {room.currentPhase && <div className="flex items-center"><ListChecks className="mr-2 h-4 w-4 text-purple-500" /> 当前阶段: {getPhaseDescription(room.currentPhase)}</div>}
                {room.teamScores && (
@@ -697,7 +697,9 @@ export default function GameRoomPage() {
                     <Button onClick={handleStartGame} disabled={!canStartGame} className="w-full bg-green-500 hover:bg-green-600 text-white transition-transform hover:scale-105 active:scale-95"><Play className="mr-2 h-5 w-5" /> 开始游戏</Button>
                     {!canStartGame && (localPlayers.length < MIN_PLAYERS_TO_START || localPlayers.length > room.maxPlayers) && (<p className="text-sm text-destructive text-center">需要 {MIN_PLAYERS_TO_START}-{room.maxPlayers} 名玩家才能开始. 当前 {localPlayers.length} 名.</p>)}
                      <Button onClick={handleAddVirtualPlayer} disabled={!canAddVirtualPlayer} variant="outline" className="w-full transition-transform hover:scale-105 active:scale-95"><UserPlus className="mr-2 h-5 w-5" /> 添加虚拟玩家</Button>
-                    {!canAddVirtualPlayer && localPlayers.length >= room.maxPlayers && (<p className="text-sm text-destructive text-center">房间已满.</p>)}</div>)}</>)}
+                    {!canAddVirtualPlayer && localPlayers.length >= room.maxPlayers && (<p className="text-sm text-destructive text-center">房间已满.</p>)}</div>)}
+                 <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
+                </>)}
             
             {room.status === GameRoomStatus.InProgress && (<>
                 <div className="text-center p-4 bg-secondary/30 rounded-md">
@@ -782,12 +784,6 @@ export default function GameRoomPage() {
                 <p className="text-muted-foreground mt-2">感谢您的参与！</p>
                  <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
               </div>)}
-            {room.status === GameRoomStatus.Waiting && (
-              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
-            )}
-             {room.status === GameRoomStatus.Finished && (
-              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
-            )}
           </CardContent>
         </Card>
       </div>
