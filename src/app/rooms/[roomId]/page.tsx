@@ -911,13 +911,20 @@ export default function GameRoomPage() {
                         {Array.from({ length: room.totalRounds || TOTAL_ROUNDS_PER_GAME }, (_, i) => i + 1)
                           .map(roundNum => {
                             const roundVotes = room.fullVoteHistory!.filter(vh => vh.round === roundNum);
-                            if (roundVotes.length === 0) return null;
+                            if (roundVotes.length === 0 && (!room.missionHistory || !room.missionHistory.find(m => m.round === roundNum))) return null;
+                            
                             const attemptCountText = roundVotes.length > 0 ? `（${roundVotes.length}次组队）` : '';
+                            let missionOutcomeText = '';
+                            const missionForRound = room.missionHistory?.find(m => m.round === roundNum);
+                            if (missionForRound) {
+                                missionOutcomeText = missionForRound.outcome === 'success' ? ' - 任务成功' : (missionForRound.outcome === 'fail' ? ' - 任务失败' : '');
+                            }
+
                             return (
                               <AccordionItem value={`round-${roundNum}`} key={`round-history-${roundNum}`}>
-                                <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 场比赛记录{attemptCountText}</AccordionTrigger>
+                                <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 场比赛记录{attemptCountText}{missionOutcomeText}</AccordionTrigger>
                                 <AccordionContent>
-                                  {roundVotes.map((voteEntry, attemptIdx) => {
+                                  {roundVotes.length > 0 ? roundVotes.map((voteEntry, attemptIdx) => {
                                     const captain = localPlayers.find(p => p.id === voteEntry.captainId);
                                     const captainDisplay = captain ? `${captain.name}${room.status === GameRoomStatus.Finished && captain.role ? ` (${captain.role})` : ''}` : '未知';
                                     
@@ -944,7 +951,9 @@ export default function GameRoomPage() {
                                         </ul>
                                         </div>
                                     );
-                                  })}
+                                  }) : (
+                                    missionForRound && <p className="text-sm text-muted-foreground">本场比赛直接判定: {missionForRound.outcome === 'success' ? '成功' : '失败'}</p>
+                                  )}
                                 </AccordionContent>
                               </AccordionItem>
                             );
