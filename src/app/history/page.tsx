@@ -90,8 +90,8 @@ export default function GameHistoryPage() {
 
       <ScrollArea className="h-[calc(100vh-20rem)]">
         <div className="space-y-6 pr-4">
-          {gameRecords.map((record) => (
-            <Card key={record.gameInstanceId} className="shadow-lg hover:shadow-xl transition-shadow">
+          {gameRecords.map((record, index) => (
+            <Card key={record.gameInstanceId ? `record-${record.gameInstanceId}-${index}` : `record-index-${index}`} className="shadow-lg hover:shadow-xl transition-shadow">
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-2xl text-primary">{record.roomName}</CardTitle>
@@ -153,7 +153,8 @@ export default function GameHistoryPage() {
                         </AccordionTrigger>
                         <AccordionContent>
                             <ScrollArea className="h-[200px] pr-2">
-                                {Array.from({ length: record.fullVoteHistory.reduce((max, vh) => Math.max(max, vh.round), 0) }, (_, i) => i + 1)
+                                {record.fullVoteHistory.reduce((acc, vh) => acc.includes(vh.round) ? acc : [...acc, vh.round], [] as number[])
+                                .sort((a,b) => a - b) // Ensure rounds are sorted numerically
                                 .map(roundNum => {
                                     const roundVotes = record.fullVoteHistory!.filter(vh => vh.round === roundNum);
                                     if (roundVotes.length === 0) return null;
@@ -218,3 +219,6 @@ export default function GameHistoryPage() {
     </div>
   );
 }
+
+
+    
