@@ -44,7 +44,7 @@ const MISSIONS_CONFIG: { [playerCount: number]: number[] } = {
 
 const MIN_PLAYERS_TO_START = 5;
 const TOTAL_ROUNDS_PER_GAME = 5;
-const MAX_CAPTAIN_CHANGES_PER_ROUND = 5; // This might be superseded by mission vote failures
+const MAX_CAPTAIN_CHANGES_PER_ROUND = 5; 
 
 const COMMON_CHINESE_NAMES = [
   "李明", "王伟", "张芳", "刘秀英", "陈静", "杨勇", "赵敏", "黄强", "周杰", "吴秀兰",
@@ -393,8 +393,8 @@ export default function GameRoomPage() {
           </div>
            {room.status === GameRoomStatus.InProgress && (
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
-              {room.currentRound !== undefined && room.totalRounds !== undefined && <div className="flex items-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> 回合: {room.currentRound} / {room.totalRounds}</div>}
-              {/* {room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && <div className="flex items-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> 队长顺位: {room.captainChangesThisRound +1} / {localPlayers.length} (本回合第 {room.captainChangesThisRound +1} 次尝试组队)</div>} */}
+              {room.currentRound !== undefined && room.totalRounds !== undefined && <div className="flex items-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> 比赛场次: {room.currentRound} / {room.totalRounds}</div>}
+              {room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && <div className="flex items-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> 本轮队长: {room.captainChangesThisRound + 1} / {room.maxCaptainChangesPerRound}</div>}
               {room.currentPhase && <div className="flex items-center"><ListChecks className="mr-2 h-4 w-4 text-purple-500" /> 当前阶段: {getPhaseDescription(room.currentPhase)}</div>}
                {room.teamScores && (
                 <div className="flex items-center gap-4">
