@@ -128,7 +128,7 @@ export default function GameHistoryPage() {
                     <p>结果: {record.coachAssassinationAttempt.assassinationSucceeded ? "指认成功 (卧底胜利)" : "指认失败 (战队胜利)"}</p>
                   </div>
                 )}
-                <Accordion type="multiple" collapsible className="w-full">
+                <Accordion type="multiple" className="w-full">
                   <AccordionItem value="players-in-game">
                     <AccordionTrigger className="text-sm hover:no-underline">
                         <Users className="mr-2 h-4 w-4 text-muted-foreground" /> 查看当局玩家 ({record.playersInGame.length}人)
@@ -219,6 +219,3 @@ export default function GameHistoryPage() {
     </div>
   );
 }
-
-
-    
