@@ -22,6 +22,19 @@ export enum GameRoomStatus {
   Finished = "finished",
 }
 
+export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
+
+export type Mission = {
+  round: number;
+  captainId: string;
+  team: Player[]; // Store full player objects or just IDs
+  outcome: MissionOutcome;
+  failCardsPlayed?: number; // Optional: for missions needing >1 fail card
+  // sabotagedBy?: string[]; // Optional: if you want to reveal saboteurs later
+};
+
+export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'game_over';
+
 export type GameRoom = {
   id: string;
   name: string;
@@ -30,11 +43,29 @@ export type GameRoom = {
   status: GameRoomStatus;
   currentCaptainId?: string;
   hostId: string;
-  // New properties for multi-round gameplay
+
+  // Multi-round gameplay
   currentRound?: number;
-  totalRounds?: number;
+  totalRounds?: number; // Typically 5
   captainChangesThisRound?: number;
-  maxCaptainChangesPerRound?: number;
-  // gameWinner?: Role | null; // Keeping it simple for now, winner determination is complex
+  maxCaptainChangesPerRound?: number; // Typically 5
+
+  // Mission and phase tracking
+  currentPhase?: GameRoomPhase;
+  selectedTeamForMission?: string[]; // Array of player IDs
+  // missionVotes?: Array<{playerId: string; vote: 'approve' | 'reject'}>; // For team voting phase
+  // playersOnMission?: string[]; // IDs of players actually on the mission
+  // missionSuccessCards?: number;
+  // missionFailCards?: number;
+  
+  teamScores?: {
+    teamMemberWins: number; // Missions succeeded by team members
+    undercoverWins: number; // Missions sabotaged by undercover
+  };
+  missionHistory?: Mission[];
+  
+  // Configuration for current game instance (derived from player count)
+  missionPlayerCounts?: number[]; // e.g. [2,3,2,3,3] for 5 players
+  // missionFailRequirements?: number[]; // e.g. [1,1,1,2,1] for when 2 fail cards are needed
 };
 

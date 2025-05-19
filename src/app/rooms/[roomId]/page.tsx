@@ -4,14 +4,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { type GameRoom, type Player, Role, GameRoomStatus } from "@/lib/types";
+import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Repeat, UsersRound } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Repeat, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: number, [Role.TeamMember]: number } } = {
   5: { [Role.Undercover]: 2, [Role.Coach]: 1, [Role.TeamMember]: 2 },
@@ -22,9 +24,27 @@ const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: 
   10: { [Role.Undercover]: 4, [Role.Coach]: 1, [Role.TeamMember]: 5 },
 };
 
+// Mission player counts: [Round1, Round2, Round3, Round4, Round5]
+const MISSIONS_CONFIG: { [playerCount: number]: number[] } = {
+  5: [2, 3, 2, 3, 3],
+  6: [2, 3, 4, 3, 4],
+  7: [2, 3, 3, 4, 4],
+  8: [3, 4, 4, 5, 5],
+  9: [3, 4, 4, 5, 5],
+  10: [3, 4, 4, 5, 5],
+};
+
+// Future: configure if 2 fail cards are needed for certain missions
+// const MISSION_FAIL_REQUIREMENTS: { [playerCount: number]: number[] } = {
+//   // Example: For 7+ players, Mission 4 might need 2 fails
+//   7: [1, 1, 1, 2, 1], 
+//   // ... others default to 1
+// };
+
+
 const MIN_PLAYERS_TO_START = 5;
 const TOTAL_ROUNDS_PER_GAME = 5;
-const MAX_CAPTAIN_CHANGES_PER_ROUND = 5;
+const MAX_CAPTAIN_CHANGES_PER_ROUND = 5; // This might be superseded by mission vote failures
 
 const COMMON_CHINESE_NAMES = [
   "李明", "王伟", "张芳", "刘秀英", "陈静", "杨勇", "赵敏", "黄强", "周杰", "吴秀兰",
@@ -44,6 +64,7 @@ export default function GameRoomPage() {
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [localPlayers, setLocalPlayers] = useState<Player[]>([]);
+  const [selectedMissionTeam, setSelectedMissionTeam] = useState<string[]>([]); // IDs of players selected by captain
 
   const updateLocalStorageRooms = useCallback((updatedRoom: GameRoom | null) => {
     if (!updatedRoom) return;
@@ -77,7 +98,6 @@ export default function GameRoomPage() {
            const newPlayer: Player = { ...user, isCaptain: false };
            currentRoom.players.push(newPlayer);
            playerExists = true;
-           // updateLocalStorageRooms is called by setRoom's effect
         } else if (!playerExists && currentRoom.status !== GameRoomStatus.Waiting) {
           toast({ title: "Game in Progress or Finished", description: "Cannot join a game that has already started or is finished.", variant: "destructive" });
           router.push("/");
@@ -90,6 +110,9 @@ export default function GameRoomPage() {
         
         setRoom(prevRoom => ({ ...prevRoom, ...currentRoom }));
         setLocalPlayers(currentRoom.players);
+        if (currentRoom.selectedTeamForMission) {
+            setSelectedMissionTeam(currentRoom.selectedTeamForMission);
+        }
       } else {
         toast({ title: "Room not found", description: "The requested game room does not exist.", variant: "destructive" });
         router.push("/");
@@ -135,9 +158,12 @@ export default function GameRoomPage() {
     const firstCaptainIndex = Math.floor(Math.random() * updatedPlayers.length);
     updatedPlayers[firstCaptainIndex].isCaptain = true;
 
+    const missionPlayerCounts = MISSIONS_CONFIG[playerCount] || MISSIONS_CONFIG[Object.keys(MISSIONS_CONFIG).map(Number).sort((a,b)=> a-b)[0]];
+
+
     setRoom(prevRoom => {
       if (!prevRoom) return null;
-      const updatedRoom = {
+      const updatedRoom: GameRoom = {
         ...prevRoom,
         players: updatedPlayers,
         status: GameRoomStatus.InProgress,
@@ -146,11 +172,17 @@ export default function GameRoomPage() {
         totalRounds: TOTAL_ROUNDS_PER_GAME,
         captainChangesThisRound: 0,
         maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND,
+        currentPhase: 'team_selection',
+        selectedTeamForMission: [],
+        teamScores: { teamMemberWins: 0, undercoverWins: 0 },
+        missionHistory: [],
+        missionPlayerCounts: missionPlayerCounts,
       };
       setLocalPlayers(updatedPlayers);
+      setSelectedMissionTeam([]);
       return updatedRoom;
     });
-    toast({ title: "Game Started!", description: `Roles assigned. Round 1 begins. ${updatedPlayers[firstCaptainIndex].name} is the first captain.` });
+    toast({ title: "Game Started!", description: `Roles assigned. Round 1, Team Selection. ${updatedPlayers[firstCaptainIndex].name} is the first captain.` });
   };
   
   const handleStartGame = () => {
@@ -207,17 +239,43 @@ export default function GameRoomPage() {
     toast({ title: "Virtual Player Added", description: `${virtualPlayerName} has joined the room.` });
   };
 
-  const handleNextTurn = () => {
-    if (!room || !room.currentCaptainId || room.status !== GameRoomStatus.InProgress || !room.players || !user) return;
-    if (user.id !== room.currentCaptainId && user.id !== room.hostId) {
-      // Allowing host to advance turn for simulation purposes, or if captain is stuck
-      // In a real game, only current captain might do this, or a voting system.
-      // For now, this also allows host to cycle through for testing.
-       // toast({ title: "Not Your Turn", description: "Only the current captain or host can advance the turn.", variant: "destructive" });
-       // return;
+  const handleProposeTeam = () => {
+    if (!room || !user || room.currentCaptainId !== user.id || room.currentPhase !== 'team_selection' || !room.missionPlayerCounts || room.currentRound === undefined) {
+      toast({ title: "Error", description: "Cannot propose team at this time.", variant: "destructive" });
+      return;
+    }
+    const requiredPlayers = room.missionPlayerCounts[room.currentRound - 1];
+    if (selectedMissionTeam.length !== requiredPlayers) {
+      toast({ title: "Invalid Team Size", description: `Please select exactly ${requiredPlayers} players for this mission.`, variant: "destructive" });
+      return;
     }
 
+    setRoom(prevRoom => {
+      if (!prevRoom) return null;
+      return {
+        ...prevRoom,
+        selectedTeamForMission: [...selectedMissionTeam],
+        currentPhase: 'team_voting', // Next phase after proposing team
+      };
+    });
+    toast({ title: "Team Proposed", description: "Players will now vote on the proposed team." });
+  };
 
+  const handlePlayerSelectionForMission = (playerId: string, checked: boolean) => {
+    setSelectedMissionTeam(prevSelected => {
+      if (checked) {
+        return [...prevSelected, playerId];
+      } else {
+        return prevSelected.filter(id => id !== playerId);
+      }
+    });
+  };
+
+
+  // Simplified next turn for now, main logic will shift to phase transitions
+  const handleNextTurn_Old = () => {
+    if (!room || !room.currentCaptainId || room.status !== GameRoomStatus.InProgress || !room.players || !user) return;
+   
     setRoom(prevRoom => {
       if (!prevRoom || !prevRoom.players || prevRoom.currentCaptainId === undefined || prevRoom.captainChangesThisRound === undefined || prevRoom.currentRound === undefined || prevRoom.maxCaptainChangesPerRound === undefined || prevRoom.totalRounds === undefined) return prevRoom;
 
@@ -229,28 +287,23 @@ export default function GameRoomPage() {
 
       const currentPlayers = prevRoom.players;
       let currentPlayerIndex = currentPlayers.findIndex(p => p.id === prevRoom.currentCaptainId);
-      if (currentPlayerIndex === -1) currentPlayerIndex = 0; // Should not happen
+      if (currentPlayerIndex === -1) currentPlayerIndex = 0; 
 
       let nextCaptainIndex = (currentPlayerIndex + 1) % currentPlayers.length;
       
       if (newCaptainChangesThisRound >= prevRoom.maxCaptainChangesPerRound) {
-        // Max captain changes reached for this round
         if (newCurrentRound >= prevRoom.totalRounds) {
-          // Game over
           gameFinished = true;
           newStatus = GameRoomStatus.Finished;
           toastMessage = "Game Over! All rounds completed.";
           toast({ title: "Game Over", description: "All rounds completed." });
         } else {
-          // Next round
           newCurrentRound++;
-          newCaptainChangesThisRound = 0; // Reset for new round
-          // Captain continues from next player in sequence for the new round
+          newCaptainChangesThisRound = 0; 
           toastMessage = `Round ${newCurrentRound} started! ${currentPlayers[nextCaptainIndex].name} is the new captain.`;
           toast({ title: `Round ${newCurrentRound} Started!`, description: `${currentPlayers[nextCaptainIndex].name} is the captain.` });
         }
       } else {
-        // Continue current round, just change captain
         toastMessage = `${currentPlayers[nextCaptainIndex].name} is now the captain.`;
         toast({ title: "Next Captain", description: `${currentPlayers[nextCaptainIndex].name} is now the captain.`});
       }
@@ -267,8 +320,11 @@ export default function GameRoomPage() {
         currentCaptainId: gameFinished ? undefined : updatedPlayers[nextCaptainIndex].id,
         currentRound: newCurrentRound,
         captainChangesThisRound: newCaptainChangesThisRound,
+        currentPhase: gameFinished ? 'game_over' : 'team_selection', // Reset to team selection for new round/captain
+        selectedTeamForMission: [], // Clear selected team
       };
       setLocalPlayers(updatedPlayers);
+      setSelectedMissionTeam([]);
       return updatedRoomState;
     });
   };
@@ -284,6 +340,7 @@ export default function GameRoomPage() {
 
   const currentUserInRoom = localPlayers.find(p => p.id === user.id);
   const currentUserRole = currentUserInRoom?.role;
+  const isCaptain = user.id === room.currentCaptainId;
 
   const getRoleIcon = (role?: Role) => {
     switch (role) {
@@ -293,6 +350,8 @@ export default function GameRoomPage() {
       default: return null;
     }
   };
+  
+  const requiredPlayersForCurrentMission = room.missionPlayerCounts && room.currentRound !== undefined ? room.missionPlayerCounts[room.currentRound -1] : 0;
 
   const isHost = user.id === room.hostId;
   const canAddVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length < room.maxPlayers;
@@ -305,6 +364,17 @@ export default function GameRoomPage() {
     ? localPlayers.filter(p => p.role === Role.Undercover && p.id !== user.id) 
     : [];
   const isSoleUndercover = currentUserRole === Role.Undercover && room.status === GameRoomStatus.InProgress && localPlayers.filter(p => p.role === Role.Undercover).length === 1;
+
+  const getPhaseDescription = (phase?: GameRoomPhase) => {
+    switch(phase) {
+        case 'team_selection': return "队伍组建阶段";
+        case 'team_voting': return "队伍投票阶段";
+        case 'mission_execution': return "任务执行阶段";
+        case 'mission_reveal': return "任务结果揭晓";
+        case 'game_over': return "游戏结束";
+        default: return "未知阶段";
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -321,10 +391,17 @@ export default function GameRoomPage() {
               {room.status.toUpperCase()}
             </Badge>
           </div>
-           {room.status === GameRoomStatus.InProgress && room.currentRound !== undefined && room.totalRounds !== undefined && room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && (
+           {room.status === GameRoomStatus.InProgress && (
             <div className="mt-2 text-sm text-muted-foreground space-y-1">
-              <div className="flex items-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> Round: {room.currentRound} / {room.totalRounds}</div>
-              <div className="flex items-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> Captain Changes: {room.captainChangesThisRound} / {room.maxCaptainChangesPerRound}</div>
+              {room.currentRound !== undefined && room.totalRounds !== undefined && <div className="flex items-center"><Repeat className="mr-2 h-4 w-4 text-blue-500" /> 回合: {room.currentRound} / {room.totalRounds}</div>}
+              {/* {room.captainChangesThisRound !== undefined && room.maxCaptainChangesPerRound !== undefined && <div className="flex items-center"><UsersRound className="mr-2 h-4 w-4 text-orange-500" /> 队长顺位: {room.captainChangesThisRound +1} / {localPlayers.length} (本回合第 {room.captainChangesThisRound +1} 次尝试组队)</div>} */}
+              {room.currentPhase && <div className="flex items-center"><ListChecks className="mr-2 h-4 w-4 text-purple-500" /> 当前阶段: {getPhaseDescription(room.currentPhase)}</div>}
+               {room.teamScores && (
+                <div className="flex items-center gap-4">
+                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 队员胜场: {room.teamScores.teamMemberWins}</span>
+                  <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores.undercoverWins}</span>
+                </div>
+              )}
             </div>
           )}
         </CardHeader>
@@ -422,7 +499,7 @@ export default function GameRoomPage() {
 
         <Card className="md:col-span-2">
           <CardHeader>
-            <CardTitle className="text-primary">游戏控制</CardTitle>
+            <CardTitle className="text-primary">游戏控制 / 状态</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {room.status === GameRoomStatus.Waiting && (
@@ -465,28 +542,93 @@ export default function GameRoomPage() {
                     {localPlayers.find(p => p.id === room.currentCaptainId)?.name || "Unknown"}
                   </p>
                 </div>
-                <p className="text-muted-foreground">游戏进行中。听从队长指示或执行行动。</p>
-                {/* 
-                  // Placeholder for captain-specific actions
-                  {user.id === room.currentCaptainId && (
-                  <Button className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">执行队长行动 (占位)</Button>
-                )} 
-                */}
-                <Button 
-                  onClick={handleNextTurn}
+
+                {room.currentPhase === 'team_selection' && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-center">组建任务队伍 (回合 {room.currentRound})</h3>
+                    <p className="text-center text-muted-foreground">
+                      本回合任务需要 <span className="font-bold text-primary">{requiredPlayersForCurrentMission}</span> 名玩家。
+                      {isCaptain ? "请选择队员：" : "等待队长选择队员..."}
+                    </p>
+                    {isCaptain && (
+                      <div className="space-y-2 max-h-60 overflow-y-auto p-2 border rounded-md">
+                        {localPlayers.map(p => (
+                          <div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded">
+                            <Checkbox
+                              id={`player-select-${p.id}`}
+                              checked={selectedMissionTeam.includes(p.id)}
+                              onCheckedChange={(checked) => handlePlayerSelectionForMission(p.id, !!checked)}
+                            />
+                            <Label htmlFor={`player-select-${p.id}`} className="flex-grow cursor-pointer">
+                              {p.name}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                     {isCaptain && (
+                      <Button 
+                        onClick={handleProposeTeam} 
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
+                        disabled={selectedMissionTeam.length !== requiredPlayersForCurrentMission}
+                      >
+                        <UsersRound className="mr-2 h-5 w-5" /> 提交队伍 ({selectedMissionTeam.length}/{requiredPlayersForCurrentMission})
+                      </Button>
+                     )}
+                  </div>
+                )}
+
+                {room.currentPhase === 'team_voting' && (
+                    <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-center">为队伍投票 (回合 {room.currentRound})</h3>
+                        <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{localPlayers.find(p=>p.id === room.currentCaptainId)?.name}</span> 提议以下队伍执行任务:</p>
+                        <ul className="text-center list-disc list-inside">
+                            {room.selectedTeamForMission?.map(playerId => localPlayers.find(p=>p.id === playerId)?.name).join(', ')}
+                        </ul>
+                        <div className="flex gap-2 justify-center">
+                            <Button className="bg-green-500 hover:bg-green-600 text-white"> <Vote className="mr-2"/> 同意</Button>
+                            <Button variant="destructive"> <Vote className="mr-2"/> 拒绝</Button>
+                        </div>
+                        <p className="text-xs text-center text-muted-foreground">(投票功能待实现)</p>
+                    </div>
+                )}
+
+                {room.currentPhase === 'mission_execution' && (
+                     <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-center">任务执行中 (回合 {room.currentRound})</h3>
+                        <p className="text-center text-muted-foreground">等待任务结果...</p>
+                        <p className="text-xs text-center text-muted-foreground">(任务卡牌功能待实现)</p>
+                    </div>
+                )}
+                
+                {room.currentPhase === 'mission_reveal' && (
+                     <div className="space-y-3">
+                        <h3 className="text-lg font-semibold text-center">任务结果 (回合 {room.currentRound})</h3>
+                         <p className="text-center text-muted-foreground">等待结果揭晓...</p>
+                        <p className="text-xs text-center text-muted-foreground">(结果展示待实现)</p>
+                    </div>
+                )}
+
+
+                {/* <Button 
+                  onClick={handleNextTurn_Old} // Temporarily keep old logic for testing round advance
                   variant="outline" 
-                  className="w-full transition-transform hover:scale-105 active:scale-95"
-                  //  Allow host to advance for easier testing/simulation
-                  //  disabled={user.id !== room.currentCaptainId && !isHost}
+                  className="w-full transition-transform hover:scale-105 active:scale-95 mt-4"
                 >
-                  下一回合 / 移交队长 (模拟)
-                </Button>
+                  模拟下一回合/移交队长 (旧)
+                </Button> */}
               </>
             )}
             {room.status === GameRoomStatus.Finished && (
               <div className="text-center p-6 bg-green-100 dark:bg-green-900 rounded-lg shadow">
                 <h3 className="text-2xl font-bold text-green-700 dark:text-green-300">游戏结束!</h3>
                 <p className="text-muted-foreground mt-2">所有回合已完成。感谢您的参与！</p>
+                 {room.teamScores && (
+                <div className="flex items-center gap-4 justify-center mt-2">
+                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 队员胜场: {room.teamScores.teamMemberWins}</span>
+                  <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores.undercoverWins}</span>
+                </div>
+              )}
               </div>
             )}
              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">
