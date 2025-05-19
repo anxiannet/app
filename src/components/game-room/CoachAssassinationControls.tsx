@@ -1,7 +1,8 @@
 
 "use client";
 
-import type { Player, Role } from "@/lib/types";
+import type { Player } from "@/lib/types";
+import { Role } from "@/lib/types"; // Changed: Role is now a value import
 import { Button } from "@/components/ui/button";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
