@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -16,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { decideVirtualPlayerVote, type VirtualPlayerVoteInput } from "@/ai/flows/decide-virtual-player-action-flow";
+import { decideAiTeamProposal, type AiProposeTeamInput } from "@/ai/flows/propose-team-flow";
 import { cn } from "@/lib/utils";
 
 const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: number, [Role.TeamMember]: number } } = {
@@ -58,9 +58,9 @@ export default function GameRoomPage() {
 
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAiVoting, setIsAiVoting] = useState(false);
+  const [isAiActing, setIsAiActing] = useState(false); // General flag for AI actions
   const [localPlayers, setLocalPlayers] = useState<Player[]>([]);
-  const [selectedMissionTeam, setSelectedMissionTeam] = useState<string[]>([]); // IDs of players selected by captain
+  const [selectedMissionTeam, setSelectedMissionTeam] = useState<string[]>([]); // IDs of players selected by human captain
 
   const updateLocalStorageRooms = useCallback((updatedRoom: GameRoom | null) => {
     if (!updatedRoom) return;
@@ -107,7 +107,7 @@ export default function GameRoomPage() {
         setRoom(prevRoom => ({ 
           ...prevRoom, 
           ...currentRoom,
-          teamVotes: currentRoom.teamVotes || [], // Ensure teamVotes is initialized
+          teamVotes: currentRoom.teamVotes || [], 
         }));
         setLocalPlayers(currentRoom.players);
         if (currentRoom.selectedTeamForMission) {
@@ -127,6 +127,89 @@ export default function GameRoomPage() {
   useEffect(() => {
     updateLocalStorageRooms(room);
   }, [room, updateLocalStorageRooms]);
+
+
+  // Effect for AI Captain to propose a team
+  useEffect(() => {
+    if (!room || !user || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_selection' || isAiActing) {
+      return;
+    }
+
+    const currentCaptain = localPlayers.find(p => p.id === room.currentCaptainId);
+    if (currentCaptain && currentCaptain.id.startsWith("virtual_") && currentCaptain.role) {
+      const performAiTeamProposal = async () => {
+        setIsAiActing(true);
+        toast({ title: "AI Captain Acting", description: `${currentCaptain.name} is selecting a team...` });
+
+        if (!room.currentRound || !room.totalRounds || !room.missionPlayerCounts || !room.teamScores) {
+            console.error("AI Captain: Missing critical game context for team proposal.");
+            setIsAiActing(false);
+            // Potentially add a fallback here or force captain pass
+            return;
+        }
+        
+        const requiredPlayers = room.missionPlayerCounts[room.currentRound -1];
+
+        const allPlayersPerspective: PlayerPerspective[] = localPlayers.map(p => {
+            let revealedRole: Role | undefined = undefined;
+            if (currentCaptain.role === Role.Coach && p.role === Role.Undercover) revealedRole = p.role;
+            else if (currentCaptain.role === Role.Undercover && p.role === Role.Undercover) revealedRole = p.role;
+            else if (p.id === currentCaptain.id) revealedRole = currentCaptain.role; // AI knows its own role
+            return { id: p.id, name: p.name, role: revealedRole, isCaptain: p.isCaptain };
+        });
+
+        const missionHistoryPerspective = room.missionHistory?.map(mh => ({
+            ...mh,
+            team: mh.team.map(member => ({
+                id: member.id,
+                name: member.name,
+                role: (currentCaptain.role === Role.Coach && member.role === Role.Undercover) || 
+                      (currentCaptain.role === Role.Undercover && member.role === Role.Undercover) || 
+                      member.id === currentCaptain.id ? member.role : undefined
+            }))
+        })) || [];
+
+        const aiInput: AiProposeTeamInput = {
+          virtualCaptain: { id: currentCaptain.id, name: currentCaptain.name, role: currentCaptain.role },
+          gameContext: {
+            currentRound: room.currentRound,
+            totalRounds: room.totalRounds,
+            requiredPlayersForMission: requiredPlayers,
+            allPlayers: allPlayersPerspective,
+            missionHistory: missionHistoryPerspective,
+            teamScores: room.teamScores,
+            missionPlayerCounts: room.missionPlayerCounts,
+          }
+        };
+
+        try {
+          const aiProposal = await decideAiTeamProposal(aiInput);
+          console.log(`AI Captain (${currentCaptain.name}, ${currentCaptain.role}) proposed team: ${aiProposal.selectedPlayerIds.join(', ')}. Reasoning: ${aiProposal.reasoning}`);
+          
+          const proposedTeamNames = aiProposal.selectedPlayerIds.map(id => localPlayers.find(p=>p.id === id)?.name || 'Unknown').join(', ');
+
+          setRoom(prevRoom => {
+            if (!prevRoom) return null;
+            return {
+              ...prevRoom,
+              selectedTeamForMission: aiProposal.selectedPlayerIds,
+              currentPhase: 'team_voting',
+              teamVotes: [], // Reset votes for the new proposal
+            };
+          });
+          toast({ title: "AI Team Proposed", description: `${currentCaptain.name} proposed: ${proposedTeamNames}` });
+
+        } catch (error) {
+          console.error(`Error getting AI team proposal for ${currentCaptain.name}:`, error);
+          toast({ title: "AI Error", description: "AI captain failed to propose a team. Manual intervention might be needed or game might stall.", variant: "destructive" });
+          // Consider a fallback: e.g. auto-reject or pass captaincy after a timeout/error
+        } finally {
+          setIsAiActing(false);
+        }
+      };
+      performAiTeamProposal();
+    }
+  }, [room, user, localPlayers, isAiActing, toast]);
 
 
   const assignRolesAndCaptain = () => {
@@ -240,9 +323,9 @@ export default function GameRoomPage() {
     toast({ title: "Virtual Player Added", description: `${virtualPlayerName} has joined the room.` });
   };
 
-  const handleProposeTeam = () => {
-    if (!room || !user || room.currentCaptainId !== user.id || room.currentPhase !== 'team_selection' || !room.missionPlayerCounts || room.currentRound === undefined) {
-      toast({ title: "Error", description: "Cannot propose team at this time.", variant: "destructive" });
+  const handleHumanProposeTeam = () => {
+    if (!room || !user || room.currentCaptainId !== user.id || room.currentPhase !== 'team_selection' || !room.missionPlayerCounts || room.currentRound === undefined || isAiActing) {
+      toast({ title: "Error", description: "Cannot propose team at this time or AI is acting.", variant: "destructive" });
       return;
     }
     const requiredPlayers = room.missionPlayerCounts[room.currentRound - 1];
@@ -257,7 +340,7 @@ export default function GameRoomPage() {
         ...prevRoom,
         selectedTeamForMission: [...selectedMissionTeam],
         currentPhase: 'team_voting',
-        teamVotes: [], // Reset votes for the new proposal
+        teamVotes: [], 
       };
     });
     toast({ title: "Team Proposed", description: "Players will now vote on the proposed team." });
@@ -286,15 +369,13 @@ export default function GameRoomPage() {
         return {
           ...prevRoom,
           currentPhase: 'mission_execution',
-          teamVotes: [], 
-          // captainChangesThisRound: 0, // Captain successfully formed a team for this attempt -> This should be reset only on mission success/fail, not here.
+          teamVotes: currentVotes, // Keep votes for display until mission execution is handled
         };
       });
     } else { // Team Rejected
       let newCaptainChangesThisRound = (room.captainChangesThisRound || 0) + 1;
       
       if (newCaptainChangesThisRound >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) {
-        // Max rejections reached, Undercover team wins
         toast({ title: "Team Rejected 5 Times!", description: "Undercover team wins the game!", variant: "destructive" });
         setRoom(prevRoom => {
           if (!prevRoom || !prevRoom.teamScores) return prevRoom;
@@ -304,13 +385,12 @@ export default function GameRoomPage() {
             currentPhase: 'game_over',
             teamScores: {
               ...prevRoom.teamScores,
-              undercoverWins: prevRoom.totalRounds || TOTAL_ROUNDS_PER_GAME, // Undercover wins all rounds
+              undercoverWins: prevRoom.totalRounds || TOTAL_ROUNDS_PER_GAME, 
             },
-            teamVotes: [],
+            teamVotes: currentVotes,
           };
         });
       } else {
-        // Pass captaincy
         const currentCaptainIndex = room.players.findIndex(p => p.id === room.currentCaptainId);
         const nextCaptainIndex = (currentCaptainIndex + 1) % room.players.length;
         const newCaptainId = room.players[nextCaptainIndex].id;
@@ -331,17 +411,17 @@ export default function GameRoomPage() {
             captainChangesThisRound: newCaptainChangesThisRound,
             currentPhase: 'team_selection',
             selectedTeamForMission: [],
-            teamVotes: [],
+            teamVotes: [], // Clear votes for new selection phase
           };
         });
-        setSelectedMissionTeam([]);
+        setSelectedMissionTeam([]); // Clear local selection for human captain UI
       }
     }
   };
   
  const handlePlayerVote = async (vote: 'approve' | 'reject') => {
-    if (!room || !user || room.currentPhase !== 'team_voting' || !room.players || isAiVoting) {
-      toast({ title: "Error", description: "Cannot vote at this time or AI is voting.", variant: "destructive" });
+    if (!room || !user || room.currentPhase !== 'team_voting' || !room.players || isAiActing) {
+      toast({ title: "Error", description: "Cannot vote at this time or AI is acting.", variant: "destructive" });
       return;
     }
 
@@ -353,7 +433,7 @@ export default function GameRoomPage() {
 
     const newVote: PlayerVote = { playerId: user.id, vote };
     let updatedVotes = [...(room.teamVotes || []), newVote];
-    // Update room state immediately to reflect the current player's vote in the UI
+    
     setRoom(prevRoom => {
         if (!prevRoom) return null;
         return {...prevRoom, teamVotes: updatedVotes};
@@ -363,9 +443,8 @@ export default function GameRoomPage() {
     const realPlayers = room.players.filter(p => !p.id.startsWith("virtual_"));
     const realPlayersWhoVotedIds = new Set(updatedVotes.filter(v => realPlayers.some(rp => rp.id === v.playerId)).map(v => v.playerId));
 
-    // Check if all real players have voted
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
-      setIsAiVoting(true);
+      setIsAiActing(true);
       toast({ title: "AI Thinking...", description: "Virtual players are now voting." });
 
       const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
@@ -422,13 +501,12 @@ export default function GameRoomPage() {
       const aiVotes = aiVotesResults.map(res => ({playerId: res.playerId, vote: res.vote}));
       updatedVotes = [...updatedVotes, ...aiVotes];
       
-      // Update room state with AI votes before processing
       setRoom(prevRoom => {
         if (!prevRoom) return null;
         return {...prevRoom, teamVotes: updatedVotes};
       });
       processTeamVotes(updatedVotes);
-      setIsAiVoting(false);
+      setIsAiActing(false);
     }
   };
 
@@ -443,7 +521,8 @@ export default function GameRoomPage() {
 
   const currentUserInRoom = localPlayers.find(p => p.id === user.id);
   const currentUserRole = currentUserInRoom?.role;
-  const isCaptain = user.id === room.currentCaptainId;
+  const isHumanCaptain = user.id === room.currentCaptainId && !user.id.startsWith("virtual_");
+  const isAiCaptain = room.currentCaptainId?.startsWith("virtual_") ?? false;
   const hasUserVotedOnCurrentTeam = room.teamVotes?.some(v => v.playerId === user.id);
 
   const getRoleIcon = (role?: Role) => {
@@ -567,7 +646,7 @@ export default function GameRoomPage() {
             <ul className="space-y-3">
               {localPlayers.map((p) => {
                 const isCurrentUser = p.id === user.id;
-                const playerVote = room.currentPhase === 'team_voting' ? votesToDisplay.find(v => v.playerId === p.id)?.vote : undefined;
+                const playerVote = room.currentPhase === 'team_voting' || room.currentPhase === 'mission_execution' || room.currentPhase === 'game_over' ? votesToDisplay.find(v => v.playerId === p.id)?.vote : undefined;
                 return (
                   <li key={p.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-md shadow-sm">
                     <div className="flex items-center">
@@ -607,7 +686,7 @@ export default function GameRoomPage() {
                           )}
                         </>
                       )}
-                      {p.isCaptain && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
+                      {p.id === room.currentCaptainId && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
                     </div>
                   </li>
                 );
@@ -662,14 +741,23 @@ export default function GameRoomPage() {
                   </p>
                 </div>
 
-                {room.currentPhase === 'team_selection' && (
+                {isAiActing && room.currentPhase === 'team_selection' && isAiCaptain && (
+                     <div className="text-center p-4">
+                        <p className="text-lg font-semibold text-blue-500 flex items-center justify-center">
+                            <Brain className="mr-2 h-6 w-6 animate-pulse" />
+                            {localPlayers.find(p => p.id === room.currentCaptainId)?.name} 正在选择队伍...
+                        </p>
+                    </div>
+                )}
+
+                {room.currentPhase === 'team_selection' && !isAiCaptain && (
                   <div className="space-y-3">
                     <h3 className="text-lg font-semibold text-center">组建任务队伍 (回合 {room.currentRound})</h3>
                     <p className="text-center text-muted-foreground">
                       本回合任务需要 <span className="font-bold text-primary">{requiredPlayersForCurrentMission}</span> 名玩家。
-                      {isCaptain ? "请选择队员：" : "等待队长选择队员..."}
+                      {isHumanCaptain ? "请选择队员：" : "等待队长选择队员..."}
                     </p>
-                    {isCaptain && (
+                    {isHumanCaptain && (
                       <div className="space-y-2 max-h-60 overflow-y-auto p-2 border rounded-md">
                         {localPlayers.map(p => (
                           <div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded">
@@ -686,11 +774,11 @@ export default function GameRoomPage() {
                         ))}
                       </div>
                     )}
-                     {isCaptain && (
+                     {isHumanCaptain && (
                       <Button 
-                        onClick={handleProposeTeam} 
+                        onClick={handleHumanProposeTeam} 
                         className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                        disabled={selectedMissionTeam.length !== requiredPlayersForCurrentMission}
+                        disabled={selectedMissionTeam.length !== requiredPlayersForCurrentMission || isAiActing}
                       >
                         <UsersRound className="mr-2 h-5 w-5" /> 提交队伍 ({selectedMissionTeam.length}/{requiredPlayersForCurrentMission})
                       </Button>
@@ -712,7 +800,7 @@ export default function GameRoomPage() {
                             </p>
                         )}
 
-                        {!hasUserVotedOnCurrentTeam && !user.id.startsWith("virtual_") && !isAiVoting ? (
+                        {!hasUserVotedOnCurrentTeam && !user.id.startsWith("virtual_") && !isAiActing ? (
                             <div className="flex gap-4 justify-center">
                                 <Button onClick={() => handlePlayerVote('approve')} className="bg-green-500 hover:bg-green-600 text-white">
                                     <ThumbsUp className="mr-2 h-5 w-5"/> 同意
@@ -724,8 +812,8 @@ export default function GameRoomPage() {
                         ) : (
                            !user.id.startsWith("virtual_") && <p className="text-center text-green-600 font-semibold">你已投票: {room.teamVotes?.find(v=>v.playerId === user.id)?.vote === 'approve' ? '同意' : '拒绝'}</p>
                         )}
-                         {realPlayersVotedCount < realPlayersCount && !isAiVoting && <p className="text-sm text-center text-muted-foreground">等待其他玩家投票...</p>}
-                         {isAiVoting && <p className="text-sm text-center text-blue-500 flex items-center justify-center"><Brain className="mr-2 h-5 w-5 animate-pulse" /> AI 正在投票...</p>}
+                         {realPlayersVotedCount < realPlayersCount && !isAiActing && <p className="text-sm text-center text-muted-foreground">等待其他玩家投票...</p>}
+                         {isAiActing && room.currentPhase === 'team_voting' && <p className="text-sm text-center text-blue-500 flex items-center justify-center"><Brain className="mr-2 h-5 w-5 animate-pulse" /> AI 正在投票...</p>}
                     </div>
                 )}
 
