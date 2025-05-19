@@ -150,11 +150,7 @@ export default function GameHistoryPage() {
                   </AccordionItem>
                 </Accordion>
               </CardContent>
-              <CardFooter>
-                <Button variant="link" onClick={() => router.push(`/rooms/${record.roomId}`)} className="text-xs p-0 h-auto">
-                  (仅供参考) 查看房间原始信息
-                </Button>
-              </CardFooter>
+              {/* CardFooter with the link has been removed */}
             </Card>
           ))}
         </div>
