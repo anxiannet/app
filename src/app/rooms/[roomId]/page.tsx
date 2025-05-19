@@ -6,9 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote, type MissionCardPlay, type MissionOutcome, type VoteHistoryEntry } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Zap, Target, History, RotateCcw } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Zap, Target, History, RotateCcw, XOctagon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 // New Component Imports
 import { RoomHeader } from "@/components/game-room/RoomHeader";
@@ -82,15 +83,12 @@ export default function GameRoomPage() {
           storedRooms[roomIndex] = updatedRoom;
           localStorage.setItem("anxian-rooms", JSON.stringify(storedRooms));
         } else {
-          // If room not found, add it (e.g. if it's a new room not yet in localStorage from lobby)
-          // This case might be less common here, more relevant when creating rooms
           localStorage.setItem("anxian-rooms", JSON.stringify([...storedRooms, updatedRoom]));
         }
       } catch (e) {
         console.error("Failed to update localStorage rooms:", e);
       }
     } else {
-        // If no rooms data exists, create it with the current room
         localStorage.setItem("anxian-rooms", JSON.stringify([updatedRoom]));
     }
   }, []);
@@ -118,7 +116,7 @@ export default function GameRoomPage() {
             const roomIndex = storedRooms.findIndex(r => r.id === currentRoom!.id);
             if (roomIndex !== -1) {
                 storedRooms[roomIndex] = currentRoom;
-            } else { // Should ideally not happen if currentRoom was found
+            } else { 
                 storedRooms.push(currentRoom);
             }
             if (typeof window !== "undefined") {
@@ -263,9 +261,8 @@ export default function GameRoomPage() {
         const requiredPlayers = room.missionPlayerCounts[room.currentRound -1];
         let proposedTeamIds: string[] = []; 
         
-        if (requiredPlayers > 0 && localPlayers.length > 0) { // Ensure localPlayers is not empty
-            // Try to include the captain first
-            if (localPlayers.some(p => p.id === currentCaptain.id)) { // check if captain is in localPlayers
+        if (requiredPlayers > 0 && localPlayers.length > 0) { 
+            if (localPlayers.some(p => p.id === currentCaptain.id)) { 
                  proposedTeamIds.push(currentCaptain.id);
             }
         }
@@ -277,7 +274,6 @@ export default function GameRoomPage() {
             proposedTeamIds.push(shuffledOtherPlayers[i].id);
         }
         
-        // If not enough players still, fill with any available players (should not happen if logic is correct)
         if (proposedTeamIds.length < requiredPlayers) {
             const allPlayerIds = localPlayers.map(p => p.id);
             const remainingNeeded = requiredPlayers - proposedTeamIds.length;
@@ -285,7 +281,6 @@ export default function GameRoomPage() {
             const shuffledAvailable = availableToPick.sort(() => 0.5 - Math.random());
             proposedTeamIds.push(...shuffledAvailable.slice(0, remainingNeeded));
         }
-        // Ensure exactly the required number of players, trimming if somehow over-selected
         proposedTeamIds = proposedTeamIds.slice(0, requiredPlayers);
 
 
@@ -504,7 +499,7 @@ export default function GameRoomPage() {
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
       const virtualPlayers = localPlayers.filter(p => p.id.startsWith("virtual_"));
       const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => {
-        return { playerId: vp.id, vote: 'approve' }; // Simple AI: always approve
+        return { playerId: vp.id, vote: 'approve' }; 
       });
       updatedVotes = [...updatedVotes, ...virtualPlayerVotes];
       setRoom(prevRoom => prevRoom ? {...prevRoom, teamVotes: updatedVotes} : null); 
@@ -644,13 +639,16 @@ export default function GameRoomPage() {
       
       setRoom(prevRoom => {
         if (!prevRoom) return null;
+        // Create a new object for the room to ensure React detects the change
         return { ...prevRoom, players: updatedPlayersList };
       });
-      setLocalPlayers(updatedPlayersList); 
+      setLocalPlayers(updatedPlayersList); // Update localPlayers state as well
 
       toast({ title: "已离开房间", description: `您已离开房间 ${roomNameForToast}。` });
     }
     
+    // Navigate to lobby regardless of being host or not,
+    // but only after state updates if player was removed
     router.push("/");
   }, [room, user, router, toast, setRoom, setLocalPlayers]);
 
@@ -693,6 +691,26 @@ export default function GameRoomPage() {
     setSelectedCoachCandidate(null);
 
     toast({ title: "游戏已重置", description: "房间已重置为等待状态。主持人可以开始新游戏。" });
+  };
+
+  const handleForceEndGame = () => {
+    if (!room || !user || room.hostId !== user.id) {
+      toast({ title: "错误", description: "只有主持人可以强制结束游戏。", variant: "destructive" });
+      return;
+    }
+    if (room.status !== GameRoomStatus.InProgress) {
+      toast({ title: "错误", description: "游戏不在进行中，无法强制结束。", variant: "destructive" });
+      return;
+    }
+    setRoom(prevRoom => {
+      if (!prevRoom) return null;
+      return {
+        ...prevRoom,
+        status: GameRoomStatus.Finished,
+        currentPhase: 'game_over',
+      };
+    });
+    toast({ title: "游戏已结束", description: "主持人已强制结束本场游戏。" });
   };
 
   const getRoleIcon = (role?: Role) => {
@@ -886,6 +904,18 @@ export default function GameRoomPage() {
                         assassinationTargetOptions={assassinationTargetOptions}
                         onConfirmCoachAssassination={handleConfirmCoachAssassination}
                     />
+                )}
+
+                {isHost && room.status === GameRoomStatus.InProgress && (
+                  <div className="mt-6 pt-6 border-t">
+                    <Button
+                      variant="destructive"
+                      onClick={handleForceEndGame}
+                      className="w-full transition-transform hover:scale-105 active:scale-95"
+                    >
+                      <XOctagon className="mr-2 h-5 w-5" /> 强制结束游戏
+                    </Button>
+                  </div>
                 )}
               </>
             )}
