@@ -196,6 +196,56 @@ export default function GameRoomPage() {
     }
   }, [room, user, localPlayers, toast]);
 
+  const finalizeAndRevealMissionOutcome = useCallback(() => {
+    if (!room || !room.selectedTeamForMission || !room.players || !room.teamScores || room.currentRound === undefined) return;
+
+    let finalPlays: MissionCardPlay[] = [...(room.missionCardPlaysForCurrentMission || [])];
+    
+    room.selectedTeamForMission.forEach(playerId => {
+      const player = localPlayers.find(p => p.id === playerId);
+      if (player && player.id.startsWith("virtual_") && !finalPlays.some(fp => fp.playerId === playerId)) {
+        const cardToPlay: 'success' | 'fail' = player.role === Role.Undercover ? 'fail' : 'success';
+        finalPlays.push({ playerId: player.id, card: cardToPlay });
+      }
+    });
+
+    const failCardsPlayed = finalPlays.filter(p => p.card === 'fail').length;
+    let missionSuccessful: boolean;
+
+    if (room.players.length >= 7 && room.currentRound === 4) {
+      missionSuccessful = failCardsPlayed < 2;
+    } else {
+      missionSuccessful = failCardsPlayed < 1;
+    }
+    
+    const outcome: MissionOutcome = missionSuccessful ? 'success' : 'fail';
+    const newTeamScores = { ...room.teamScores };
+    if (missionSuccessful) newTeamScores.teamMemberWins++;
+    else newTeamScores.undercoverWins++;
+
+    const missionRecord: Mission = {
+      round: room.currentRound,
+      captainId: room.currentCaptainId || "unknown",
+      teamPlayerIds: room.selectedTeamForMission,
+      outcome: outcome,
+      failCardsPlayed: failCardsPlayed,
+    };
+    
+    setRoom(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        teamScores: newTeamScores,
+        missionHistory: [...(prev.missionHistory || []), missionRecord],
+        currentPhase: 'mission_reveal',
+        missionOutcomeForDisplay: outcome,
+        failCardsPlayedForDisplay: failCardsPlayed,
+        missionCardPlaysForCurrentMission: finalPlays, // Store final plays including virtual ones for display
+      };
+    });
+    toast({ title: `第 ${room.currentRound} 轮任务结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
+
+  }, [room, localPlayers, toast]);
 
   // Effect to process mission actions once all human players on mission have acted
   useEffect(() => {
@@ -451,57 +501,6 @@ export default function GameRoomPage() {
     });
      toast({ title: "任务牌已打出", description: `您打出了【${card === 'success' ? '成功' : '破坏'}】。` });
   };
-
-  const finalizeAndRevealMissionOutcome = useCallback(() => {
-    if (!room || !room.selectedTeamForMission || !room.players || !room.teamScores || room.currentRound === undefined) return;
-
-    let finalPlays: MissionCardPlay[] = [...(room.missionCardPlaysForCurrentMission || [])];
-    
-    room.selectedTeamForMission.forEach(playerId => {
-      const player = localPlayers.find(p => p.id === playerId);
-      if (player && player.id.startsWith("virtual_") && !finalPlays.some(fp => fp.playerId === playerId)) {
-        const cardToPlay: 'success' | 'fail' = player.role === Role.Undercover ? 'fail' : 'success';
-        finalPlays.push({ playerId: player.id, card: cardToPlay });
-      }
-    });
-
-    const failCardsPlayed = finalPlays.filter(p => p.card === 'fail').length;
-    let missionSuccessful: boolean;
-
-    if (room.players.length >= 7 && room.currentRound === 4) {
-      missionSuccessful = failCardsPlayed < 2;
-    } else {
-      missionSuccessful = failCardsPlayed < 1;
-    }
-    
-    const outcome: MissionOutcome = missionSuccessful ? 'success' : 'fail';
-    const newTeamScores = { ...room.teamScores };
-    if (missionSuccessful) newTeamScores.teamMemberWins++;
-    else newTeamScores.undercoverWins++;
-
-    const missionRecord: Mission = {
-      round: room.currentRound,
-      captainId: room.currentCaptainId || "unknown",
-      teamPlayerIds: room.selectedTeamForMission,
-      outcome: outcome,
-      failCardsPlayed: failCardsPlayed,
-    };
-    
-    setRoom(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        teamScores: newTeamScores,
-        missionHistory: [...(prev.missionHistory || []), missionRecord],
-        currentPhase: 'mission_reveal',
-        missionOutcomeForDisplay: outcome,
-        failCardsPlayedForDisplay: failCardsPlayed,
-        missionCardPlaysForCurrentMission: finalPlays, // Store final plays including virtual ones for display
-      };
-    });
-    toast({ title: `第 ${room.currentRound} 轮任务结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
-
-  }, [room, localPlayers, toast]);
 
 
   const handleProceedToNextRoundOrGameOver = () => {
