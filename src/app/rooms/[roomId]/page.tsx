@@ -569,12 +569,12 @@ export default function GameRoomPage() {
     let toastDescription = "";
 
     if (selectedCoachCandidate === actualCoach.id) {
-      finalTeamScores.undercoverWins = room.totalRounds || TOTAL_ROUNDS_PER_GAME; // Max score for undercovers
+      // Undercover win count remains unchanged as per request
       finalTeamScores.teamMemberWins = Math.min(finalTeamScores.teamMemberWins, (Math.ceil((room.totalRounds || TOTAL_ROUNDS_PER_GAME)/2))-1 ); // Ensure team members don't show as winners if undercovers win by assassination
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
     } else {
-      // Team Members/Coach win confirmed
+      // Team Members/Coach win confirmed (no change to scores needed here as they already won by missions)
       toastTitle = "指认失败！队员方获胜！";
       const wronglyAccusedPlayer = localPlayers.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
@@ -587,7 +587,7 @@ export default function GameRoomPage() {
         status: GameRoomStatus.Finished,
         currentPhase: 'game_over',
         teamScores: finalTeamScores,
-        coachCandidateId: selectedCoachCandidate,
+        coachCandidateId: selectedCoachCandidate, // Store who was targeted
       };
     });
     toast({ title: toastTitle, description: toastDescription, duration: 5000 });
@@ -650,6 +650,31 @@ export default function GameRoomPage() {
     if (fellowUndercovers.some(fu => fu.id === p.id)) return false; // Cannot target fellow undercover
     return true;
   });
+
+  // Game Over Message Logic
+  let gameOverMessage;
+  if (room.status === GameRoomStatus.Finished) {
+    if (room.coachCandidateId && room.players.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
+      // Assassination was successful
+      gameOverMessage = <span className="text-destructive">卧底阵营胜利! (通过指认教练)</span>;
+    } else if (room.teamScores) {
+      if (room.teamScores.teamMemberWins > room.teamScores.undercoverWins && (!room.coachCandidateId || (room.coachCandidateId && !room.players.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) ) ) {
+        // Team Members win by score, and assassination either didn't happen or failed
+        gameOverMessage = <span className="text-green-600">队员阵营胜利!</span>;
+      } else if (room.teamScores.undercoverWins > room.teamScores.teamMemberWins) {
+        gameOverMessage = <span className="text-destructive">卧底阵营胜利!</span>;
+      } else if (room.teamScores.teamMemberWins === room.teamScores.undercoverWins && room.coachCandidateId && !room.players.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
+        // Scores are tied, but assassination failed, so Team members implicitly win (as assassination was the only way for undercovers to win from that point)
+         gameOverMessage = <span className="text-green-600">队员阵营胜利! (指认失败)</span>;
+      }
+       else {
+        // Default or tie (should be rare if logic is correct)
+        gameOverMessage = <span className="text-foreground">游戏结束! (比分 {room.teamScores.teamMemberWins} : {room.teamScores.undercoverWins})</span>;
+      }
+    } else {
+      gameOverMessage = <span className="text-foreground">游戏结束!</span>;
+    }
+  }
 
 
   return (
@@ -757,8 +782,10 @@ export default function GameRoomPage() {
                     {!canStartGame && (localPlayers.length < MIN_PLAYERS_TO_START || localPlayers.length > room.maxPlayers) && (<p className="text-sm text-destructive text-center">需要 {MIN_PLAYERS_TO_START}-{room.maxPlayers} 名玩家才能开始. 当前 {localPlayers.length} 名.</p>)}
                      <Button onClick={handleAddVirtualPlayer} disabled={!canAddVirtualPlayer} variant="outline" className="w-full transition-transform hover:scale-105 active:scale-95"><UserPlus className="mr-2 h-5 w-5" /> 添加虚拟玩家</Button>
                     {!canAddVirtualPlayer && localPlayers.length >= room.maxPlayers && (<p className="text-sm text-destructive text-center">房间已满.</p>)}</div>)}
-                 <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
-                </>)}
+                 </>)}
+             {(room.status === GameRoomStatus.Waiting || room.status === GameRoomStatus.Finished) && (
+                <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
+             )}
             
             {room.status === GameRoomStatus.InProgress && (<>
                 <div className="text-center p-4 bg-secondary/30 rounded-md">
@@ -870,11 +897,7 @@ export default function GameRoomPage() {
             {room.status === GameRoomStatus.Finished && (
               <div className="text-center p-6 bg-green-100 dark:bg-green-900 rounded-lg shadow">
                 <h3 className="text-2xl font-bold text-green-700 dark:text-green-300">游戏结束!</h3>
-                 {room.teamScores && (<p className="text-lg mt-2">
-                        {room.teamScores.teamMemberWins > room.teamScores.undercoverWins ? <span className="text-green-600">队员阵营胜利!</span> 
-                            : room.teamScores.undercoverWins > room.teamScores.teamMemberWins ? <span className="text-destructive">卧底阵营胜利!</span> 
-                                : <span className="text-foreground">平局! (理论上不应发生)</span>}
-                    </p>)}
+                 {gameOverMessage && (<p className="text-lg mt-2">{gameOverMessage}</p>)}
                 {room.coachCandidateId && (
                     <div className="mt-2 text-sm">
                         <p className="font-semibold">教练指认环节:</p>
@@ -893,7 +916,6 @@ export default function GameRoomPage() {
                   <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores?.undercoverWins || 0}</span>
                 </div>
                 <p className="text-muted-foreground mt-2">感谢您的参与！</p>
-                 <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">返回大厅</Button>
               </div>)}
           </CardContent>
         </Card>
@@ -901,3 +923,6 @@ export default function GameRoomPage() {
     </div>
   );
 }
+
+
+    
