@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Users, LogIn, CheckSquare } from "lucide-react";
-import { GameRoomStatus, type GameRoom, type Player } from "@/lib/types"; // Ensure GameRoomStatus is a value import
+import { GameRoomStatus, type GameRoom, type Player } from "@/lib/types";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
@@ -33,27 +33,43 @@ export default function LobbyPage() {
       
       let currentRooms: GameRoom[] = [];
       const storedRoomsRaw = localStorage.getItem("anxian-rooms");
+      let roomsWereModified = false;
+
       if (storedRoomsRaw) {
         try {
-            currentRooms = JSON.parse(storedRoomsRaw);
+            const parsedRooms: GameRoom[] = JSON.parse(storedRoomsRaw);
+            
+            // Filter out empty rooms
+            const activeRooms = parsedRooms.filter(room => room.players && room.players.length > 0);
+            if (activeRooms.length < parsedRooms.length) {
+              localStorage.setItem("anxian-rooms", JSON.stringify(activeRooms));
+              roomsWereModified = true;
+            }
+            currentRooms = activeRooms;
+
         } catch (e) {
             console.error("Failed to parse rooms from localStorage, using mock.", e);
-            currentRooms = mockRooms;
+            currentRooms = mockRooms.filter(room => room.players && room.players.length > 0);
             localStorage.setItem("anxian-rooms", JSON.stringify(currentRooms));
+            roomsWereModified = true;
         }
       } else {
-        currentRooms = mockRooms;
+        currentRooms = mockRooms.filter(room => room.players && room.players.length > 0);
         localStorage.setItem("anxian-rooms", JSON.stringify(currentRooms));
+        roomsWereModified = true;
       }
+
+      // Filter out finished rooms for display
+      const displayableRooms = currentRooms.filter(room => room.status !== GameRoomStatus.Finished);
 
       // Sorting logic
       const statusPriority: { [key in GameRoomStatus]: number } = {
         [GameRoomStatus.InProgress]: 1,
         [GameRoomStatus.Waiting]: 2,
-        [GameRoomStatus.Finished]: 3,
+        [GameRoomStatus.Finished]: 3, // Will be filtered out before display but kept for sorting completeness
       };
 
-      currentRooms.sort((a, b) => {
+      displayableRooms.sort((a, b) => {
         // Sort by status priority
         const statusDiff = statusPriority[a.status] - statusPriority[b.status];
         if (statusDiff !== 0) {
@@ -63,7 +79,7 @@ export default function LobbyPage() {
         return b.players.length - a.players.length;
       });
 
-      setRooms(currentRooms);
+      setRooms(displayableRooms);
     }
   }, []);
 
@@ -78,13 +94,23 @@ export default function LobbyPage() {
     const newRoom: GameRoom = {
       id: newRoomId,
       name: newRoomName,
-      players: [], 
+      players: [], // Initially empty, host will join on redirect
       maxPlayers: 10, 
       status: GameRoomStatus.Waiting,
       hostId: user.id,
     };
     
-    const updatedRooms = [newRoom, ...rooms]; // Add new room to the beginning
+    const currentRoomsRaw = localStorage.getItem("anxian-rooms");
+    let allRooms: GameRoom[] = [];
+    if (currentRoomsRaw) {
+        try {
+            allRooms = JSON.parse(currentRoomsRaw);
+        } catch (e) {
+            console.error("Failed to parse existing rooms, starting fresh.", e);
+        }
+    }
+    
+    const updatedRooms = [newRoom, ...allRooms]; 
 
      // Sorting logic - re-sort after adding a new room
     const statusPriority: { [key in GameRoomStatus]: number } = {
@@ -97,9 +123,16 @@ export default function LobbyPage() {
       if (statusDiff !== 0) return statusDiff;
       return b.players.length - a.players.length;
     });
+    
+    // Before setting to state, filter out finished and empty for display
+    const displayableUpdatedRooms = updatedRooms
+        .filter(room => room.players && room.players.length > 0 || room.id === newRoomId) // keep the new room even if "empty" for a moment
+        .filter(room => room.status !== GameRoomStatus.Finished);
 
-    setRooms(updatedRooms);
+    setRooms(displayableUpdatedRooms); // Update UI immediately with potentially displayable rooms
+
     if (typeof window !== "undefined") {
+      // Save all rooms (including potentially new empty one that user will join) to localStorage
       localStorage.setItem("anxian-rooms", JSON.stringify(updatedRooms));
     }
     router.push(`/rooms/${newRoomId}`);
@@ -137,6 +170,11 @@ export default function LobbyPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
+              // This check is technically redundant here due to filtering, but safe
+              if (room.status === GameRoomStatus.Finished || room.players.length === 0) {
+                return null; 
+              }
+
               return (
                 <Card 
                   key={room.id} 
@@ -166,7 +204,7 @@ export default function LobbyPage() {
                         "ml-1 font-semibold",
                         room.status === GameRoomStatus.Waiting && "border-yellow-500 text-yellow-600",
                         room.status === GameRoomStatus.InProgress && "bg-green-500 text-white",
-                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white"
+                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white" // Should not be displayed
                       )}>{room.status.toUpperCase()}</Badge>
                     </div>
                     <Image 
@@ -195,3 +233,4 @@ export default function LobbyPage() {
     </div>
   );
 }
+
