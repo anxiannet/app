@@ -141,16 +141,18 @@ export default function GameHistoryPage() {
                         <Users className="mr-2 h-4 w-4 text-muted-foreground" /> 查看当局玩家 ({record.playersInGame.length}人)
                     </AccordionTrigger>
                     <AccordionContent>
-                      <ul className="space-y-1 text-xs pl-2 max-h-40 overflow-y-auto">
-                        {record.playersInGame.map(p => (
-                          <li key={p.id} className="flex items-center justify-between p-1 rounded hover:bg-muted/50">
-                            <span>{p.name}</span>
-                            <Badge variant="outline" className="font-normal text-xs">
-                                {getRoleIcon(p.role)} {getRoleChineseName(p.role)}
-                            </Badge>
-                          </li>
-                        ))}
-                      </ul>
+                      <ScrollArea className="max-h-40"> {/* Removed overflow-y-auto here */}
+                        <ul className="space-y-1 text-xs pl-2">
+                          {record.playersInGame.map(p => (
+                            <li key={p.id} className="flex items-center justify-between p-1 rounded hover:bg-muted/50">
+                              <span>{p.name}</span>
+                              <Badge variant="outline" className="font-normal text-xs">
+                                  {getRoleIcon(p.role)} {getRoleChineseName(p.role)}
+                              </Badge>
+                            </li>
+                          ))}
+                        </ul>
+                      </ScrollArea>
                     </AccordionContent>
                   </AccordionItem>
 
@@ -202,7 +204,7 @@ export default function GameHistoryPage() {
                             )}
                             {record.fullVoteHistory && record.fullVoteHistory.length > 0 && (
                                 <section>
-                                    <h4 className="text-xs font-semibold mb-2 text-muted-foreground">详细投票记录:</h4>
+                                    <h4 className="text-xs font-semibold mb-2 mt-4 text-muted-foreground">详细投票记录:</h4>
                                     <ScrollArea className="h-[200px] pr-2">
                                         {record.fullVoteHistory.reduce((acc, vh) => acc.includes(vh.round) ? acc : [...acc, vh.round], [] as number[])
                                         .sort((a,b) => a - b) 
