@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import type { GameRoom, Player, Role } from "@/lib/types";
-import { GameRoomStatus } from "@/lib/types";
+import { type GameRoom, type Player, Role, GameRoomStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -190,7 +189,7 @@ export default function GameRoomPage() {
         <CardHeader>
           <CardTitle className="text-3xl text-primary flex items-center justify-between">
             {room.name}
-            <Badge variant={room.status === "waiting" ? "outline" : "default"} className={room.status === "waiting" ? "border-yellow-500 text-yellow-500" : room.status === "in-progress" ? "bg-green-500" : "bg-gray-500"}>
+            <Badge variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"} className={room.status === GameRoomStatus.Waiting ? "border-yellow-500 text-yellow-500" : room.status === GameRoomStatus.InProgress ? "bg-green-500" : "bg-gray-500"}>
               {room.status.toUpperCase()}
             </Badge>
           </CardTitle>

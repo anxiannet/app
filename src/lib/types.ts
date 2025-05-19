@@ -15,14 +15,19 @@ export type Player = User & {
   isCaptain?: boolean;
 };
 
-export type GameRoomStatus = "waiting" | "in-progress" | "finished";
+// Changed from type alias to enum
+export enum GameRoomStatus {
+  Waiting = "waiting",
+  InProgress = "in-progress",
+  Finished = "finished",
+}
 
 export type GameRoom = {
   id: string;
   name: string;
   players: Player[];
   maxPlayers: number;
-  status: GameRoomStatus;
+  status: GameRoomStatus; // This will now correctly refer to the enum
   currentCaptainId?: string;
   hostId: string;
 };
