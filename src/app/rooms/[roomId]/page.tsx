@@ -8,7 +8,7 @@ import { type GameRoom, type Player, Role, GameRoomStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -104,7 +104,7 @@ export default function GameRoomPage() {
     });
     
     while(rolesToAssign.length < playerCount) {
-        rolesToAssign.push(Role.TeamMember); // Default fill with TeamMember
+        rolesToAssign.push(Role.TeamMember); 
     }
     
     rolesToAssign = rolesToAssign.slice(0, playerCount);
@@ -228,6 +228,14 @@ export default function GameRoomPage() {
   const canAddVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length < room.maxPlayers;
   const canStartGame = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length >= MIN_PLAYERS_TO_START && localPlayers.length <= room.maxPlayers;
 
+  const knownUndercoversByCoach = currentUserRole === Role.Coach 
+    ? localPlayers.filter(p => p.role === Role.Undercover) 
+    : [];
+  const fellowUndercovers = currentUserRole === Role.Undercover 
+    ? localPlayers.filter(p => p.role === Role.Undercover && p.id !== user.id) 
+    : [];
+  const isSoleUndercover = currentUserRole === Role.Undercover && localPlayers.filter(p => p.role === Role.Undercover).length === 1;
+
 
   return (
     <div className="space-y-6">
@@ -254,6 +262,37 @@ export default function GameRoomPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      {room.status === GameRoomStatus.InProgress && currentUserRole === Role.Coach && knownUndercoversByCoach.length > 0 && (
+        <Alert variant="default" className="bg-primary/10 border-primary/30 text-primary mt-4">
+          <Eye className="h-5 w-5 text-primary" />
+          <AlertTitle className="font-semibold">你知道的卧底</AlertTitle>
+          <AlertDescription>
+            作为教练，你已洞察到以下玩家是卧底: {knownUndercoversByCoach.map(u => u.name).join(', ')}。
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {room.status === GameRoomStatus.InProgress && currentUserRole === Role.Undercover && (
+        <>
+          {fellowUndercovers.length > 0 && (
+            <Alert variant="default" className="bg-destructive/10 border-destructive/30 text-destructive-foreground mt-4">
+              <Users className="h-5 w-5 text-destructive" />
+              <AlertTitle className="font-semibold">你的卧底同伙</AlertTitle>
+              <AlertDescription>
+                你的卧底同伙是: {fellowUndercovers.map(u => u.name).join(', ')}。
+              </AlertDescription>
+            </Alert>
+          )}
+          {isSoleUndercover && (
+             <Alert variant="default" className="bg-destructive/10 border-destructive/30 text-destructive-foreground mt-4">
+              <Info className="h-5 w-5 text-destructive" />
+              <AlertTitle className="font-semibold">孤军奋战</AlertTitle>
+              <AlertDescription>你是场上唯一的卧底。</AlertDescription>
+            </Alert>
+          )}
+        </>
+      )}
       
       <div className="grid md:grid-cols-3 gap-6">
         <Card className="md:col-span-1">
@@ -262,25 +301,42 @@ export default function GameRoomPage() {
           </CardHeader>
           <CardContent>
             <ul className="space-y-3">
-              {localPlayers.map((p) => (
-                <li key={p.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-md shadow-sm">
-                  <div className="flex items-center">
-                    <Avatar className="h-10 w-10 mr-3 border-2 border-primary/50">
-                      <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
-                      <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <span className="font-medium">{p.name} {p.id === user.id && "(You)"}</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {room.status === GameRoomStatus.InProgress && p.id === user.id && p.role && (
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                        {getRoleIcon(p.role)} {p.role}
-                      </Badge>
-                    )}
-                    {p.isCaptain && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
-                  </div>
-                </li>
-              ))}
+              {localPlayers.map((p) => {
+                const isCurrentUser = p.id === user.id;
+                return (
+                  <li key={p.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-md shadow-sm">
+                    <div className="flex items-center">
+                      <Avatar className="h-10 w-10 mr-3 border-2 border-primary/50">
+                        <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
+                        <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <span className="font-medium">{p.name} {isCurrentUser && "(You)"}</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {room.status === GameRoomStatus.InProgress && p.role && (
+                        <>
+                          {isCurrentUser && (
+                            <Badge variant="secondary" className="flex items-center gap-1">
+                              {getRoleIcon(p.role)} {p.role}
+                            </Badge>
+                          )}
+                          {!isCurrentUser && currentUserRole === Role.Coach && p.role === Role.Undercover && (
+                            <Badge variant="destructive" className="flex items-center gap-1">
+                              <Eye className="h-4 w-4" /> 卧底
+                            </Badge>
+                          )}
+                          {!isCurrentUser && currentUserRole === Role.Undercover && p.role === Role.Undercover && (
+                            <Badge variant="outline" className="flex items-center gap-1 border-destructive text-destructive">
+                              <Users className="h-4 w-4" /> 卧底队友
+                            </Badge>
+                          )}
+                        </>
+                      )}
+                      {p.isCaptain && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>
@@ -355,3 +411,6 @@ export default function GameRoomPage() {
     </div>
   );
 }
+
+
+    
