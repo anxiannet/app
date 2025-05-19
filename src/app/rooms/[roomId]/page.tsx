@@ -375,16 +375,15 @@ export default function GameRoomPage() {
       setRoom(prevRoom => {
         if (!prevRoom) return null;
         return {
-          ...prevRoom, currentPhase: 'mission_execution', teamVotes: currentVotes, // Persist votes for display during execution
-          captainChangesThisRound: 0, // Reset captain changes for the round as team is approved
-          missionCardPlaysForCurrentMission: [], // Clear previous mission card plays
-          humanUndercoverCardChoice: null, // Reset UI state for undercover choice
+          ...prevRoom, currentPhase: 'mission_execution', teamVotes: currentVotes, 
+          captainChangesThisRound: 0, 
+          missionCardPlaysForCurrentMission: [], 
+          humanUndercoverCardChoice: null, 
           fullVoteHistory: updatedFullVoteHistory,
         };
       });
-      setHumanUndercoverCardChoice(null); // Also reset local state
+      setHumanUndercoverCardChoice(null); 
 
-      // Automatically record 'success' for human Team Members/Coaches on the mission
       const currentSelectedTeam = room.selectedTeamForMission || [];
       const autoPlays: MissionCardPlay[] = [];
       currentSelectedTeam.forEach(playerId => {
@@ -405,8 +404,8 @@ export default function GameRoomPage() {
           if (!prevRoom || !prevRoom.teamScores) return prevRoom;
           return {
             ...prevRoom, status: GameRoomStatus.Finished, currentPhase: 'game_over',
-            teamScores: { ...prevRoom.teamScores, undercoverWins: prevRoom.totalRounds || TOTAL_ROUNDS_PER_GAME }, // Undercovers win all remaining rounds
-            teamVotes: currentVotes, // Persist final votes
+            teamScores: { ...prevRoom.teamScores, undercoverWins: prevRoom.totalRounds || TOTAL_ROUNDS_PER_GAME }, 
+            teamVotes: currentVotes, 
             fullVoteHistory: updatedFullVoteHistory,
           };
         });
@@ -419,15 +418,15 @@ export default function GameRoomPage() {
         setRoom(prevRoom => {
           if (!prevRoom) return null;
           const updatedPlayersData = prevRoom.players.map(p => ({ ...p, isCaptain: p.id === newCaptainId }));
-          setLocalPlayers(updatedPlayersData); // Update localPlayers for correct captain display
+          setLocalPlayers(updatedPlayersData); 
           return {
             ...prevRoom, players: updatedPlayersData, currentCaptainId: newCaptainId,
             captainChangesThisRound: newCaptainChangesThisRound, currentPhase: 'team_selection',
-            selectedTeamForMission: [], teamVotes: [], // Clear for new proposal
+            selectedTeamForMission: [], teamVotes: [], 
             fullVoteHistory: updatedFullVoteHistory,
           };
         });
-        setSelectedMissionTeam([]); // Clear local selection
+        setSelectedMissionTeam([]); 
       }
     }
   }, [room, user, localPlayers, toast]);
@@ -445,20 +444,17 @@ export default function GameRoomPage() {
     setRoom(prevRoom => prevRoom ? {...prevRoom, teamVotes: updatedVotes} : null);
     toast({title: "投票已提交", description: `您投了 ${vote === 'approve' ? '同意' : '拒绝'}。等待其他玩家...`});
 
-    // Check if all real players have voted
     const realPlayers = room.players.filter(p => !p.id.startsWith("virtual_"));
     const realPlayersWhoVotedIds = new Set(updatedVotes.filter(v => realPlayers.some(rp => rp.id === v.playerId)).map(v => v.playerId));
 
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
-      // All real players have voted, now simulate AI votes
       const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
       const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => {
-        // Simple AI: All virtual players approve
         return { playerId: vp.id, vote: 'approve' };
       });
       updatedVotes = [...updatedVotes, ...virtualPlayerVotes];
-      setRoom(prevRoom => prevRoom ? {...prevRoom, teamVotes: updatedVotes} : null); // Update room with AI votes
-      processTeamVotes(updatedVotes); // Process all votes
+      setRoom(prevRoom => prevRoom ? {...prevRoom, teamVotes: updatedVotes} : null); 
+      processTeamVotes(updatedVotes); 
     }
   };
 
@@ -472,7 +468,7 @@ export default function GameRoomPage() {
         toast({ title: "已行动", description: "您已在此任务中行动过。", variant: "destructive" });
         return;
     }
-    setHumanUndercoverCardChoice(card); // Update local UI state
+    setHumanUndercoverCardChoice(card); 
     setRoom(prev => {
         if (!prev) return null;
         const newPlay: MissionCardPlay = { playerId: user.id, card };
@@ -488,53 +484,49 @@ export default function GameRoomPage() {
   const handleProceedToNextRoundOrGameOver = () => {
     if (!room || !room.teamScores || room.currentRound === undefined || room.totalRounds === undefined) return;
 
-    // Check for Team Member/Coach win (3 successful missions)
     if (room.teamScores.teamMemberWins >= 3 && room.teamScores.undercoverWins < 3 && room.currentRound <= room.totalRounds) {
       const humanUndercovers = localPlayers.filter(p => p.role === Role.Undercover && !p.id.startsWith("virtual_"));
       if (humanUndercovers.length > 0) {
-        // Transition to Coach Assassination phase
         setRoom(prev => prev ? { ...prev, currentPhase: 'coach_assassination' } : null);
         toast({ title: "队员方胜利在望!", description: "卧底现在有一次指认教练的机会来反败为胜。" });
         return;
       } else {
-        // No human undercovers to assassinate, Team Members win
         toast({ title: "队员方获胜!", description: "卧底方无力回天。" });
         setRoom(prev => prev ? { ...prev, status: GameRoomStatus.Finished, currentPhase: 'game_over' } : null);
         return;
       }
     }
 
-    // Check for Undercover win (3 failed missions) OR all rounds completed
     if (room.teamScores.undercoverWins >= 3 || room.currentRound >= room.totalRounds) {
       setRoom(prev => prev ? { ...prev, status: GameRoomStatus.Finished, currentPhase: 'game_over' } : null);
-    } else { // Proceed to next round
+    } else { 
       const nextRound = room.currentRound + 1;
       const currentCaptainIndex = localPlayers.findIndex(p => p.id === room.currentCaptainId);
       const nextCaptainIndex = (currentCaptainIndex + 1) % localPlayers.length;
       const newCaptainId = localPlayers[nextCaptainIndex].id;
 
       const updatedPlayers = localPlayers.map(p => ({ ...p, isCaptain: p.id === newCaptainId }));
-      setLocalPlayers(updatedPlayers); // Update local state for immediate UI captain update
+      setLocalPlayers(updatedPlayers); 
 
       setRoom(prev => {
         if (!prev) return null;
         return {
           ...prev,
-          players: updatedPlayers, // Also update room.players for persistence
+          players: updatedPlayers, 
           currentRound: nextRound,
           currentCaptainId: newCaptainId,
           captainChangesThisRound: 0,
           currentPhase: 'team_selection',
           selectedTeamForMission: [],
-          teamVotes: [], // Clear votes for the new round
-          missionCardPlaysForCurrentMission: [], // Clear mission plays for the new round
+          teamVotes: [], 
+          missionCardPlaysForCurrentMission: [], 
           missionOutcomeForDisplay: undefined,
           failCardsPlayedForDisplay: undefined,
         };
       });
-      setSelectedMissionTeam([]); // Clear local UI state
-      setHumanUndercoverCardChoice(null); // Clear local UI state
-      setSelectedCoachCandidate(null); // Clear local UI state
+      setSelectedMissionTeam([]); 
+      setHumanUndercoverCardChoice(null); 
+      setSelectedCoachCandidate(null); 
       toast({ title: `第 ${nextRound} 轮开始`, description: `队长是 ${localPlayers.find(p=>p.id === newCaptainId)?.name}` });
     }
   };
@@ -547,7 +539,6 @@ export default function GameRoomPage() {
 
     const actualCoach = localPlayers.find(p => p.role === Role.Coach);
     if (!actualCoach) {
-      // This should ideally not happen if roles are assigned correctly
       toast({ title: "游戏错误", description: "未找到教练角色。", variant: "destructive" });
       setRoom(prev => prev ? { ...prev, status: GameRoomStatus.Finished, currentPhase: 'game_over' } : null);
       return;
@@ -558,13 +549,10 @@ export default function GameRoomPage() {
     let toastDescription = "";
 
     if (selectedCoachCandidate === actualCoach.id) {
-      // Undercovers win by assassination
-      finalTeamScores.teamMemberWins = Math.min(finalTeamScores.teamMemberWins, (Math.ceil((room.totalRounds || TOTAL_ROUNDS_PER_GAME)/2))-1 ); // Reduce team member wins to prevent them from winning
-      // finalTeamScores.undercoverWins = room.totalRounds || TOTAL_ROUNDS_PER_GAME; // No longer setting this to max
+      finalTeamScores.teamMemberWins = Math.min(finalTeamScores.teamMemberWins, (Math.ceil((room.totalRounds || TOTAL_ROUNDS_PER_GAME)/2))-1 ); 
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
     } else {
-      // Assassination failed, Team Members confirm their win
       toastTitle = "指认失败！队员方获胜！";
       const wronglyAccusedPlayer = localPlayers.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
@@ -577,11 +565,11 @@ export default function GameRoomPage() {
         status: GameRoomStatus.Finished,
         currentPhase: 'game_over',
         teamScores: finalTeamScores,
-        coachCandidateId: selectedCoachCandidate, // Store who was targeted
+        coachCandidateId: selectedCoachCandidate, 
       };
     });
     toast({ title: toastTitle, description: toastDescription, duration: 5000 });
-    setSelectedCoachCandidate(null); // Reset UI state
+    setSelectedCoachCandidate(null); 
   };
 
 
@@ -632,12 +620,11 @@ export default function GameRoomPage() {
 
   const realPlayersCount = localPlayers.filter(p => !p.id.startsWith("virtual_")).length;
   const realPlayersVotedCount = room.teamVotes?.filter(v => localPlayers.find(p => p.id === v.playerId && !p.id.startsWith("virtual_"))).length || 0;
-  const votesToDisplay = room.teamVotes || []; // Used for showing individual votes
-  const missionPlaysToDisplay = room.missionCardPlaysForCurrentMission || []; // Used for showing mission cards
+  const votesToDisplay = room.teamVotes || []; 
+  const missionPlaysToDisplay = room.missionCardPlaysForCurrentMission || []; 
   const assassinationTargetOptions = localPlayers.filter(p => {
-    if (currentUserRole !== Role.Undercover) return false; // Only undercovers can assassinate
-    if (p.id === user.id) return false; // Cannot target self
-    // Cannot target fellow undercovers (though Coach is the target, this prevents accidental clicks on allies if UI shows all)
+    if (currentUserRole !== Role.Undercover) return false; 
+    if (p.id === user.id) return false; 
     if (fellowUndercovers.some(fu => fu.id === p.id)) return false;
     return true;
   });
@@ -652,12 +639,9 @@ export default function GameRoomPage() {
       } else if (room.teamScores.undercoverWins > room.teamScores.teamMemberWins) {
         gameOverMessage = <span className="text-destructive">卧底阵营胜利!</span>;
       } else if (room.teamScores.teamMemberWins === room.teamScores.undercoverWins && room.coachCandidateId && !room.players.find(p => p.id === room.coachCandidateId && p.role === Role.Coach)) {
-         // This case: scores might be equal (e.g., 2-2 and coach assassination fails for undercovers)
-         // Team members win due to failed assassination.
          gameOverMessage = <span className="text-green-600">队员阵营胜利! (指认失败)</span>;
       }
        else {
-        // Default fallback if no clear winner from above, or if scores are somehow equal without assassination
         gameOverMessage = <span className="text-foreground">游戏结束! (比分 {room.teamScores.teamMemberWins} : {room.teamScores.undercoverWins})</span>;
       }
     } else {
@@ -751,12 +735,19 @@ export default function GameRoomPage() {
                            {missionCardPlay === 'success' ? <ShieldCheck className="h-3 w-3" /> : <ShieldX className="h-3 w-3" />}
                         </Badge>
                       )}
-                      {room.status === GameRoomStatus.InProgress && p.role && (<>
+                      
+                      {room.status === GameRoomStatus.InProgress && p.role && (
+                        <>
                           {isCurrentUser && (<Badge variant="secondary" className="flex items-center gap-1">{getRoleIcon(p.role)} {p.role}</Badge>)}
                           {!isCurrentUser && currentUserRole === Role.Coach && p.role === Role.Undercover && (<Badge variant="destructive" className="flex items-center gap-1"><Eye className="h-4 w-4" /> 卧底</Badge>)}
                           {!isCurrentUser && currentUserRole === Role.Undercover && p.role === Role.Undercover && (<Badge variant="outline" className="flex items-center gap-1 border-destructive text-destructive"><Users className="h-4 w-4" /> 卧底队友</Badge>)}
-                        </>)}
-                      {p.id === room.currentCaptainId && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
+                        </>
+                      )}
+                      {room.status === GameRoomStatus.Finished && p.role && (
+                        <Badge variant="outline" className="flex items-center gap-1 border-muted-foreground text-muted-foreground">{getRoleIcon(p.role)} {p.role}</Badge>
+                      )}
+
+                      {p.id === room.currentCaptainId && room.status === GameRoomStatus.InProgress && <Crown className="h-5 w-5 text-yellow-500" title="Captain" />}
                     </div>
                   </li>);})}</ul></CardContent>
         </Card>
@@ -907,7 +898,6 @@ export default function GameRoomPage() {
                 <p className="text-muted-foreground mt-2">感谢您的参与！</p>
               </div>)}
 
-            {/* In-game and Post-game Vote History Accordion */}
             {room.fullVoteHistory && room.fullVoteHistory.length > 0 && room.status !== GameRoomStatus.Waiting && (
               <Accordion type="single" collapsible className="w-full mt-6 pt-4 border-t">
                 <AccordionItem value="vote-history">
@@ -925,20 +915,34 @@ export default function GameRoomPage() {
                               <AccordionItem value={`round-${roundNum}`} key={`round-history-${roundNum}`}>
                                 <AccordionTrigger className="text-md font-medium hover:no-underline">第 {roundNum} 轮投票记录</AccordionTrigger>
                                 <AccordionContent>
-                                  {roundVotes.map((voteEntry, attemptIdx) => (
-                                    <div key={`round-${roundNum}-attempt-${attemptIdx}`} className="mb-4 p-3 border rounded-md bg-muted/20">
-                                      <p className="font-semibold text-sm">第 {voteEntry.attemptNumberInRound} 次组队尝试 (队长: {localPlayers.find(p => p.id === voteEntry.captainId)?.name || '未知'})</p>
-                                      <p className="text-xs mt-1">提议队伍: {voteEntry.proposedTeamIds.map(id => localPlayers.find(p => p.id === id)?.name || '未知').join(', ')}</p>
-                                      <p className="text-xs mt-1">投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
-                                      <ul className="mt-2 space-y-1 text-xs list-disc list-inside pl-2">
-                                        {voteEntry.votes.map(vote => (
-                                          <li key={`vote-${voteEntry.round}-${voteEntry.attemptNumberInRound}-${vote.playerId}`}>
-                                            {localPlayers.find(p => p.id === vote.playerId)?.name || '未知玩家'}: {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
-                                  ))}
+                                  {roundVotes.map((voteEntry, attemptIdx) => {
+                                    const captain = localPlayers.find(p => p.id === voteEntry.captainId);
+                                    const captainDisplay = captain ? `${captain.name}${room.status === GameRoomStatus.Finished && captain.role ? ` (${captain.role})` : ''}` : '未知';
+                                    
+                                    const proposedTeamDisplay = voteEntry.proposedTeamIds.map(id => {
+                                        const player = localPlayers.find(p => p.id === id);
+                                        return player ? `${player.name}${room.status === GameRoomStatus.Finished && player.role ? ` (${player.role})` : ''}` : '未知';
+                                    }).join(', ');
+
+                                    return (
+                                        <div key={`round-${roundNum}-attempt-${attemptIdx}`} className="mb-4 p-3 border rounded-md bg-muted/20">
+                                        <p className="font-semibold text-sm">第 {voteEntry.attemptNumberInRound} 次组队尝试 (队长: {captainDisplay})</p>
+                                        <p className="text-xs mt-1">提议队伍: {proposedTeamDisplay}</p>
+                                        <p className="text-xs mt-1">投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
+                                        <ul className="mt-2 space-y-1 text-xs list-disc list-inside pl-2">
+                                            {voteEntry.votes.map(vote => {
+                                            const voter = localPlayers.find(p => p.id === vote.playerId);
+                                            const voterDisplay = voter ? `${voter.name}${room.status === GameRoomStatus.Finished && voter.role ? ` (${voter.role})` : ''}` : '未知玩家';
+                                            return (
+                                                <li key={`vote-${voteEntry.round}-${voteEntry.attemptNumberInRound}-${vote.playerId}`}>
+                                                {voterDisplay}: {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
+                                                </li>
+                                            );
+                                            })}
+                                        </ul>
+                                        </div>
+                                    );
+                                  })}
                                 </AccordionContent>
                               </AccordionItem>
                             );
