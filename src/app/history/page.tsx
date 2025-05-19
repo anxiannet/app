@@ -187,7 +187,7 @@ export default function GameHistoryPage() {
                                          {mission.outcome === 'fail' && mission.cardPlays.filter(cp => cp.card === 'fail').length > 0 && (
                                             <p className="mt-1">破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
                                                 const player = record.playersInGame.find(p => p.id === cp.playerId);
-                                                return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
+                                                return player ? player.name : '未知玩家';
                                             }).join(', ')}
                                             </p>
                                         )}
