@@ -24,6 +24,14 @@ const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: 
 
 const MIN_PLAYERS_TO_START = 5;
 
+const COMMON_CHINESE_NAMES = [
+  "李明", "王伟", "张芳", "刘秀英", "陈静", "杨勇", "赵敏", "黄强", "周杰", "吴秀兰",
+  "徐雷", "孙艳", "胡波", "朱琳", "高翔", "林娜", "郑军", "何平", "马超", "宋丹",
+  "小红", "大山", "思思", "阿强", "文文", "乐乐", "聪聪", "萌萌", "飞飞", "静静",
+  "李娜", "张伟", "王芳", "刘洋", "陈勇", "杨静", "赵强", "黄秀英", "周敏", "吴雷",
+  "徐艳", "孙波", "胡琳", "朱翔", "高娜", "林军", "郑平", "何超", "马丹", "宋杰"
+];
+
 export default function GameRoomPage() {
   const params = useParams();
   const router = useRouter();
@@ -159,14 +167,21 @@ export default function GameRoomPage() {
       return;
     }
 
-    const virtualPlayerCount = localPlayers.filter(p => p.name.startsWith("Virtual Player")).length;
-    const virtualPlayerName = `Virtual Player ${virtualPlayerCount + 1}`;
+    const existingVirtualPlayerNames = localPlayers.filter(p => p.id.startsWith("virtual_")).map(p => p.name);
+    const availableNames = COMMON_CHINESE_NAMES.filter(name => !existingVirtualPlayerNames.includes(name));
+
+    if (availableNames.length === 0) {
+      toast({ title: "Error", description: "No more unique virtual player names available.", variant: "destructive" });
+      return;
+    }
+    
+    const virtualPlayerName = availableNames[Math.floor(Math.random() * availableNames.length)];
     const virtualPlayerId = `virtual_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     
     const newVirtualPlayer: Player = {
       id: virtualPlayerId,
       name: virtualPlayerName,
-      avatarUrl: `https://placehold.co/100x100.png?text=V${virtualPlayerCount + 1}`,
+      avatarUrl: `https://placehold.co/100x100.png?text=${encodeURIComponent(virtualPlayerName.charAt(0))}`,
       isCaptain: false,
     };
 
@@ -411,6 +426,3 @@ export default function GameRoomPage() {
     </div>
   );
 }
-
-
-    
