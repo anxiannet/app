@@ -2,13 +2,12 @@
 "use client";
 
 import type { User } from "@/lib/types";
-import type { GameRoom, Player, Role, PlayerVote, MissionCardPlay } from "@/lib/types";
+import { type GameRoom, type Player, Role, type PlayerVote, type MissionCardPlay, GameRoomStatus } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Crown, Users, Eye, ThumbsUp, ThumbsDown, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { GameRoomStatus } from "@/lib/types";
 
 type PlayerListPanelProps = {
   localPlayers: Player[];
