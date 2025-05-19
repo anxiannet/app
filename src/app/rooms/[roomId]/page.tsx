@@ -699,12 +699,15 @@ export default function GameRoomPage() {
                 <p className="text-muted-foreground mt-2">感谢您的参与！</p>
               </div>
             )}
-             <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">
-                返回大厅
-            </Button>
+            {room.status === GameRoomStatus.Waiting && (
+              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">
+                  返回大厅
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>
     </div>
   );
 }
+
