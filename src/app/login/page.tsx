@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Button } from "@/components/ui/button";
@@ -14,16 +14,21 @@ export default function LoginPage() {
   const router = useRouter();
   const [name, setName] = useState("");
 
+  useEffect(() => {
+    if (user) {
+      router.push("/"); // Redirect if already logged in
+    }
+  }, [user, router]);
+
   if (user) {
-    router.push("/"); // Redirect if already logged in
-    return null;
+    return null; // Return null while redirecting
   }
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim()) {
       login(name.trim());
-      router.push("/");
+      // No need to push here, useEffect will handle it after user state updates
     }
   };
 
