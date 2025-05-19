@@ -98,7 +98,7 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
 
                         {missionForRound && room.status === GameRoomStatus.Finished && missionForRound.cardPlays && missionForRound.cardPlays.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-dashed">
-                            <p className="font-semibold text-sm mb-2">比赛牌局详情 (出战队员: {missionForRound.teamPlayerIds.map(id => localPlayers.find(p=>p.id===id)?.name || '未知').join(', ')}):</p>
+                            <p className="font-semibold text-sm mb-2">比赛牌局详情:</p>
                             <ul className="space-y-1 text-xs">
                               {missionForRound.cardPlays.map((play, playIdx) => {
                                 const player = localPlayers.find(p => p.id === play.playerId);
@@ -135,3 +135,4 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
     </Accordion>
   );
 }
+
