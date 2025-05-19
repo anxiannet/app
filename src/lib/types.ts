@@ -22,14 +22,14 @@ export enum GameRoomStatus {
   Finished = "finished",
 }
 
-export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged'; // 'sabotaged' can be used if explicitly revealing sabotage
+export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
 
 export type Mission = {
   round: number;
   captainId: string;
-  teamPlayerIds: string[]; // Store player IDs
+  teamPlayerIds: string[];
   outcome: MissionOutcome;
-  failCardsPlayed: number; 
+  failCardsPlayed: number;
 };
 
 export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'coach_assassination' | 'game_over';
@@ -44,6 +44,15 @@ export type MissionCardPlay = {
   card: 'success' | 'fail';
 };
 
+export type VoteHistoryEntry = {
+  round: number;
+  captainId: string;
+  attemptNumberInRound: number;
+  proposedTeamIds: string[];
+  votes: PlayerVote[];
+  outcome: 'approved' | 'rejected';
+};
+
 export type GameRoom = {
   id: string;
   name: string;
@@ -54,25 +63,25 @@ export type GameRoom = {
   hostId: string;
 
   currentRound?: number;
-  totalRounds?: number; 
+  totalRounds?: number;
   captainChangesThisRound?: number;
   maxCaptainChangesPerRound?: number;
 
   currentPhase?: GameRoomPhase;
-  selectedTeamForMission?: string[]; 
+  selectedTeamForMission?: string[];
   teamVotes?: PlayerVote[];
-  
+
   missionCardPlaysForCurrentMission?: MissionCardPlay[];
   missionOutcomeForDisplay?: MissionOutcome;
   failCardsPlayedForDisplay?: number;
-  
+
   teamScores?: {
-    teamMemberWins: number; 
-    undercoverWins: number; 
+    teamMemberWins: number;
+    undercoverWins: number;
   };
   missionHistory?: Mission[];
-  
-  missionPlayerCounts?: number[];
-  coachCandidateId?: string; // Player ID targeted by Undercovers as Coach
-};
+  fullVoteHistory?: VoteHistoryEntry[]; // Added for detailed vote logging
 
+  missionPlayerCounts?: number[];
+  coachCandidateId?: string;
+};
