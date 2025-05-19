@@ -32,7 +32,7 @@ export type Mission = {
   failCardsPlayed: number; 
 };
 
-export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'game_over';
+export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'coach_assassination' | 'game_over';
 
 export type PlayerVote = {
   playerId: string;
@@ -73,4 +73,6 @@ export type GameRoom = {
   missionHistory?: Mission[];
   
   missionPlayerCounts?: number[];
+  coachCandidateId?: string; // Player ID targeted by Undercovers as Coach
 };
+
