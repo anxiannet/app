@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -7,7 +8,7 @@ import { type GameRoom, type Player, Role, GameRoomStatus } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -60,13 +61,12 @@ export default function GameRoomPage() {
       const currentRoom = storedRooms.find(r => r.id === roomId);
 
       if (currentRoom) {
-        // Ensure user is part of the room players if not already
         let playerExists = currentRoom.players.some(p => p.id === user.id);
         if (!playerExists && currentRoom.players.length < currentRoom.maxPlayers && currentRoom.status === GameRoomStatus.Waiting) {
            const newPlayer: Player = { ...user, isCaptain: false };
            currentRoom.players.push(newPlayer);
            playerExists = true;
-           updateLocalStorageRooms(currentRoom); // Save updated room
+           updateLocalStorageRooms(currentRoom); 
         } else if (!playerExists && currentRoom.status !== GameRoomStatus.Waiting) {
           toast({ title: "Game in Progress", description: "Cannot join a game that has already started or is finished.", variant: "destructive" });
           router.push("/");
@@ -94,7 +94,7 @@ export default function GameRoomPage() {
     if (!room || room.players.length < MIN_PLAYERS_TO_START) return;
 
     const playerCount = room.players.length;
-    const config = ROLES_CONFIG[playerCount] || ROLES_CONFIG[Math.max(...Object.keys(ROLES_CONFIG).map(Number))]; // Fallback to largest config
+    const config = ROLES_CONFIG[playerCount] || ROLES_CONFIG[Math.max(...Object.keys(ROLES_CONFIG).map(Number))]; 
 
     let rolesToAssign: Role[] = [];
     Object.entries(config).forEach(([role, count]) => {
@@ -102,12 +102,11 @@ export default function GameRoomPage() {
         rolesToAssign.push(role as Role);
       }
     });
-    // Fill remaining with Civilian if not enough roles defined (e.g. playerCount > 8 and no specific config)
     while(rolesToAssign.length < playerCount) {
         rolesToAssign.push(Role.Civilian);
     }
 
-    rolesToAssign = rolesToAssign.sort(() => Math.random() - 0.5); // Shuffle roles
+    rolesToAssign = rolesToAssign.sort(() => Math.random() - 0.5); 
 
     const updatedPlayers = room.players.map((player, index) => ({
       ...player,
@@ -140,6 +139,39 @@ export default function GameRoomPage() {
       return;
     }
     assignRolesAndCaptain();
+  };
+
+  const handleAddVirtualPlayer = () => {
+    if (!room || !user || room.hostId !== user.id || room.status !== GameRoomStatus.Waiting) {
+      toast({ title: "Not Authorized", description: "Only the host can add virtual players while waiting.", variant: "destructive" });
+      return;
+    }
+    if (localPlayers.length >= room.maxPlayers) {
+      toast({ title: "Room Full", description: "Cannot add more players, room is full.", variant: "destructive" });
+      return;
+    }
+
+    const virtualPlayerCount = localPlayers.filter(p => p.name.startsWith("Virtual Player")).length;
+    const virtualPlayerName = `Virtual Player ${virtualPlayerCount + 1}`;
+    const virtualPlayerId = `virtual_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    
+    const newVirtualPlayer: Player = {
+      id: virtualPlayerId,
+      name: virtualPlayerName,
+      avatarUrl: `https://placehold.co/100x100.png?text=${virtualPlayerName.charAt(0)}P`, // VP for Virtual Player
+      isCaptain: false,
+    };
+
+    const updatedPlayers = [...localPlayers, newVirtualPlayer];
+    const updatedRoom = {
+      ...room,
+      players: updatedPlayers,
+    };
+
+    setRoom(updatedRoom);
+    setLocalPlayers(updatedPlayers);
+    updateLocalStorageRooms(updatedRoom);
+    toast({ title: "Virtual Player Added", description: `${virtualPlayerName} has joined the room.` });
   };
 
   const handleNextTurn = () => {
@@ -182,6 +214,11 @@ export default function GameRoomPage() {
       default: return null;
     }
   };
+
+  const isHost = user.id === room.hostId;
+  const canAddVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length < room.maxPlayers;
+  const canStartGame = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length >= MIN_PLAYERS_TO_START;
+
 
   return (
     <div className="space-y-6">
@@ -247,17 +284,30 @@ export default function GameRoomPage() {
             {room.status === GameRoomStatus.Waiting && (
               <>
                 <p className="text-muted-foreground">Waiting for the host to start the game...</p>
-                {user.id === room.hostId && (
-                  <Button 
-                    onClick={handleStartGame} 
-                    disabled={localPlayers.length < MIN_PLAYERS_TO_START}
-                    className="w-full bg-green-500 hover:bg-green-600 text-white transition-transform hover:scale-105 active:scale-95"
-                  >
-                    <Play className="mr-2 h-5 w-5" /> Start Game
-                  </Button>
-                )}
-                {localPlayers.length < MIN_PLAYERS_TO_START && (
-                    <p className="text-sm text-destructive">Need at least {MIN_PLAYERS_TO_START} players to start. Currently {localPlayers.length}.</p>
+                {isHost && (
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={handleStartGame} 
+                      disabled={!canStartGame}
+                      className="w-full bg-green-500 hover:bg-green-600 text-white transition-transform hover:scale-105 active:scale-95"
+                    >
+                      <Play className="mr-2 h-5 w-5" /> Start Game
+                    </Button>
+                    {!canStartGame && localPlayers.length < MIN_PLAYERS_TO_START && (
+                      <p className="text-sm text-destructive text-center">Need at least {MIN_PLAYERS_TO_START} players to start.</p>
+                    )}
+                     <Button 
+                      onClick={handleAddVirtualPlayer} 
+                      disabled={!canAddVirtualPlayer}
+                      variant="outline"
+                      className="w-full transition-transform hover:scale-105 active:scale-95"
+                    >
+                      <UserPlus className="mr-2 h-5 w-5" /> Add Virtual Player
+                    </Button>
+                    {!canAddVirtualPlayer && localPlayers.length >= room.maxPlayers && (
+                         <p className="text-sm text-destructive text-center">Room is full.</p>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -294,3 +344,5 @@ export default function GameRoomPage() {
     </div>
   );
 }
+
+    
