@@ -4,7 +4,7 @@
 import type { GameRoom, Player, Role, VoteHistoryEntry } from "@/lib/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX, Users } from "lucide-react";
+import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GameRoomStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +53,8 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                               .filter(play => play.card === 'fail')
                               .map(play => {
                                   const player = localPlayers.find(p => p.id === play.playerId);
-                                  return player ? `${player.name} (${player.role || '未知角色'})` : '未知玩家';
+                                  // Changed: Only show player name in the trigger's saboteur list
+                                  return player ? player.name : '未知玩家';
                               });
                           if (saboteurs.length > 0) {
                               missionOutcomeText += ` (破坏者: ${saboteurs.join(', ')})`;
@@ -102,6 +103,7 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                             <ul className="space-y-1 text-xs">
                               {missionForRound.cardPlays.map((play, playIdx) => {
                                 const player = localPlayers.find(p => p.id === play.playerId);
+                                // Roles are revealed here in the content if game is finished
                                 const playerDisplay = player ? `${player.name} (${player.role || '未知角色'})` : '未知玩家';
                                 return (
                                   <li key={`mission-play-${roundNum}-${playIdx}`} className="flex items-center">
