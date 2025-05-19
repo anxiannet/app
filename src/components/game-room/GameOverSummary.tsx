@@ -1,7 +1,7 @@
 
 "use client";
 
-import type { GameRoom, Player, Role } from "@/lib/types";
+import { type GameRoom, type Player, Role } from "@/lib/types"; // Changed import
 import { Button } from "@/components/ui/button";
 import { ShieldCheck, ShieldX } from "lucide-react";
 
@@ -39,3 +39,4 @@ export function GameOverSummary({ room, localPlayers, gameOverMessage, onReturnT
     </div>
   );
 }
+
