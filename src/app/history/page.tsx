@@ -205,53 +205,90 @@ export default function GameHistoryPage() {
                             {record.fullVoteHistory && record.fullVoteHistory.length > 0 && (
                                 <section>
                                     <h4 className="text-xs font-semibold mb-2 mt-4 text-muted-foreground">详细投票记录:</h4>
-                                    <ScrollArea className="h-[200px] pr-2">
-                                        {record.fullVoteHistory.reduce((acc, vh) => acc.includes(vh.round) ? acc : [...acc, vh.round], [] as number[])
-                                        .sort((a,b) => a - b) 
-                                        .map(roundNum => {
-                                            const roundVotes = record.fullVoteHistory!.filter(vh => vh.round === roundNum);
-                                            if (roundVotes.length === 0) return null;
-                                            
-                                            return (
-                                                <Accordion key={`record-${record.gameInstanceId}-round-${roundNum}`} type="single" collapsible className="mb-2">
-                                                <AccordionItem value={`round-detail-${roundNum}`}>
-                                                    <AccordionTrigger className="text-xs font-medium hover:no-underline p-2 bg-muted/50 rounded-t-md">
-                                                    第 {roundNum} 场比赛记录 ({roundVotes.length}次组队)
-                                                    </AccordionTrigger>
-                                                    <AccordionContent className="p-2 border border-t-0 rounded-b-md">
-                                                    {roundVotes.map((voteEntry, attemptIdx) => {
-                                                        const captain = record.playersInGame.find(p => p.id === voteEntry.captainId);
-                                                        const captainDisplay = captain ? `${captain.name} (${getRoleChineseName(captain.role)})` : '未知';
+                                    <ScrollArea className="h-[300px] pr-4">
+                                        <Accordion type="multiple" className="w-full">
+                                            {Array.from(new Set(record.fullVoteHistory.map(vh => vh.round))).sort((a, b) => a - b)
+                                            .map(roundNum => {
+                                                const roundVotes = record.fullVoteHistory!.filter(vh => vh.round === roundNum);
+                                                const missionForRound = record.missionHistory?.find(m => m.round === roundNum);
 
-                                                        const proposedTeamDisplay = voteEntry.proposedTeamIds.map(id => {
-                                                            const player = record.playersInGame.find(p => p.id === id);
-                                                            return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知';
-                                                        }).join(', ');
+                                                if (roundVotes.length === 0 && !missionForRound) return null;
 
-                                                        return (
-                                                        <div key={`record-${record.gameInstanceId}-round-${roundNum}-attempt-${attemptIdx}`} className="mb-3 p-2 border rounded-md bg-background text-xs">
-                                                            <p className="font-semibold">第 {voteEntry.attemptNumberInRound} 次组队 (队长: {captainDisplay})</p>
-                                                            <p className="mt-1">提议队伍: {proposedTeamDisplay}</p>
-                                                            <p className="mt-1">投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
-                                                            <ul className="mt-1.5 space-y-0.5 list-disc list-inside pl-1">
-                                                            {voteEntry.votes.map(vote => {
-                                                                const voter = record.playersInGame.find(p => p.id === vote.playerId);
-                                                                const voterDisplay = voter ? `${voter.name} (${getRoleChineseName(voter.role)})` : '未知玩家';
-                                                                return (
-                                                                <li key={`vote-${record.gameInstanceId}-${voteEntry.round}-${voteEntry.attemptNumberInRound}-${vote.playerId}`}>
-                                                                    {voterDisplay}: {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
-                                                                </li>
-                                                                );
-                                                            })}
-                                                            </ul>
-                                                        </div>
-                                                        );
-                                                    })}
-                                                    </AccordionContent>
-                                                </AccordionItem>
-                                                </Accordion>
-                                            );
-                                        })}
+                                                let missionOutcomeText = '';
+                                                if (missionForRound) {
+                                                    missionOutcomeText = missionForRound.outcome === 'success' ? ' - 比赛成功' : (missionForRound.outcome === 'fail' ? ' - 比赛失败' : '');
+                                                    if (missionForRound.outcome === 'fail' && missionForRound.cardPlays) {
+                                                        const saboteurs = missionForRound.cardPlays
+                                                            .filter(play => play.card === 'fail')
+                                                            .map(play => {
+                                                                const player = record.playersInGame.find(p => p.id === play.playerId);
+                                                                return player ? player.name : '未知玩家';
+                                                            });
+                                                        if (saboteurs.length > 0) {
+                                                            missionOutcomeText += ` (破坏者: ${saboteurs.join(', ')})`;
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                return (
+                                                    <AccordionItem value={`round-history-${record.gameInstanceId}-${roundNum}`} key={`round-history-${record.gameInstanceId}-${roundNum}`}>
+                                                        <AccordionTrigger className="text-sm font-medium hover:no-underline p-2 bg-muted/50 rounded-t-md">
+                                                        第 {roundNum} 场比赛记录 ({roundVotes.length}次组队){missionOutcomeText}
+                                                        </AccordionTrigger>
+                                                        <AccordionContent className="p-2 border border-t-0 rounded-b-md">
+                                                        {roundVotes.map((voteEntry, attemptIdx) => {
+                                                            const captain = record.playersInGame.find(p => p.id === voteEntry.captainId);
+                                                            const captainDisplay = captain ? `${captain.name} (${getRoleChineseName(captain.role)})` : '未知';
+
+                                                            const proposedTeamDisplay = voteEntry.proposedTeamIds.map(id => {
+                                                                const player = record.playersInGame.find(p => p.id === id);
+                                                                return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知';
+                                                            }).join(', ');
+
+                                                            return (
+                                                            <div key={`vote-entry-${record.gameInstanceId}-${roundNum}-${attemptIdx}`} className="mb-3 p-2 border rounded-md bg-background text-xs">
+                                                                <p className="font-semibold">第 {voteEntry.attemptNumberInRound} 次组队 (队长: {captainDisplay})</p>
+                                                                <p className="mt-1">提议队伍: {proposedTeamDisplay}</p>
+                                                                <p className="mt-1">投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
+                                                                <ul className="mt-1.5 space-y-0.5 list-disc list-inside pl-1">
+                                                                {voteEntry.votes.map(vote => {
+                                                                    const voter = record.playersInGame.find(p => p.id === vote.playerId);
+                                                                    const voterDisplay = voter ? `${voter.name} (${getRoleChineseName(voter.role)})` : '未知玩家';
+                                                                    return (
+                                                                    <li key={`vote-${record.gameInstanceId}-${voteEntry.round}-${voteEntry.attemptNumberInRound}-${vote.playerId}`}>
+                                                                        {voterDisplay}: {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
+                                                                    </li>
+                                                                    );
+                                                                })}
+                                                                </ul>
+                                                            </div>
+                                                            );
+                                                        })}
+                                                        {missionForRound && missionForRound.cardPlays && missionForRound.cardPlays.length > 0 && (
+                                                            <div className="mt-3 pt-3 border-t border-dashed">
+                                                                <p className="font-semibold text-sm mb-1">本场比赛队员行动:</p>
+                                                                <ul className="space-y-0.5 text-xs list-disc list-inside pl-1">
+                                                                {missionForRound.cardPlays.map((play, playIdx) => {
+                                                                    const player = record.playersInGame.find(p => p.id === play.playerId);
+                                                                    const playerDisplay = player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
+                                                                    return (
+                                                                    <li key={`mission-play-${record.gameInstanceId}-${roundNum}-${playIdx}`}>
+                                                                        {playerDisplay}: 
+                                                                        {play.card === 'success' ? 
+                                                                            <Badge variant="outline" className="ml-1 px-1 py-0 border-green-500 text-green-600"><CheckCircle2 className="inline-block mr-0.5 h-3 w-3"/> 成功</Badge> : 
+                                                                            <Badge variant="destructive" className="ml-1 px-1 py-0"><XCircle className="inline-block mr-0.5 h-3 w-3"/> 破坏</Badge>
+                                                                        }
+                                                                    </li>
+                                                                    );
+                                                                })}
+                                                                </ul>
+                                                            </div>
+                                                        )}
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                );
+                                            })}
+                                        </Accordion>
                                     </ScrollArea>
                                 </section>
                             )}
