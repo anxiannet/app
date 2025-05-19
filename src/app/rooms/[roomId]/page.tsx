@@ -4,11 +4,11 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission } from "@/lib/types";
+import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Repeat, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Repeat, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -33,14 +33,6 @@ const MISSIONS_CONFIG: { [playerCount: number]: number[] } = {
   9: [3, 4, 4, 5, 5],
   10: [3, 4, 4, 5, 5],
 };
-
-// Future: configure if 2 fail cards are needed for certain missions
-// const MISSION_FAIL_REQUIREMENTS: { [playerCount: number]: number[] } = {
-//   // Example: For 7+ players, Mission 4 might need 2 fails
-//   7: [1, 1, 1, 2, 1], 
-//   // ... others default to 1
-// };
-
 
 const MIN_PLAYERS_TO_START = 5;
 const TOTAL_ROUNDS_PER_GAME = 5;
@@ -108,7 +100,11 @@ export default function GameRoomPage() {
           return;
         }
         
-        setRoom(prevRoom => ({ ...prevRoom, ...currentRoom }));
+        setRoom(prevRoom => ({ 
+          ...prevRoom, 
+          ...currentRoom,
+          teamVotes: currentRoom.teamVotes || [], // Ensure teamVotes is initialized
+        }));
         setLocalPlayers(currentRoom.players);
         if (currentRoom.selectedTeamForMission) {
             setSelectedMissionTeam(currentRoom.selectedTeamForMission);
@@ -174,6 +170,7 @@ export default function GameRoomPage() {
         maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND,
         currentPhase: 'team_selection',
         selectedTeamForMission: [],
+        teamVotes: [],
         teamScores: { teamMemberWins: 0, undercoverWins: 0 },
         missionHistory: [],
         missionPlayerCounts: missionPlayerCounts,
@@ -255,7 +252,8 @@ export default function GameRoomPage() {
       return {
         ...prevRoom,
         selectedTeamForMission: [...selectedMissionTeam],
-        currentPhase: 'team_voting', // Next phase after proposing team
+        currentPhase: 'team_voting',
+        teamVotes: [], // Reset votes for the new proposal
       };
     });
     toast({ title: "Team Proposed", description: "Players will now vote on the proposed team." });
@@ -271,62 +269,104 @@ export default function GameRoomPage() {
     });
   };
 
+  const processTeamVotes = (currentVotes: PlayerVote[]) => {
+    if (!room || !user || !room.players || !room.teamScores) return;
 
-  // Simplified next turn for now, main logic will shift to phase transitions
-  const handleNextTurn_Old = () => {
-    if (!room || !room.currentCaptainId || room.status !== GameRoomStatus.InProgress || !room.players || !user) return;
-   
-    setRoom(prevRoom => {
-      if (!prevRoom || !prevRoom.players || prevRoom.currentCaptainId === undefined || prevRoom.captainChangesThisRound === undefined || prevRoom.currentRound === undefined || prevRoom.maxCaptainChangesPerRound === undefined || prevRoom.totalRounds === undefined) return prevRoom;
+    const approveVotes = currentVotes.filter(v => v.vote === 'approve').length;
+    const rejectVotes = currentVotes.filter(v => v.vote === 'reject').length;
 
-      let newCaptainChangesThisRound = prevRoom.captainChangesThisRound + 1;
-      let newCurrentRound = prevRoom.currentRound;
-      let gameFinished = false;
-      let newStatus = prevRoom.status;
-      let toastMessage = "";
-
-      const currentPlayers = prevRoom.players;
-      let currentPlayerIndex = currentPlayers.findIndex(p => p.id === prevRoom.currentCaptainId);
-      if (currentPlayerIndex === -1) currentPlayerIndex = 0; 
-
-      let nextCaptainIndex = (currentPlayerIndex + 1) % currentPlayers.length;
+    if (approveVotes > rejectVotes) { // Team Approved
+      toast({ title: "Team Approved!", description: "Proceeding to mission execution." });
+      setRoom(prevRoom => {
+        if (!prevRoom) return null;
+        return {
+          ...prevRoom,
+          currentPhase: 'mission_execution',
+          teamVotes: [], 
+          // captainChangesThisRound: 0, // Captain successfully formed a team for this attempt
+        };
+      });
+    } else { // Team Rejected
+      let newCaptainChangesThisRound = (room.captainChangesThisRound || 0) + 1;
       
-      if (newCaptainChangesThisRound >= prevRoom.maxCaptainChangesPerRound) {
-        if (newCurrentRound >= prevRoom.totalRounds) {
-          gameFinished = true;
-          newStatus = GameRoomStatus.Finished;
-          toastMessage = "Game Over! All rounds completed.";
-          toast({ title: "Game Over", description: "All rounds completed." });
-        } else {
-          newCurrentRound++;
-          newCaptainChangesThisRound = 0; 
-          toastMessage = `Round ${newCurrentRound} started! ${currentPlayers[nextCaptainIndex].name} is the new captain.`;
-          toast({ title: `Round ${newCurrentRound} Started!`, description: `${currentPlayers[nextCaptainIndex].name} is the captain.` });
-        }
+      if (newCaptainChangesThisRound >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) {
+        // Max rejections reached, Undercover team wins
+        toast({ title: "Team Rejected 5 Times!", description: "Undercover team wins the game!", variant: "destructive" });
+        setRoom(prevRoom => {
+          if (!prevRoom || !prevRoom.teamScores) return prevRoom;
+          return {
+            ...prevRoom,
+            status: GameRoomStatus.Finished,
+            currentPhase: 'game_over',
+            teamScores: {
+              ...prevRoom.teamScores,
+              undercoverWins: prevRoom.totalRounds || TOTAL_ROUNDS_PER_GAME, // Undercover wins all rounds
+            },
+            teamVotes: [],
+          };
+        });
       } else {
-        toastMessage = `${currentPlayers[nextCaptainIndex].name} is now the captain.`;
-        toast({ title: "Next Captain", description: `${currentPlayers[nextCaptainIndex].name} is now the captain.`});
-      }
+        // Pass captaincy
+        const currentCaptainIndex = room.players.findIndex(p => p.id === room.currentCaptainId);
+        const nextCaptainIndex = (currentCaptainIndex + 1) % room.players.length;
+        const newCaptainId = room.players[nextCaptainIndex].id;
+        const newCaptainName = room.players[nextCaptainIndex].name;
 
-      const updatedPlayers = currentPlayers.map((p, index) => ({
-        ...p,
-        isCaptain: !gameFinished && index === nextCaptainIndex,
-      }));
-      
-      const updatedRoomState: GameRoom = {
-        ...prevRoom,
-        players: updatedPlayers,
-        status: newStatus,
-        currentCaptainId: gameFinished ? undefined : updatedPlayers[nextCaptainIndex].id,
-        currentRound: newCurrentRound,
-        captainChangesThisRound: newCaptainChangesThisRound,
-        currentPhase: gameFinished ? 'game_over' : 'team_selection', // Reset to team selection for new round/captain
-        selectedTeamForMission: [], // Clear selected team
-      };
-      setLocalPlayers(updatedPlayers);
-      setSelectedMissionTeam([]);
-      return updatedRoomState;
-    });
+        toast({ title: "Team Rejected!", description: `Passing captaincy to ${newCaptainName}.` });
+        setRoom(prevRoom => {
+          if (!prevRoom) return null;
+          const updatedPlayers = prevRoom.players.map(p => ({
+            ...p,
+            isCaptain: p.id === newCaptainId,
+          }));
+          setLocalPlayers(updatedPlayers);
+          return {
+            ...prevRoom,
+            players: updatedPlayers,
+            currentCaptainId: newCaptainId,
+            captainChangesThisRound: newCaptainChangesThisRound,
+            currentPhase: 'team_selection',
+            selectedTeamForMission: [],
+            teamVotes: [],
+          };
+        });
+        setSelectedMissionTeam([]);
+      }
+    }
+  };
+  
+  const handlePlayerVote = (vote: 'approve' | 'reject') => {
+    if (!room || !user || room.currentPhase !== 'team_voting' || !room.players) {
+      toast({ title: "Error", description: "Cannot vote at this time.", variant: "destructive" });
+      return;
+    }
+
+    const existingVote = room.teamVotes?.find(v => v.playerId === user.id);
+    if (existingVote) {
+      toast({ title: "Already Voted", description: "You have already voted on this team.", variant: "destructive" });
+      return;
+    }
+
+    const newVote: PlayerVote = { playerId: user.id, vote };
+    let updatedVotes = [...(room.teamVotes || []), newVote];
+
+    // Simulate virtual player votes if this is the last real player voting
+    const realPlayers = room.players.filter(p => !p.id.startsWith("virtual_"));
+    const realPlayersWhoVoted = updatedVotes.filter(v => realPlayers.some(rp => rp.id === v.playerId));
+
+    if (realPlayersWhoVoted.length === realPlayers.length) {
+      const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
+      virtualPlayers.forEach(vp => {
+        if (!updatedVotes.some(v => v.playerId === vp.id)) {
+          updatedVotes.push({ playerId: vp.id, vote: 'approve' }); // Virtual players always approve for now
+        }
+      });
+      setRoom(prevRoom => ({ ...prevRoom, teamVotes: updatedVotes } as GameRoom)); // Update state to show virtual votes if needed
+      processTeamVotes(updatedVotes);
+    } else {
+       setRoom(prevRoom => ({ ...prevRoom, teamVotes: updatedVotes } as GameRoom));
+       toast({title: "Vote Cast", description: `You voted to ${vote}. Waiting for other players.`})
+    }
   };
 
 
@@ -341,6 +381,7 @@ export default function GameRoomPage() {
   const currentUserInRoom = localPlayers.find(p => p.id === user.id);
   const currentUserRole = currentUserInRoom?.role;
   const isCaptain = user.id === room.currentCaptainId;
+  const hasUserVotedOnCurrentTeam = room.teamVotes?.some(v => v.playerId === user.id);
 
   const getRoleIcon = (role?: Role) => {
     switch (role) {
@@ -351,7 +392,7 @@ export default function GameRoomPage() {
     }
   };
   
-  const requiredPlayersForCurrentMission = room.missionPlayerCounts && room.currentRound !== undefined ? room.missionPlayerCounts[room.currentRound -1] : 0;
+  const requiredPlayersForCurrentMission = room.missionPlayerCounts && room.currentRound !== undefined && room.missionPlayerCounts.length > room.currentRound -1  ? room.missionPlayerCounts[room.currentRound -1] : 0;
 
   const isHost = user.id === room.hostId;
   const canAddVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && localPlayers.length < room.maxPlayers;
@@ -375,6 +416,10 @@ export default function GameRoomPage() {
         default: return "未知阶段";
     }
   }
+  
+  const realPlayersCount = localPlayers.filter(p => !p.id.startsWith("virtual_")).length;
+  const realPlayersVotedCount = room.teamVotes?.filter(v => localPlayers.find(p => p.id === v.playerId && !p.id.startsWith("virtual_"))).length || 0;
+  const votesToDisplay = room.teamVotes || [];
 
   return (
     <div className="space-y-6">
@@ -459,6 +504,7 @@ export default function GameRoomPage() {
             <ul className="space-y-3">
               {localPlayers.map((p) => {
                 const isCurrentUser = p.id === user.id;
+                const playerVote = room.currentPhase === 'team_voting' ? room.teamVotes?.find(v => v.playerId === p.id)?.vote : undefined;
                 return (
                   <li key={p.id} className="flex items-center justify-between p-3 bg-secondary/50 rounded-md shadow-sm">
                     <div className="flex items-center">
@@ -469,6 +515,11 @@ export default function GameRoomPage() {
                       <span className="font-medium">{p.name} {isCurrentUser && "(You)"}</span>
                     </div>
                     <div className="flex items-center space-x-2">
+                       {playerVote && (
+                        <Badge variant={playerVote === 'approve' ? 'default' : 'destructive'} className="bg-opacity-70">
+                          {playerVote === 'approve' ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
+                        </Badge>
+                      )}
                       {room.status === GameRoomStatus.InProgress && p.role && (
                         <>
                           {isCurrentUser && (
@@ -558,6 +609,7 @@ export default function GameRoomPage() {
                               id={`player-select-${p.id}`}
                               checked={selectedMissionTeam.includes(p.id)}
                               onCheckedChange={(checked) => handlePlayerSelectionForMission(p.id, !!checked)}
+                              disabled={selectedMissionTeam.length >= requiredPlayersForCurrentMission && !selectedMissionTeam.includes(p.id)}
                             />
                             <Label htmlFor={`player-select-${p.id}`} className="flex-grow cursor-pointer">
                               {p.name}
@@ -582,20 +634,38 @@ export default function GameRoomPage() {
                     <div className="space-y-3">
                         <h3 className="text-lg font-semibold text-center">为队伍投票 (回合 {room.currentRound})</h3>
                         <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{localPlayers.find(p=>p.id === room.currentCaptainId)?.name}</span> 提议以下队伍执行任务:</p>
-                        <ul className="text-center list-disc list-inside">
-                            {room.selectedTeamForMission?.map(playerId => localPlayers.find(p=>p.id === playerId)?.name).join(', ')}
+                        <ul className="text-center font-medium list-disc list-inside bg-muted/30 p-2 rounded-md">
+                           {(room.selectedTeamForMission || []).map(playerId => localPlayers.find(p=>p.id === playerId)?.name || '未知玩家').join(', ')}
                         </ul>
-                        <div className="flex gap-2 justify-center">
-                            <Button className="bg-green-500 hover:bg-green-600 text-white"> <Vote className="mr-2"/> 同意</Button>
-                            <Button variant="destructive"> <Vote className="mr-2"/> 拒绝</Button>
-                        </div>
-                        <p className="text-xs text-center text-muted-foreground">(投票功能待实现)</p>
+                        {votesToDisplay.length > 0 && (
+                            <p className="text-xs text-center text-muted-foreground">
+                                已投票: {votesToDisplay.filter(v => v.vote === 'approve').length} 同意, {votesToDisplay.filter(v => v.vote === 'reject').length} 拒绝.
+                                ({localPlayers.length - votesToDisplay.length} 人未投票)
+                            </p>
+                        )}
+
+                        {!hasUserVotedOnCurrentTeam && !user.id.startsWith("virtual_") ? (
+                            <div className="flex gap-4 justify-center">
+                                <Button onClick={() => handlePlayerVote('approve')} className="bg-green-500 hover:bg-green-600 text-white">
+                                    <ThumbsUp className="mr-2 h-5 w-5"/> 同意
+                                </Button>
+                                <Button onClick={() => handlePlayerVote('reject')} variant="destructive">
+                                    <ThumbsDown className="mr-2 h-5 w-5"/> 拒绝
+                                </Button>
+                            </div>
+                        ) : (
+                           !user.id.startsWith("virtual_") && <p className="text-center text-green-600 font-semibold">你已投票: {room.teamVotes?.find(v=>v.playerId === user.id)?.vote === 'approve' ? '同意' : '拒绝'}</p>
+                        )}
+                         {realPlayersVotedCount < realPlayersCount && <p className="text-sm text-center text-muted-foreground">等待其他玩家投票...</p>}
                     </div>
                 )}
 
                 {room.currentPhase === 'mission_execution' && (
                      <div className="space-y-3">
                         <h3 className="text-lg font-semibold text-center">任务执行中 (回合 {room.currentRound})</h3>
+                        <p className="text-center text-muted-foreground">
+                            队伍成员: { (room.selectedTeamForMission || []).map(playerId => localPlayers.find(p=>p.id === playerId)?.name || '未知玩家').join(', ')}
+                        </p>
                         <p className="text-center text-muted-foreground">等待任务结果...</p>
                         <p className="text-xs text-center text-muted-foreground">(任务卡牌功能待实现)</p>
                     </div>
@@ -608,27 +678,25 @@ export default function GameRoomPage() {
                         <p className="text-xs text-center text-muted-foreground">(结果展示待实现)</p>
                     </div>
                 )}
-
-
-                {/* <Button 
-                  onClick={handleNextTurn_Old} // Temporarily keep old logic for testing round advance
-                  variant="outline" 
-                  className="w-full transition-transform hover:scale-105 active:scale-95 mt-4"
-                >
-                  模拟下一回合/移交队长 (旧)
-                </Button> */}
               </>
             )}
             {room.status === GameRoomStatus.Finished && (
               <div className="text-center p-6 bg-green-100 dark:bg-green-900 rounded-lg shadow">
                 <h3 className="text-2xl font-bold text-green-700 dark:text-green-300">游戏结束!</h3>
-                <p className="text-muted-foreground mt-2">所有回合已完成。感谢您的参与！</p>
                  {room.teamScores && (
+                    <p className="text-lg mt-2">
+                        {room.teamScores.teamMemberWins > room.teamScores.undercoverWins 
+                            ? <span className="text-green-600">队员阵营胜利!</span> 
+                            : room.teamScores.undercoverWins > room.teamScores.teamMemberWins 
+                                ? <span className="text-destructive">卧底阵营胜利!</span> 
+                                : <span className="text-foreground">平局!</span>}
+                    </p>
+                )}
                 <div className="flex items-center gap-4 justify-center mt-2">
-                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 队员胜场: {room.teamScores.teamMemberWins}</span>
-                  <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores.undercoverWins}</span>
+                  <span className="flex items-center"><ShieldCheck className="mr-1 h-4 w-4 text-green-500" /> 队员胜场: {room.teamScores?.teamMemberWins || 0}</span>
+                  <span className="flex items-center"><ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores?.undercoverWins || 0}</span>
                 </div>
-              )}
+                <p className="text-muted-foreground mt-2">感谢您的参与！</p>
               </div>
             )}
              <Button variant="outline" onClick={() => router.push('/')} className="w-full mt-4">
@@ -640,4 +708,3 @@ export default function GameRoomPage() {
     </div>
   );
 }
-

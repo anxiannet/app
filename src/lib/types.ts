@@ -35,6 +35,11 @@ export type Mission = {
 
 export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'game_over';
 
+export type PlayerVote = {
+  playerId: string;
+  vote: 'approve' | 'reject';
+};
+
 export type GameRoom = {
   id: string;
   name: string;
@@ -53,7 +58,7 @@ export type GameRoom = {
   // Mission and phase tracking
   currentPhase?: GameRoomPhase;
   selectedTeamForMission?: string[]; // Array of player IDs
-  // missionVotes?: Array<{playerId: string; vote: 'approve' | 'reject'}>; // For team voting phase
+  teamVotes?: PlayerVote[]; // For team voting phase
   // playersOnMission?: string[]; // IDs of players actually on the mission
   // missionSuccessCards?: number;
   // missionFailCards?: number;
@@ -68,4 +73,3 @@ export type GameRoom = {
   missionPlayerCounts?: number[]; // e.g. [2,3,2,3,3] for 5 players
   // missionFailRequirements?: number[]; // e.g. [1,1,1,2,1] for when 2 fail cards are needed
 };
-
