@@ -24,7 +24,7 @@ import { GameOverSummary } from "@/components/game-room/GameOverSummary";
 import { VoteHistoryAccordion } from "@/components/game-room/VoteHistoryAccordion";
 
 import { db } from "@/lib/firebase"; // Firebase client SDK
-import { doc, getDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, serverTimestamp, Timestamp, deleteField } from "firebase/firestore";
+import { doc, getDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, serverTimestamp, Timestamp, deleteField, deleteDoc } from "firebase/firestore";
 import type { Unsubscribe } from "firebase/firestore";
 
 
@@ -69,7 +69,6 @@ export default function GameRoomPage() {
 
   const [room, setRoom] = useState<GameRoom | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  // Local players state is now derived from room.players for consistency
   const localPlayers = room?.players || [];
 
   const [selectedMissionTeam, setSelectedMissionTeam] = useState<string[]>([]);
@@ -80,7 +79,6 @@ export default function GameRoomPage() {
     if (!roomId || typeof roomId !== 'string') return;
     const roomRef = doc(db, "rooms", roomId);
 
-    // Create a new object excluding any properties with undefined values
     const cleanedUpdates: { [key: string]: any } = {};
     for (const key in updatedFields) {
       if (Object.prototype.hasOwnProperty.call(updatedFields, key)) {
@@ -88,15 +86,10 @@ export default function GameRoomPage() {
         if (value !== undefined) {
           cleanedUpdates[key] = value;
         }
-        // If a field needs to be explicitly removed from Firestore,
-        // it should be passed as FieldValue.delete() instead of undefined.
-        // For example: { coachCandidateId: deleteField() }
       }
     }
 
     if (Object.keys(cleanedUpdates).length === 0) {
-      // Avoids an unnecessary Firestore write if all fields were undefined or no changes were made
-      // console.warn("updateFirestoreRoom: No valid fields to update after cleaning.");
       return;
     }
 
@@ -123,7 +116,6 @@ export default function GameRoomPage() {
     let unsubscribe: Unsubscribe;
 
     const setupSnapshotListener = async () => {
-        // Initial fetch to join player if necessary
         const initialDocSnap = await getDoc(roomRef);
         if (initialDocSnap.exists()) {
             let initialRoomData = { id: initialDocSnap.id, ...initialDocSnap.data() } as GameRoom;
@@ -133,12 +125,10 @@ export default function GameRoomPage() {
             const playerExists = initialRoomData.players.some(p => p.id === user.id);
 
             if (!playerExists && initialRoomData.status === GameRoomStatus.Waiting && initialRoomData.players.length < initialRoomData.maxPlayers) {
-                const newPlayer: Player = { ...user }; // No isCaptain here
-                // Use Firestore arrayUnion to add the player
+                const newPlayer: Player = { ...user }; 
                 await updateDoc(roomRef, {
                     players: arrayUnion(newPlayer)
                 });
-                // Firestore onSnapshot will pick up this change and update the local 'room' state
             } else if (!playerExists && initialRoomData.status !== GameRoomStatus.Waiting) {
                 toast({ title: "游戏已开始或结束", description: "无法加入已开始或结束的游戏。", variant: "destructive" });
                 router.push("/");
@@ -154,11 +144,9 @@ export default function GameRoomPage() {
             return;
         }
 
-        // Now set up the real-time listener
         unsubscribe = onSnapshot(roomRef, (docSnap) => {
           if (docSnap.exists()) {
             const roomData = { id: docSnap.id, ...docSnap.data() } as GameRoom;
-            // Ensure nested arrays/objects have defaults if not present in Firestore
             const validatedRoom: GameRoom = {
               ...roomData,
               players: roomData.players || [],
@@ -247,7 +235,7 @@ export default function GameRoomPage() {
 
 
     allPlayersInGame.forEach(player => {
-      if (!player.role) return; // Should not happen in a finished game
+      if (!player.role) return; 
 
       let playerOutcome: 'win' | 'loss' | 'draw' = 'loss';
       if (winningFaction === 'Draw') {
@@ -446,7 +434,6 @@ export default function GameRoomPage() {
         missionPlayerCounts: missionPlayerCounts,
         fullVoteHistory: [],
         currentGameInstanceId: newGameInstanceId,
-        // Explicitly clear fields that might have been set in a previous game
         missionOutcomeForDisplay: deleteField() as any,
         failCardsPlayedForDisplay: deleteField() as any,
         coachCandidateId: deleteField() as any,
@@ -670,9 +657,11 @@ export default function GameRoomPage() {
     } else if (room.teamScores.undercoverWins >= 3 && room.teamScores.undercoverWins > room.teamScores.teamMemberWins) {
         gameIsOver = true;
         nextPhase = 'game_over';
+        toast({ title: "卧底方获胜!", description: "卧底方已完成3场比赛。" });
     } else if (room.currentRound >= room.totalRounds) { 
         gameIsOver = true;
         nextPhase = 'game_over';
+        toast({ title: "所有比赛结束!", description: "根据胜场决定最终胜负。" });
     }
 
 
@@ -680,7 +669,7 @@ export default function GameRoomPage() {
       updates = { 
         status: GameRoomStatus.Finished, 
         currentPhase: 'game_over',
-        missionOutcomeForDisplay: deleteField() as any, // Clean up display fields
+        missionOutcomeForDisplay: deleteField() as any, 
         failCardsPlayedForDisplay: deleteField() as any,
       };
       saveGameRecordForAllPlayers({...room, ...updates, currentPhase: nextPhase } as GameRoom); 
@@ -735,7 +724,7 @@ export default function GameRoomPage() {
     let toastDescription = "";
 
     if (selectedCoachCandidate === actualCoach.id) {
-      finalTeamScores.teamMemberWins = Math.min(finalTeamScores.teamMemberWins, 2); 
+      //卧底方通过指认获胜，队员分数保持不变，但卧底是胜利方
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
     } else {
@@ -747,7 +736,7 @@ export default function GameRoomPage() {
     const finalUpdates: Partial<GameRoom> = {
       status: GameRoomStatus.Finished,
       currentPhase: 'game_over',
-      teamScores: finalTeamScores,
+      teamScores: finalTeamScores, // Scores might reflect mission wins, but overall outcome is decided by assassination
       coachCandidateId: selectedCoachCandidate,
     };
     saveGameRecordForAllPlayers({...room, ...finalUpdates} as GameRoom);
@@ -764,22 +753,35 @@ export default function GameRoomPage() {
     const currentRoomId = typeof roomId === 'string' ? roomId : null;
     const currentRoomName = room?.name || "一个房间"; 
 
-    if (currentRoomId && room && room.players.some(p => p.id === user.id) && room.hostId !== user.id) {
+    if (currentRoomId && room) {
         const roomRef = doc(db, "rooms", currentRoomId);
-        const playerObjectInRoom = room.players.find(p => p.id === user.id);
-        if (playerObjectInRoom) {
-          try {
-              await updateDoc(roomRef, {
-                  players: arrayRemove(playerObjectInRoom)
-              });
-              toast({ title: "已离开房间", description: `您已离开房间 ${currentRoomName}。` });
-          } catch (e) {
-              console.error("Failed to update Firestore on leave:", e);
-              toast({ title: "离开房间失败", description: `无法从房间 ${currentRoomName} 移除您。`, variant: "destructive" });
-          }
+        if (user.id === room.hostId && room.status === GameRoomStatus.Waiting) {
+            // Host is leaving a waiting room, delete the room
+            try {
+                await deleteDoc(roomRef);
+                toast({ title: "房间已关闭", description: `您作为主持人已离开并关闭了等待中的房间 ${currentRoomName}。` });
+            } catch (e) {
+                console.error("Failed to delete room:", e);
+                toast({ title: "关闭房间失败", description: `无法关闭房间 ${currentRoomName}。`, variant: "destructive" });
+            }
+        } else if (room.players.some(p => p.id === user.id) && room.hostId !== user.id) {
+            // Non-host player is leaving
+            const playerObjectInRoom = room.players.find(p => p.id === user.id);
+            if (playerObjectInRoom) {
+              try {
+                  await updateDoc(roomRef, {
+                      players: arrayRemove(playerObjectInRoom)
+                  });
+                  toast({ title: "已离开房间", description: `您已离开房间 ${currentRoomName}。` });
+              } catch (e) {
+                  console.error("Failed to update Firestore on leave:", e);
+                  toast({ title: "离开房间失败", description: `无法从房间 ${currentRoomName} 移除您。`, variant: "destructive" });
+              }
+            }
+        } else {
+            // Host leaving an in-progress/finished game, or user not actually in players list (e.g., after being removed)
+            toast({ title: "已返回大厅" });
         }
-    } else if (room && room.hostId === user.id) {
-         toast({ title: "已离开房间", description: `您作为房主已离开房间 ${currentRoomName}。房间可能仍然存在。`});
     } else {
         toast({ title: "已返回大厅" });
     }
@@ -801,7 +803,6 @@ export default function GameRoomPage() {
         id: p.id,
         name: p.name,
         avatarUrl: p.avatarUrl,
-        // role property is omitted
     }));
 
     const updates: Partial<GameRoom> = {
@@ -814,7 +815,6 @@ export default function GameRoomPage() {
         teamVotes: [],
         missionCardPlaysForCurrentMission: [],
         currentGameInstanceId: newGameInstanceId, 
-        // Fields to explicitly remove or reset to initial state
         currentCaptainId: deleteField() as any,
         currentRound: deleteField() as any,
         captainChangesThisRound: deleteField() as any,
@@ -842,6 +842,7 @@ export default function GameRoomPage() {
     const finalUpdates: Partial<GameRoom> = {
       status: GameRoomStatus.Finished,
       currentPhase: 'game_over',
+      teamScores: room.teamScores || { teamMemberWins: 0, undercoverWins: 0 }, 
     };
     saveGameRecordForAllPlayers({...room, ...finalUpdates, currentPhase: 'game_over' } as GameRoom);
     await updateFirestoreRoom(finalUpdates);
@@ -1081,4 +1082,3 @@ export default function GameRoomPage() {
     </div>
   );
 }
-
