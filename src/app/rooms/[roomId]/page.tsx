@@ -182,7 +182,7 @@ export default function GameRoomPage() {
         missionCardPlaysForCurrentMission: finalPlays, 
       };
     });
-    toast({ title: `第 ${room.currentRound} 轮任务结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
+    toast({ title: `第 ${room.currentRound} 轮比赛结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
 
   }, [room, localPlayers, toast]);
 
@@ -366,7 +366,7 @@ export default function GameRoomPage() {
 
 
     if (voteOutcome === 'approved') {
-      toast({ title: "队伍已批准!", description: "进入任务执行阶段。" });
+      toast({ title: "队伍已批准!", description: "进入比赛执行阶段。" });
       setRoom(prevRoom => {
         if (!prevRoom) return null;
         return {
@@ -472,7 +472,7 @@ export default function GameRoomPage() {
             missionCardPlaysForCurrentMission: [...(prev.missionCardPlaysForCurrentMission || []), newPlay]
         }
     });
-     toast({ title: "任务牌已打出", description: `您打出了【${card === 'success' ? '成功' : '破坏'}】。` });
+     toast({ title: "比赛牌已打出", description: `您打出了【${card === 'success' ? '成功' : '破坏'}】。` });
   };
 
 
@@ -605,8 +605,8 @@ export default function GameRoomPage() {
     switch(phase) {
         case 'team_selection': return "队伍组建阶段";
         case 'team_voting': return "队伍投票阶段";
-        case 'mission_execution': return "任务执行阶段";
-        case 'mission_reveal': return "任务结果揭晓";
+        case 'mission_execution': return "比赛执行阶段";
+        case 'mission_reveal': return "比赛结果揭晓";
         case 'coach_assassination': return "卧底指认教练阶段";
         case 'game_over': return "游戏结束";
         default: return "未知阶段";
@@ -773,8 +773,8 @@ export default function GameRoomPage() {
 
                 {room.currentPhase === 'team_selection' && !isVirtualCaptain && (
                   <div className="space-y-3">
-                    <h3 className="text-lg font-semibold text-center">组建任务队伍</h3>
-                    <p className="text-center text-muted-foreground">本回合任务需要 <span className="font-bold text-primary">{requiredPlayersForCurrentMission}</span> 名玩家。{isHumanCaptain ? "请选择队员：" : "等待队长选择队员..."}</p>
+                    <h3 className="text-lg font-semibold text-center">组建比赛队伍</h3>
+                    <p className="text-center text-muted-foreground">本回合比赛需要 <span className="font-bold text-primary">{requiredPlayersForCurrentMission}</span> 名玩家。{isHumanCaptain ? "请选择队员：" : "等待队长选择队员..."}</p>
                     {isHumanCaptain && (<div className="space-y-2 max-h-60 overflow-y-auto p-2 border rounded-md">
                         {localPlayers.map(p => (<div key={p.id} className="flex items-center space-x-2 p-2 hover:bg-muted/50 rounded">
                             <Checkbox id={`player-select-${p.id}`} checked={selectedMissionTeam.includes(p.id)} onCheckedChange={(checked) => handlePlayerSelectionForMission(p.id, !!checked)} disabled={selectedMissionTeam.length >= requiredPlayersForCurrentMission && !selectedMissionTeam.includes(p.id)}/>
@@ -790,7 +790,7 @@ export default function GameRoomPage() {
                            )}
                         </div>
                         <h3 className="text-lg font-semibold text-center">为队伍投票</h3>
-                        <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{localPlayers.find(p=>p.id === room.currentCaptainId)?.name}</span> 提议以下队伍执行任务:</p>
+                        <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{localPlayers.find(p=>p.id === room.currentCaptainId)?.name}</span> 提议以下队伍执行比赛:</p>
                         <ul className="text-center font-medium list-disc list-inside bg-muted/30 p-2 rounded-md">{(room.selectedTeamForMission || []).map(playerId => localPlayers.find(p=>p.id === playerId)?.name || '未知玩家').join(', ')}</ul>
                         {votesToDisplay.length > 0 && (<p className="text-xs text-center text-muted-foreground">已投票: {votesToDisplay.filter(v => v.vote === 'approve').length} 同意, {votesToDisplay.filter(v => v.vote === 'reject').length} 拒绝. ({localPlayers.filter(p => !p.id.startsWith("virtual_") && !votesToDisplay.some(v => v.playerId === p.id)).length} 人未投票)</p>)}
                         {!hasUserVotedOnCurrentTeam && !user.id.startsWith("virtual_") ? (<div className="flex gap-4 justify-center">
@@ -802,7 +802,7 @@ export default function GameRoomPage() {
 
                 {room.currentPhase === 'mission_execution' && (
                      <div className="space-y-3">
-                        <h3 className="text-lg font-semibold text-center">任务执行中 (回合 {room.currentRound})</h3>
+                        <h3 className="text-lg font-semibold text-center">比赛执行中 (回合 {room.currentRound})</h3>
                         <p className="text-center text-muted-foreground">出战队伍: { missionTeamPlayerObjects.map(p => p.name).join(', ') }</p>
                         {currentUserIsOnMission ? (
                             currentUserRole === Role.Undercover ? (
@@ -816,16 +816,16 @@ export default function GameRoomPage() {
                                     </div>
                                 ) : (<p className="text-center text-green-600 font-semibold">你已选择: 打出【{humanUndercoverCardChoice === 'success' ? '成功' : '破坏'}】</p>)
                             ) : (<p className="text-center text-blue-600 font-semibold">你自动打出【成功】牌。</p>)
-                        ) : (<p className="text-center text-muted-foreground">等待任务队伍行动...</p>)}
+                        ) : (<p className="text-center text-muted-foreground">等待队伍行动...</p>)}
                     </div>
                 )}
 
                 {room.currentPhase === 'mission_reveal' && (
                      <div className="space-y-3 text-center">
-                        <h3 className="text-lg font-semibold">第 {room.currentRound} 轮任务结果揭晓!</h3>
+                        <h3 className="text-lg font-semibold">第 {room.currentRound} 轮比赛结果揭晓!</h3>
                         {room.missionOutcomeForDisplay === 'success' ?
-                            <p className="text-2xl font-bold text-green-500 flex items-center justify-center"><CheckCircle2 className="mr-2 h-8 w-8"/> 任务成功!</p> :
-                            <p className="text-2xl font-bold text-destructive flex items-center justify-center"><XCircle className="mr-2 h-8 w-8"/> 任务失败!</p>
+                            <p className="text-2xl font-bold text-green-500 flex items-center justify-center"><CheckCircle2 className="mr-2 h-8 w-8"/> 比赛成功!</p> :
+                            <p className="text-2xl font-bold text-destructive flex items-center justify-center"><XCircle className="mr-2 h-8 w-8"/> 比赛失败!</p>
                         }
                         <p className="text-muted-foreground">破坏牌数量: {room.failCardsPlayedForDisplay}</p>
                         <Button onClick={handleProceedToNextRoundOrGameOver} className="mt-2">继续</Button>
@@ -896,7 +896,7 @@ export default function GameRoomPage() {
               </div>)}
 
             {room.fullVoteHistory && room.fullVoteHistory.length > 0 && room.status !== GameRoomStatus.Waiting && (
-              <Accordion type="single" collapsible className="w-full mt-6 pt-4 border-t">
+              <Accordion type="single" collapsible className="w-full mt-6 pt-4 border-t" defaultValue={room.status === GameRoomStatus.InProgress && room.currentRound ? `round-${room.currentRound}` : undefined}>
                 <AccordionItem value="vote-history">
                   <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                     <History className="mr-2 h-5 w-5 text-primary" /> 查看详细投票记录
@@ -917,7 +917,7 @@ export default function GameRoomPage() {
                             let missionOutcomeText = '';
                             const missionForRound = room.missionHistory?.find(m => m.round === roundNum);
                             if (missionForRound) {
-                                missionOutcomeText = missionForRound.outcome === 'success' ? ' - 任务成功' : (missionForRound.outcome === 'fail' ? ' - 任务失败' : '');
+                                missionOutcomeText = missionForRound.outcome === 'success' ? ' - 比赛成功' : (missionForRound.outcome === 'fail' ? ' - 比赛失败' : '');
                             }
 
                             return (
