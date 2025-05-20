@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote, type MissionCardPlay, type MissionOutcome, type VoteHistoryEntry, type PlayerGameRecord, type WinningFactionType } from "@/lib/types";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Zap, Target, History, RotateCcw, XOctagon, LogOut } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Zap, Target, History, RotateCcw, XOctagon, LogOut, Brain } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -83,16 +83,16 @@ export default function GameRoomPage() {
     for (const key in rawUpdatedFields) {
         if (Object.prototype.hasOwnProperty.call(rawUpdatedFields, key)) {
             const value = rawUpdatedFields[key as keyof GameRoom];
-            // Only include the field if its value is not undefined.
+             // Only include the field if its value is not undefined.
             // If you explicitly want to remove a field, pass deleteField() as its value.
-            if (value !== undefined) {
+            if (value !== undefined || value === deleteField()) {
                 updatesForFirestore[key] = value;
             }
         }
     }
-
+    
     if (Object.keys(updatesForFirestore).length === 0) {
-        console.log("updateFirestoreRoom: No changes to apply after filtering undefined values or if only deleteField() was passed for non-existent fields.");
+        // console.log("updateFirestoreRoom: No changes to apply after filtering undefined values or if only deleteField() was passed for non-existent fields.");
         return;
     }
 
@@ -761,25 +761,19 @@ export default function GameRoomPage() {
     if (!actualCoach) {
       // This should not happen in a valid game setup
       toast({ title: "游戏错误", description: "未找到教练角色。", variant: "destructive" });
-      const finalRoomStateForError: Partial<GameRoom> = { status: GameRoomStatus.Finished, currentPhase: 'game_over' };
+      const finalRoomStateForError: Partial<GameRoom> = { status: GameRoomStatus.Finished, currentPhase: 'game_over', teamScores: room.teamScores };
       saveGameRecordForAllPlayers({...room, ...finalRoomStateForError} as GameRoom);
       await updateFirestoreRoom(finalRoomStateForError);
       return;
     }
 
-    let finalTeamScores = { ...(room.teamScores!) }; // current scores
     let toastTitle = "";
     let toastDescription = "";
 
     if (selectedCoachCandidate === actualCoach.id) {
-      // Undercovers win by assassination
-      // Team Member wins don't change; Undercover wins become effectively MAX for win condition
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
-      // Winning faction determination logic in saveGameRecord will handle this.
-      // Score remains as mission scores for record, overall outcome is Undercover win.
     } else {
-      // Assassination failed, Team Members win (as they had >= 3 mission wins)
       toastTitle = "指认失败！战队方获胜！";
       const wronglyAccusedPlayer = localPlayers.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
@@ -788,8 +782,7 @@ export default function GameRoomPage() {
     const finalUpdates: Partial<GameRoom> = {
       status: GameRoomStatus.Finished,
       currentPhase: 'game_over',
-      teamScores: finalTeamScores, // Scores remain as they were from missions for record
-      coachCandidateId: selectedCoachCandidate, // Record who was targeted
+      coachCandidateId: selectedCoachCandidate, 
     };
     saveGameRecordForAllPlayers({...room, ...finalUpdates} as GameRoom);
     await updateFirestoreRoom(finalUpdates);
@@ -820,12 +813,13 @@ export default function GameRoomPage() {
             // Non-host player is leaving
             const playerObjectInRoom = room.players.find(p => p.id === user.id);
             if (playerObjectInRoom) {
-              const cleanedPlayerObject = { // Ensure no undefined fields if Player type changes
+              const cleanedPlayerObject: {id: string; name: string; avatarUrl?: string; role?: Role} = { // Ensure no undefined fields if Player type changes
                 id: playerObjectInRoom.id,
                 name: playerObjectInRoom.name,
-                ...(playerObjectInRoom.avatarUrl && { avatarUrl: playerObjectInRoom.avatarUrl }),
-                ...(playerObjectInRoom.role && { role: playerObjectInRoom.role }),
               };
+              if (playerObjectInRoom.avatarUrl !== undefined) cleanedPlayerObject.avatarUrl = playerObjectInRoom.avatarUrl;
+              if (playerObjectInRoom.role !== undefined) cleanedPlayerObject.role = playerObjectInRoom.role;
+
               try {
                   await updateDoc(roomRef, {
                       players: arrayRemove(cleanedPlayerObject)
@@ -837,7 +831,6 @@ export default function GameRoomPage() {
               }
             }
         } else {
-            // Host leaving an in-progress/finished game, or user not actually in players list (e.g., after being removed)
             toast({ title: "已返回大厅" });
         }
     } else {
@@ -865,7 +858,6 @@ export default function GameRoomPage() {
         if (p.avatarUrl !== undefined) {
             playerObject.avatarUrl = p.avatarUrl;
         }
-        // Role is intentionally omitted to be reassigned
         return playerObject;
     });
 
@@ -1053,11 +1045,7 @@ export default function GameRoomPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-primary">游戏控制 / 状态</CardTitle>
-                   <div className="text-sm text-muted-foreground p-1 bg-secondary/30 rounded-md border text-center">
-                    {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
-                       <p className="font-semibold">第 {room.currentRound} 场比赛，第 {(room.captainChangesThisRound || 0) + 1} 次组队</p>
-                    )}
-                  </div>
+                   {/* Removed round and team attempt display from here */}
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {room.currentPhase === 'team_selection' && (
