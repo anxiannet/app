@@ -3,7 +3,7 @@
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { initializeFirestore, type Firestore } from "firebase/firestore"; // Changed from getFirestore
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,6 +18,8 @@ const firebaseConfig = {
 let app: FirebaseApp | undefined = undefined;
 let auth: Auth | undefined = undefined;
 let db: Firestore | undefined = undefined;
+
+const PROXY_HOST = "black-rain-7f1e.bostage.workers.dev";
 
 if (typeof window !== "undefined") { // Only run on client
   // Log the configuration object that will be used
@@ -54,9 +56,22 @@ if (typeof window !== "undefined") { // Only run on client
       try {
         console.log(`Attempting to initialize Firebase for project ID: ${firebaseConfig.projectId}`);
         app = initializeApp(firebaseConfig);
-        auth = getAuth(app);
-        db = getFirestore(app);
-        console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}`);
+        auth = getAuth(app); // Auth will use default endpoints
+
+        // Configure Firestore to use the proxy
+        // The worker expects the service name as the first path segment.
+        // The SDK will make requests like: https://PROXY_HOST/firestore/v1/projects/...
+        const firestoreHostWithServicePath = `${PROXY_HOST}/firestore`;
+        console.log(`Initializing Firestore with proxy host: ${firestoreHostWithServicePath}`);
+        db = initializeFirestore(app, {
+          host: firestoreHostWithServicePath,
+          ssl: true, // Assuming your worker is served over HTTPS
+          ignoreUndefinedProperties: true, // Good practice
+        });
+        
+        console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}. Firestore is configured to use proxy: ${firestoreHostWithServicePath}.`);
+        console.warn("Firebase Auth and Storage are NOT configured to use this proxy with the current client SDK setup. They will use default Google endpoints.");
+
       } catch (error) {
         console.error("Firebase client initialization error during initializeApp/getAuth/getFirestore:", error);
         console.error("Firebase config that may have caused the error (check environment variables):", {
@@ -69,8 +84,22 @@ if (typeof window !== "undefined") { // Only run on client
       }
     } else { // Already initialized
       app = getApps()[0];
-      auth = getAuth(app);
-      db = getFirestore(app);
+      auth = getAuth(app); // Auth will use default endpoints
+      
+      // Check if db is already initialized with proxy settings, otherwise re-initialize with proxy
+      // This scenario is less common for client-side but good for robustness
+      const existingDb = db; // Check if 'db' was somehow set globally before this point
+      if (!existingDb || (existingDb && !(existingDb.settings && (existingDb.settings as any).host?.includes(PROXY_HOST)))) {
+        const firestoreHostWithServicePath = `${PROXY_HOST}/firestore`;
+        console.log(`Re-initializing Firestore on existing app instance with proxy host: ${firestoreHostWithServicePath}`);
+        db = initializeFirestore(app, {
+          host: firestoreHostWithServicePath,
+          ssl: true,
+          ignoreUndefinedProperties: true,
+        });
+      } else {
+        console.log("Firestore already initialized, possibly with proxy settings.");
+      }
     }
   } else {
     console.error("Firebase initialization SKIPPED due to missing critical configuration (API Key or Project ID). The app will not function correctly.");
