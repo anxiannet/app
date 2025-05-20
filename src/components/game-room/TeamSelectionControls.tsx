@@ -1,19 +1,15 @@
 
 "use client";
 
-import type { Player } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UsersRound, CheckCircle2 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { UsersRound } from "lucide-react";
 
 type TeamSelectionControlsProps = {
   isVirtualCaptain: boolean;
   currentCaptainName?: string;
   isHumanCaptain: boolean;
   requiredPlayersForCurrentMission: number;
-  selectedMissionTeamLength: number; // Changed from selectedMissionTeam to just its length
+  selectedMissionTeamLength: number;
   onHumanProposeTeam: () => void;
 };
 
@@ -44,7 +40,7 @@ export function TeamSelectionControls({
           {requiredPlayersForCurrentMission}
         </span>{" "}
         名玩家。
-        {isHumanCaptain ? "请在左侧玩家列表中选择队员：" : `等待队长 ${currentCaptainName || ''} 在左侧玩家列表中选择队员...`}
+        {isHumanCaptain ? "" : `等待队长 ${currentCaptainName || ''} 在左侧玩家列表中选择队员...`}
       </p>
       
       {isHumanCaptain && (
