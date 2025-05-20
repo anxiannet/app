@@ -34,16 +34,9 @@ export function TeamVotingControls({
 }: TeamVotingControlsProps) {
   return (
     <div className="space-y-3">
-      {/* 
-      The following lines have been removed as per user request:
-      <h3 className="text-lg font-semibold text-center">为队伍投票</h3>
-      <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{currentCaptainName}</span> 提议以下队伍执行比赛:</p>
-      <ul className="text-center font-medium list-disc list-inside bg-muted/30 p-2 rounded-md">{proposedTeamNames.join(', ')}</ul> 
-      */}
       
       {votesToDisplay.length > 0 && (
         <p className="text-xs text-center text-muted-foreground">
-          已投票: {votesToDisplay.filter(v => v.vote === 'approve').length} 同意, {votesToDisplay.filter(v => v.vote === 'reject').length} 拒绝.
           ({realPlayersCount - realPlayersVotedCount} 人未投票)
         </p>
       )}
@@ -59,3 +52,4 @@ export function TeamVotingControls({
     </div>
   );
 }
+
