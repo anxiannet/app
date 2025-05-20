@@ -4,10 +4,10 @@
 import type { User } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   type User as FirebaseUser // Alias Firebase's User to avoid naming conflict
 } from "firebase/auth";
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // User is signed in, fetch their profile from Firestore
         if (!db) {
           console.error("Firestore db is not initialized. Cannot fetch user profile.");
-          setUser(null); 
+          setUser(null);
           setLoading(false);
           return;
         }
@@ -68,10 +68,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
           const userData = userDocSnap.data();
-          setUser({ 
-            id: firebaseUser.uid, 
+          setUser({
+            id: firebaseUser.uid,
             name: userData.nickname, // Use nickname from Firestore
-            avatarUrl: userData.avatarUrl 
+            avatarUrl: userData.avatarUrl
           });
         } else {
           // This case should ideally not happen if signup creates a profile
@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe(); // Cleanup subscription on unmount
-  }, [toast]); // router removed as it's not directly used in this effect
+  }, [toast]);
 
   const login = async (nicknameAsEmail: string, password: string) => {
     if (!auth) {
@@ -100,13 +100,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // For Firebase auth, "email" cannot be empty.
       // We are using nickname as email here.
       const emailToUse = `${nicknameAsEmail}@anxian.game`; // Append a dummy domain
+      console.log(`Attempting to sign in with email: ${emailToUse} and password: ${password ? '******' : 'EMPTY'}`); // Added console log
       await signInWithEmailAndPassword(auth, emailToUse, password);
       // onAuthStateChanged will handle fetching profile and setting user state
     } catch (error: any) {
       console.error("Login error:", error);
       let errorMessage = "登录失败，请稍后再试。";
-      if (error.code === "auth/invalid-credential" || 
-          error.code === "auth/user-not-found" || 
+      if (error.code === "auth/invalid-credential" ||
+          error.code === "auth/user-not-found" ||
           error.code === "auth/wrong-password") {
         errorMessage = "您输入的昵称或密码不正确，请检查后重试。";
       } else if (error.code === "auth/invalid-email") {
@@ -130,11 +131,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       // For Firebase auth, "email" cannot be empty and must be a valid email format.
       // We are using nickname + a dummy domain as email here.
-      const emailToUse = `${nicknameAsEmail}@anxian.game`; 
+      const emailToUse = `${nicknameAsEmail}@anxian.game`;
       const userCredential = await createUserWithEmailAndPassword(auth, emailToUse, password);
       const firebaseUser = userCredential.user;
       const randomAvatar = PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)];
-      
+
       // Store additional user info (nickname, avatar) in Firestore
       const userDocRef = doc(db, "users", firebaseUser.uid);
       await setDoc(userDocRef, {
@@ -172,7 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       await signOut(auth);
       // onAuthStateChanged will set user to null
-      router.push("/"); 
+      router.push("/");
     } catch (error) {
       console.error("Logout error:", error);
       toast({ title: "登出失败", description: "无法登出，请稍后再试。", variant: "destructive" });
@@ -195,7 +196,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-
-    
-
-    
