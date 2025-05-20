@@ -82,6 +82,7 @@ const AiProposeTeamInputSchema = z.object({
     missionPlayerCounts: z.array(z.number()).describe("Players needed for missions in round 1, 2, 3, 4, 5."),
     captainChangesThisRound: z.number(),
     maxCaptainChangesPerRound: z.number(),
+    failedMissionCaptainIds: z.array(z.string()).optional().describe("IDs of captains whose missions previously failed."),
   }),
 });
 export type AiProposeTeamInput = z.infer<typeof AiProposeTeamInputSchema>;
@@ -131,6 +132,13 @@ Strategy:
 - Select yourself (ID: {{virtualCaptain.id}}) for the team.
 - Select other players you believe are Team Members.
 - Avoid players you suspect are Undercover based on past mission failures or voting patterns.
+{{#if gameContext.failedMissionCaptainIds.length}}
+- Avoid selecting players who were captains of previously FAILED missions. These players might be Undercover or poor leaders.
+  Previously failed mission captains to consider avoiding:
+  {{#each gameContext.failedMissionCaptainIds}}
+  - {{findPlayerNameById this ../../gameContext.allPlayers}} (ID: {{this}})
+  {{/each}}
+{{/if}}
 - Prioritize players who have not been on many failed missions.
 - If unsure, try to distribute mission participation.
 - Ensure you select exactly {{gameContext.requiredPlayersForMission}} players.
@@ -207,9 +215,9 @@ const aiProposeTeamFlow = ai.defineFlow(
       const expectedCount = input.gameContext.requiredPlayersForMission;
       const actualCount = output?.selectedPlayerIds?.length || 0;
       console.warn(
-        `AI Propose Team Flow Warning: AI failed to provide a valid team proposal or correct number of players. Expected ${expectedCount}, got ${actualCount}. Defaulting to a random selection including self. AI Output:`, 
-        JSON.stringify(output), 
-        "Input Context (summary):", 
+        `AI Propose Team Flow Warning: AI failed to provide a valid team proposal or correct number of players. Expected ${expectedCount}, got ${actualCount}. Defaulting to a random selection including self. AI Output:`,
+        JSON.stringify(output),
+        "Input Context (summary):",
         JSON.stringify({
           virtualCaptain: input.virtualCaptain,
           currentRound: input.gameContext.currentRound,
@@ -217,9 +225,10 @@ const aiProposeTeamFlow = ai.defineFlow(
           needsTwoFails: input.gameContext.currentMissionNeedsTwoFails,
           playerCount: input.gameContext.allPlayers.length,
           missionHistoryCount: input.gameContext.missionHistory?.length || 0,
+          failedMissionCaptainIds: input.gameContext.failedMissionCaptainIds,
         })
       );
-      
+
       // Fallback logic: select self and then random other players
       let proposedTeamIds = [input.virtualCaptain.id];
       const otherPlayerIds = input.gameContext.allPlayers
@@ -255,3 +264,4 @@ const aiProposeTeamFlow = ai.defineFlow(
 export async function decideAiTeamProposal(input: AiProposeTeamInput): Promise<AiProposeTeamOutput> {
   return aiProposeTeamFlow(input);
 }
+
