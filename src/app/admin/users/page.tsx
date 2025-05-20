@@ -21,7 +21,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Users, ShieldCheck, Search as SearchIcon } from "lucide-react";
+import { AlertTriangle, Users, ShieldCheck, Search as SearchIcon, UserCog } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface FirestoreUser {
   id: string;
@@ -35,11 +36,13 @@ interface FirestoreUser {
 export default function PlayerManagementPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [users, setUsers] = useState<FirestoreUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [updatingAdminStatus, setUpdatingAdminStatus] = useState<string | null>(null); // userId of user being updated
 
   useEffect(() => {
     if (authLoading) {
@@ -115,13 +118,56 @@ export default function PlayerManagementPage() {
     }
   };
 
+  const handleToggleAdminStatus = async (targetUserId: string, currentIsAdmin: boolean) => {
+    if (!user?.isAdmin) {
+      toast({ title: "权限不足", description: "只有管理员可以修改权限。", variant: "destructive" });
+      return;
+    }
+    if (user.id === targetUserId) {
+      toast({ title: "操作无效", description: "不能修改自己的管理员权限。", variant: "destructive" });
+      return;
+    }
+
+    setUpdatingAdminStatus(targetUserId);
+    try {
+      // In a real app, the auth token would be sent to verify the CALLER is an admin.
+      const response = await fetch('/api/admin/set-admin-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId, makeAdmin: !currentIsAdmin }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to update admin status (${response.status})`);
+      }
+
+      setUsers(prevUsers =>
+        prevUsers.map(u =>
+          u.id === targetUserId ? { ...u, isAdmin: !currentIsAdmin } : u
+        )
+      );
+      toast({
+        title: "权限已更新",
+        description: `玩家 ${users.find(u=>u.id === targetUserId)?.nickname || targetUserId} 的管理员权限已${!currentIsAdmin ? '授予' : '撤销'}。`,
+      });
+    } catch (err) {
+      console.error("Error updating admin status:", err);
+      const errorMessage = err instanceof Error ? err.message : "操作失败";
+      toast({ title: "更新失败", description: errorMessage, variant: "destructive" });
+    } finally {
+      setUpdatingAdminStatus(null);
+    }
+  };
+
+
   if (authLoading || (isLoading && !accessDenied)) {
     return <div className="text-center py-10">加载中...</div>;
   }
 
   if (accessDenied) {
     return (
-      <div className="text-center py-10">
+      <div className="container mx-auto py-10 text-center">
         <h1 className="text-2xl font-bold text-destructive">访问被拒绝</h1>
         <p className="text-muted-foreground">您没有权限查看此页面。</p>
         <Button onClick={() => router.push("/")} className="mt-4">返回首页</Button>
@@ -189,6 +235,7 @@ export default function PlayerManagementPage() {
                     <TableHead>昵称</TableHead>
                     <TableHead>权限</TableHead>
                     <TableHead>注册日期</TableHead>
+                    <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -212,6 +259,24 @@ export default function PlayerManagementPage() {
                         )}
                       </TableCell>
                       <TableCell>{formatDate(u.createdAt)}</TableCell>
+                      <TableCell className="text-right">
+                        {user && user.id !== u.id && ( // Admin cannot change their own status here
+                          <Button
+                            variant={u.isAdmin ? "destructive" : "outline"}
+                            size="sm"
+                            onClick={() => handleToggleAdminStatus(u.id, u.isAdmin || false)}
+                            disabled={updatingAdminStatus === u.id}
+                            className="transition-transform hover:scale-105 active:scale-95"
+                          >
+                            <UserCog className="mr-1 h-4 w-4" />
+                            {updatingAdminStatus === u.id
+                              ? "更新中..."
+                              : u.isAdmin
+                              ? "撤销管理员"
+                              : "设为管理员"}
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
