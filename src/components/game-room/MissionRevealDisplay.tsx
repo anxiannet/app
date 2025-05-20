@@ -32,26 +32,34 @@ export function MissionRevealDisplay({
           <p className="text-2xl font-bold text-destructive flex items-center justify-center">
             <XCircle className="mr-2 h-8 w-8"/> {roundText}：战败!
           </p>
-          {generatedFailureReason && generatedFailureReason.narrativeSummary ? (
-            <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-left">
-              <p>
-                <span className="font-semibold">原因分析:</span> {generatedFailureReason.narrativeSummary}
-              </p>
-              {generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 0 && (
-                <ul className="list-disc list-inside mt-2 text-xs pl-4">
-                  {generatedFailureReason.selectedReasons.map((reason, index) => (
-                    <li key={index}>{reason}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+          {generatedFailureReason && (generatedFailureReason.selectedReasons?.length > 0 || generatedFailureReason.narrativeSummary) ? (
+            (() => {
+              let displayReasonText = "";
+              if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length === 1) {
+                displayReasonText = generatedFailureReason.selectedReasons[0];
+              } else if (generatedFailureReason.narrativeSummary) {
+                displayReasonText = generatedFailureReason.narrativeSummary;
+              } else if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 1) {
+                // Fallback if narrativeSummary is somehow empty but multiple reasons exist
+                displayReasonText = generatedFailureReason.selectedReasons.join("，");
+              } else {
+                displayReasonText = "未能确定具体原因。"; 
+              }
+              return (
+                <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-left">
+                  <p>
+                    <span className="font-semibold">原因分析:</span> {displayReasonText}
+                  </p>
+                </div>
+              );
+            })()
           ) : failCardsPlayedForDisplay !== undefined && failCardsPlayedForDisplay > 0 ? (
             <p className="text-sm text-muted-foreground flex items-center justify-center">
               <AlertTriangle className="mr-1 h-4 w-4 text-orange-500" />
               比赛因 {failCardsPlayedForDisplay} 个破坏行动而失败。
             </p>
           ) : (
-            <p className="text-sm text-muted-foreground">比赛因未知原因失败。</p>
+            <p className="text-sm text-muted-foreground">比赛失败，原因未知。</p>
           )}
         </>
       )}
