@@ -6,7 +6,8 @@ import { type GameRoom, type Player, Role, type PlayerVote, type MissionCardPlay
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Crown, Users, Eye, ThumbsUp, ThumbsDown, CheckCircle2 as MissionCardSuccessIcon, XCircle as MissionCardFailIcon, Brain, Zap, CheckCircle2 as SelectedIcon, CheckCircle2 as VotedIcon, Target } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Brain, Zap, CheckCircle2 as SelectedIcon, Target, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type PlayerListPanelProps = {
@@ -19,16 +20,15 @@ type PlayerListPanelProps = {
   getRoleIcon: (role?: Role) => JSX.Element | null;
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
-  // Props for team selection mode
   isSelectionModeActive?: boolean;
   selectedPlayersForMission?: string[];
   onTogglePlayerForMission?: (playerId: string) => void;
   selectionLimitForMission?: number;
-  // Props for coach assassination mode
   isCoachAssassinationModeActive?: boolean;
   selectedCoachCandidateId?: string | null;
   onSelectCoachCandidate?: (playerId: string) => void;
   assassinationTargetOptionsPlayerIds?: string[];
+  onRemoveVirtualPlayer?: (playerId: string) => void; // New prop
 };
 
 export function PlayerListPanel({ 
@@ -49,6 +49,7 @@ export function PlayerListPanel({
   selectedCoachCandidateId,
   onSelectCoachCandidate,
   assassinationTargetOptionsPlayerIds = [],
+  onRemoveVirtualPlayer,
 }: PlayerListPanelProps) {
 
   const handlePlayerCardClick = (playerId: string) => {
@@ -61,6 +62,8 @@ export function PlayerListPanel({
       onSelectCoachCandidate(playerId);
     }
   };
+
+  const isHost = user.id === room.hostId;
 
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
@@ -75,17 +78,17 @@ export function PlayerListPanel({
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               
-              const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
-              const playerHasVoted = !!playerVoteInfo;
+              const playerHasVoted = votesToDisplay.some(v => v.playerId === p.id);
               
-              const missionCardPlayInfo = (room.currentPhase === 'mission_reveal' || room.status === GameRoomStatus.Finished) ? 
+              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) ? 
                 room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id) : undefined;
               const missionCardPlayed = missionCardPlayInfo?.card;
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
               
               const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) && 
-                                      (room.currentPhase === 'team_voting' || 
+                                      (room.currentPhase === 'team_selection' || 
+                                       room.currentPhase === 'team_voting' ||
                                        room.currentPhase === 'mission_execution' ||
                                        room.currentPhase === 'mission_reveal'); 
               
@@ -99,7 +102,7 @@ export function PlayerListPanel({
               
               const canBeClicked = (isSelectionModeActive && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
               
-              let cardClassName = "flex flex-col items-center justify-start p-3 rounded-lg border-2 bg-card shadow-sm h-auto min-h-[120px] transition-all";
+              let cardClassName = "relative flex flex-col items-center justify-start p-3 rounded-lg border-2 bg-card shadow-sm h-auto min-h-[120px] transition-all";
               if (isCurrentUser && !isSelectionModeActive && !isCoachAssassinationModeActive) cardClassName = cn(cardClassName, "border-primary ring-1 ring-primary");
               else cardClassName = cn(cardClassName, "border-muted");
 
@@ -113,6 +116,7 @@ export function PlayerListPanel({
                 if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
               }
 
+              const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
 
               return (
                 <div 
@@ -120,6 +124,20 @@ export function PlayerListPanel({
                   onClick={canBeClicked ? () => handlePlayerCardClick(p.id) : undefined}
                   className={cardClassName}
                 >
+                  {canRemoveVirtualPlayer && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-0 right-0 h-6 w-6 text-destructive hover:bg-destructive/10 z-10"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent card click
+                        onRemoveVirtualPlayer(p.id);
+                      }}
+                      title={`移除 ${p.name}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                   <div className="relative">
                     <Avatar className="h-16 w-16 border-2 border-primary/30">
                       <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
@@ -151,9 +169,9 @@ export function PlayerListPanel({
                        </Badge>
                     )}
                     {missionCardPlayed && room.status === GameRoomStatus.Finished && (
-                      <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
+                       <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
                          {missionCardPlayed === 'success' ? <MissionCardSuccessIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
-                      </Badge>
+                       </Badge>
                     )}
                     
                     {room.status === GameRoomStatus.InProgress && p.role && (
@@ -178,3 +196,8 @@ export function PlayerListPanel({
     </Card>
   );
 }
+
+// Re-add mission card icons for clarity if they were accidentally removed
+const MissionCardSuccessIcon = CheckCircle2;
+const MissionCardFailIcon = Trash2; // Or XCircle, using Trash2 for consistency with remove icon, can be XCircle if preferred
+
