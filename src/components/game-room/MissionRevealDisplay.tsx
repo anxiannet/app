@@ -38,15 +38,20 @@ export function MissionRevealDisplay({
               if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length === 1) {
                 displayReasonText = generatedFailureReason.selectedReasons[0];
               } else if (generatedFailureReason.narrativeSummary) {
-                displayReasonText = generatedFailureReason.narrativeSummary;
+                // Remove the "比赛失利，主要原因是：" part if it exists
+                let summary = generatedFailureReason.narrativeSummary;
+                const prefix = "比赛失利，主要原因是：";
+                if (summary.startsWith(prefix)) {
+                  summary = summary.substring(prefix.length);
+                }
+                displayReasonText = summary;
               } else if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 1) {
-                // Fallback if narrativeSummary is somehow empty but multiple reasons exist
                 displayReasonText = generatedFailureReason.selectedReasons.join("，");
               } else {
                 displayReasonText = "未能确定具体原因。"; 
               }
               return (
-                <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-left">
+                <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-center">
                   <p>
                     <span className="font-semibold">原因分析:</span> {displayReasonText}
                   </p>
@@ -67,3 +72,4 @@ export function MissionRevealDisplay({
     </div>
   );
 }
+
