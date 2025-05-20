@@ -10,7 +10,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import type { PlayerPerspective, Role, Mission } from '@/lib/types';
+import { Role } from '@/lib/types';
+import type { PlayerPerspective, Mission } from '@/lib/types';
 import Handlebars from 'handlebars';
 
 // Helper to find a player by ID (name for display in prompt)
