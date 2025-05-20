@@ -21,6 +21,7 @@ export function MissionRevealDisplay({
   onProceedToNextRoundOrGameOver,
 }: MissionRevealDisplayProps) {
   const roundText = currentRound !== undefined ? `第 ${currentRound} 场比赛` : "本场比赛";
+
   return (
     <div className="space-y-3 text-center">
       {missionOutcomeForDisplay === 'success' ? (
@@ -30,46 +31,45 @@ export function MissionRevealDisplay({
       ) : (
         <>
           <p className="text-2xl font-bold text-destructive flex items-center justify-center">
-            <XCircle className="mr-2 h-8 w-8"/> {roundText}：战败!
+             <XCircle className="mr-2 h-8 w-8"/> {roundText}：战败!
           </p>
-          {generatedFailureReason && (generatedFailureReason.selectedReasons?.length > 0 || generatedFailureReason.narrativeSummary) ? (
-            (() => {
-              let displayReasonText = "";
-              if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length === 1) {
-                displayReasonText = generatedFailureReason.selectedReasons[0];
-              } else if (generatedFailureReason.narrativeSummary) {
-                // Remove the "比赛失利，主要原因是：" part if it exists
-                let summary = generatedFailureReason.narrativeSummary;
-                const prefix = "比赛失利，主要原因是：";
-                if (summary.startsWith(prefix)) {
-                  summary = summary.substring(prefix.length);
-                }
-                displayReasonText = summary;
-              } else if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 1) {
-                displayReasonText = generatedFailureReason.selectedReasons.join("，");
-              } else {
-                displayReasonText = "未能确定具体原因。"; 
-              }
-              return (
-                <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-center">
-                  <p>
-                    <span className="font-semibold">原因分析:</span> {displayReasonText}
-                  </p>
-                </div>
-              );
-            })()
-          ) : failCardsPlayedForDisplay !== undefined && failCardsPlayedForDisplay > 0 ? (
-            <p className="text-sm text-muted-foreground flex items-center justify-center">
-              <AlertTriangle className="mr-1 h-4 w-4 text-orange-500" />
-              比赛因 {failCardsPlayedForDisplay} 个破坏行动而失败。
+          <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-center">
+            <p className="font-semibold text-lg mb-2 text-destructive">
+              原因分析 ({failCardsPlayedForDisplay || 0}):
             </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">比赛失败，原因未知。</p>
-          )}
+            {generatedFailureReason ? (
+              (() => {
+                let reasonText = "未能确定具体原因。";
+                if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length === 1) {
+                  reasonText = generatedFailureReason.selectedReasons[0];
+                } else if (generatedFailureReason.narrativeSummary) {
+                  // Remove the common AI prefixes if they exist for a cleaner display
+                  let summary = generatedFailureReason.narrativeSummary;
+                  const prefixesToRemove = ["比赛失利，主要原因是：", "比赛失利，可能原因是：", "本次比赛失利，主要归咎于以下几点："];
+                  for (const prefix of prefixesToRemove) {
+                    if (summary.startsWith(prefix)) {
+                      summary = summary.substring(prefix.length);
+                      break;
+                    }
+                  }
+                  reasonText = summary;
+                } else if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 1) {
+                  reasonText = generatedFailureReason.selectedReasons.join("，");
+                }
+                return <p>比赛失利；{reasonText}</p>;
+              })()
+            ) : failCardsPlayedForDisplay !== undefined && failCardsPlayedForDisplay > 0 ? (
+              <p className="flex items-center justify-center">
+                <AlertTriangle className="mr-1 h-4 w-4 text-orange-500" />
+                比赛因 {failCardsPlayedForDisplay} 个破坏行动而失败。
+              </p>
+            ) : (
+              <p>比赛失败，原因未知。</p>
+            )}
+          </div>
         </>
       )}
       <Button onClick={onProceedToNextRoundOrGameOver} className="mt-2">继续</Button>
     </div>
   );
 }
-
