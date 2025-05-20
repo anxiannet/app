@@ -6,7 +6,7 @@ import { type GameRoom, type Player, Role, type PlayerVote, type MissionCardPlay
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Crown, Users, Eye, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Brain, Zap } from "lucide-react";
+import { Crown, Users, Eye, ThumbsUp, ThumbsDown, CheckCircle2 as MissionCardSuccessIcon, XCircle as MissionCardFailIcon, Brain, Zap, CheckCircle2 as SelectedIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type PlayerListPanelProps = {
@@ -19,6 +19,11 @@ type PlayerListPanelProps = {
   getRoleIcon: (role?: Role) => JSX.Element | null;
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
+  // Props for team selection mode
+  isSelectionModeActive?: boolean;
+  selectedPlayersForMission?: string[];
+  onTogglePlayerForMission?: (playerId: string) => void;
+  selectionLimitForMission?: number;
 };
 
 export function PlayerListPanel({ 
@@ -30,8 +35,18 @@ export function PlayerListPanel({
   missionPlaysToDisplay,
   getRoleIcon,
   fellowUndercovers,
-  knownUndercoversByCoach
+  knownUndercoversByCoach,
+  isSelectionModeActive = false,
+  selectedPlayersForMission = [],
+  onTogglePlayerForMission,
+  selectionLimitForMission = 0,
 }: PlayerListPanelProps) {
+
+  const handlePlayerCardClick = (playerId: string) => {
+    if (isSelectionModeActive && onTogglePlayerForMission) {
+      onTogglePlayerForMission(playerId);
+    }
+  };
 
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
@@ -49,22 +64,30 @@ export function PlayerListPanel({
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
               const playerVote = playerVoteInfo?.vote;
               
-              const missionCardPlayed = (room.status === GameRoomStatus.Finished) ? 
-                missionPlaysToDisplay.find(cp => cp.playerId === p.id)?.card : undefined;
+              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) ? 
+                room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id) : undefined;
+              const missionCardPlayed = missionCardPlayInfo?.card;
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
               
-              const isOnMissionTeam = room.selectedTeamForMission?.includes(p.id) && 
-                                      (room.currentPhase === 'team_selection' || 
-                                       room.currentPhase === 'team_voting' || 
+              const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) && 
+                                      (room.currentPhase === 'team_voting' || 
                                        room.currentPhase === 'mission_execution');
+              
+              const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
+              const canBeSelected = isSelectionModeActive && (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
+
 
               return (
                 <div 
                   key={p.id} 
+                  onClick={isSelectionModeActive && user.id === room.currentCaptainId ? () => handlePlayerCardClick(p.id) : undefined}
                   className={cn(
-                    "flex flex-col items-center justify-start p-3 rounded-lg border-2 bg-card shadow-sm h-auto min-h-[120px]",
-                    isCurrentUser ? "border-primary ring-1 ring-primary" : "border-muted"
+                    "flex flex-col items-center justify-start p-3 rounded-lg border-2 bg-card shadow-sm h-auto min-h-[120px] transition-all",
+                    isCurrentUser && !isSelectionModeActive ? "border-primary ring-1 ring-primary" : "border-muted",
+                    isSelectionModeActive && user.id === room.currentCaptainId && "cursor-pointer hover:border-accent",
+                    isSelectedForMissionByCaptain && "border-primary ring-2 ring-primary bg-primary/10",
+                    isSelectionModeActive && user.id === room.currentCaptainId && !canBeSelected && !isSelectedForMissionByCaptain && "opacity-50 cursor-not-allowed"
                   )}
                 >
                   <div className="relative">
@@ -78,8 +101,11 @@ export function PlayerListPanel({
                     {isVirtualPlayer && (
                       <Brain className="absolute -bottom-1 -right-1 h-4 w-4 text-blue-400 bg-background rounded-full p-0.5" title="Virtual Player"/>
                     )}
-                    {isOnMissionTeam && (
+                    {isOnMissionTeamForDisplay && (
                        <Zap className="absolute -top-2 -left-2 h-5 w-5 text-orange-400 bg-background rounded-full p-0.5" title="On Mission Team" />
+                    )}
+                    {isSelectedForMissionByCaptain && (
+                      <SelectedIcon className="absolute -bottom-1 -left-1 h-5 w-5 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
                     )}
                   </div>
 
@@ -94,7 +120,7 @@ export function PlayerListPanel({
                     )}
                     {missionCardPlayed && (
                       <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
-                         {missionCardPlayed === 'success' ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                         {missionCardPlayed === 'success' ? <MissionCardSuccessIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
                       </Badge>
                     )}
                     

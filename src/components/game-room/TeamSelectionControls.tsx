@@ -13,9 +13,7 @@ type TeamSelectionControlsProps = {
   currentCaptainName?: string;
   isHumanCaptain: boolean;
   requiredPlayersForCurrentMission: number;
-  localPlayers: Player[];
-  selectedMissionTeam: string[];
-  onPlayerSelectionForMission: (playerId: string, checked: boolean) => void;
+  selectedMissionTeamLength: number; // Changed from selectedMissionTeam to just its length
   onHumanProposeTeam: () => void;
 };
 
@@ -24,9 +22,7 @@ export function TeamSelectionControls({
   currentCaptainName,
   isHumanCaptain,
   requiredPlayersForCurrentMission,
-  localPlayers,
-  selectedMissionTeam,
-  onPlayerSelectionForMission,
+  selectedMissionTeamLength,
   onHumanProposeTeam,
 }: TeamSelectionControlsProps) {
   if (isVirtualCaptain) {
@@ -39,19 +35,6 @@ export function TeamSelectionControls({
     );
   }
 
-  const handleTogglePlayerSelection = (playerId: string) => {
-    const isSelected = selectedMissionTeam.includes(playerId);
-    if (isSelected) {
-      onPlayerSelectionForMission(playerId, false);
-    } else {
-      if (selectedMissionTeam.length < requiredPlayersForCurrentMission) {
-        onPlayerSelectionForMission(playerId, true);
-      }
-      // Optionally, add a toast if trying to select more than required
-      // else { toast({ title: "Team selection full", description: `You can only select ${requiredPlayersForCurrentMission} players.`})}
-    }
-  };
-
   return (
     <div className="space-y-4">
       <h3 className="text-xl font-semibold text-center">组建比赛队伍</h3>
@@ -61,53 +44,21 @@ export function TeamSelectionControls({
           {requiredPlayersForCurrentMission}
         </span>{" "}
         名玩家。
-        {isHumanCaptain ? "请选择队员：" : "等待队长选择队员..."}
+        {isHumanCaptain ? "请在左侧玩家列表中选择队员：" : `等待队长 ${currentCaptainName || ''} 在左侧玩家列表中选择队员...`}
       </p>
-      {isHumanCaptain && (
-        <ScrollArea className="h-72 w-full rounded-md border p-2">
-          <div className="space-y-2">
-            {localPlayers.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => isHumanCaptain && handleTogglePlayerSelection(p.id)}
-                className={cn(
-                  "flex items-center p-3 rounded-lg border-2 transition-all duration-150 ease-in-out",
-                  isHumanCaptain ? "cursor-pointer" : "cursor-default",
-                  selectedMissionTeam.includes(p.id)
-                    ? "border-primary ring-2 ring-primary bg-primary/10 shadow-md"
-                    : "border-muted bg-card hover:border-primary/30",
-                  isHumanCaptain && selectedMissionTeam.length >= requiredPlayersForCurrentMission && !selectedMissionTeam.includes(p.id)
-                    ? "opacity-60 cursor-not-allowed"
-                    : "hover:shadow-sm"
-                )}
-              >
-                <Avatar className="h-10 w-10 mr-3 border">
-                  <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person" />
-                  <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <span className="font-medium text-sm flex-grow truncate">
-                  {p.name}
-                </span>
-                {selectedMissionTeam.includes(p.id) && (
-                  <CheckCircle2 className="h-5 w-5 text-primary ml-2 shrink-0" />
-                )}
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
-      )}
+      
       {isHumanCaptain && (
         <Button
           onClick={onHumanProposeTeam}
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95"
-          disabled={selectedMissionTeam.length !== requiredPlayersForCurrentMission}
+          disabled={selectedMissionTeamLength !== requiredPlayersForCurrentMission}
         >
           <UsersRound className="mr-2 h-5 w-5" /> 提交队伍 (
-          {selectedMissionTeam.length}/{requiredPlayersForCurrentMission})
+          {selectedMissionTeamLength}/{requiredPlayersForCurrentMission})
         </Button>
       )}
        {!isHumanCaptain && !isVirtualCaptain && (
-         <p className="text-center text-muted-foreground py-4">等待队长 <span className="font-semibold text-primary">{currentCaptainName}</span> 选择队伍...</p>
+         <p className="text-center text-muted-foreground py-4">等待队长 <span className="font-semibold text-primary">{currentCaptainName}</span> 在左侧玩家列表中选择队员...</p>
        )}
     </div>
   );
