@@ -6,7 +6,7 @@ import { type GameRoom, type Player, Role, type PlayerVote, type MissionCardPlay
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Crown, Users, Eye, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Brain } from "lucide-react";
+import { Crown, Users, Eye, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Brain, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type PlayerListPanelProps = {
@@ -53,6 +53,11 @@ export function PlayerListPanel({
                 missionPlaysToDisplay.find(cp => cp.playerId === p.id)?.card : undefined;
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
+              
+              const isOnMissionTeam = room.selectedTeamForMission?.includes(p.id) && 
+                                      (room.currentPhase === 'team_selection' || 
+                                       room.currentPhase === 'team_voting' || 
+                                       room.currentPhase === 'mission_execution');
 
               return (
                 <div 
@@ -72,6 +77,9 @@ export function PlayerListPanel({
                     )}
                     {isVirtualPlayer && (
                       <Brain className="absolute -bottom-1 -right-1 h-4 w-4 text-blue-400 bg-background rounded-full p-0.5" title="Virtual Player"/>
+                    )}
+                    {isOnMissionTeam && (
+                       <Zap className="absolute -top-2 -left-2 h-5 w-5 text-orange-400 bg-background rounded-full p-0.5" title="On Mission Team" />
                     )}
                   </div>
 
