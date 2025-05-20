@@ -138,10 +138,26 @@ export default function PlayerManagementPage() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to update admin status (${response.status})`);
+        let errorMessage = `Failed to update admin status (${response.status})`;
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } else {
+            // If not JSON, it might be an HTML error page from Next.js or server
+            const errorText = await response.text();
+            console.error("Server returned non-JSON error response:", errorText);
+            // Keep generic message, or you could try to extract a title from HTML if needed
+          }
+        } catch (parseError) {
+          // This catch is for errors during parsing of the error response itself
+          console.error("Error parsing the error response:", parseError);
+        }
+        throw new Error(errorMessage);
       }
 
+      // If response.ok is true, assume success (API route should return 200 on success)
       setUsers(prevUsers =>
         prevUsers.map(u =>
           u.id === targetUserId ? { ...u, isAdmin: !currentIsAdmin } : u
