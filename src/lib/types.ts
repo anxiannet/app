@@ -2,8 +2,8 @@
 import type { Timestamp } from "firebase/firestore";
 
 export type User = {
-  id: string;
-  name: string;
+  id: string; // Firebase Auth UID
+  name: string; // Nickname
   avatarUrl?: string;
 };
 
@@ -84,7 +84,7 @@ export type GameRoom = {
   missionCardPlaysForCurrentMission?: MissionCardPlay[];
   missionOutcomeForDisplay?: MissionOutcome;
   failCardsPlayedForDisplay?: number;
-  generatedFailureReason?: GeneratedFailureReason; // For display during mission reveal
+  generatedFailureReason?: GeneratedFailureReason; 
 
   teamScores?: {
     teamMemberWins: number;
@@ -118,32 +118,4 @@ export type PlayerGameRecord = {
   };
   fullVoteHistory?: VoteHistoryEntry[];
   missionHistory?: Mission[];
-};
-
-// For AI Flow input
-export type PlayerPerspective = Omit<Player, 'role'> & { role?: Role | 'Unknown' };
-
-export type VirtualPlayerVoteInputContext = {
-  allPlayers: PlayerPerspective[];
-  currentRound: number;
-  missionHistory: Array<Omit<Mission, 'teamPlayerIds' | 'captainId'> & { teamPlayerIds: string[], captainId: string, teamPlayerNames?: string[], captainName?: string }>;
-  teamScores: { teamMemberWins: number; undercoverWins: number };
-  proposedTeamIds: string[];
-  proposedTeamMemberNames?: string[];
-  captainId: string;
-  captainName?: string;
-  captainChangesThisRound: number;
-  maxCaptainChangesPerRound: number;
-  missionPlayerCounts: number[];
-};
-
-export type AiProposeTeamInputContext = {
-  currentRound: number;
-  requiredPlayersForMission: number;
-  allPlayers: PlayerPerspective[];
-  missionHistory: Array<Omit<Mission, 'teamPlayerIds' | 'captainId'> & { teamPlayerIds: string[], captainId: string, teamPlayerNames?: string[], captainName?: string }>;
-  teamScores: { teamMemberWins: number; undercoverWins: number };
-  missionPlayerCounts: number[];
-  captainChangesThisRound: number;
-  maxCaptainChangesPerRound: number;
 };
