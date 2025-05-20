@@ -11,7 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { Role } from '@/lib/types';
-import type { PlayerPerspective, Mission } from '@/lib/types';
+import type { PlayerPerspective, Mission } from '@/lib/types'; // Ensure Mission is imported if used, or remove
 import Handlebars from 'handlebars';
 
 // Helper to find a player by ID (name for display in prompt)
@@ -122,7 +122,7 @@ You are an Undercover. Your goal is to get Undercovers onto missions so they can
 - If you are the only Undercover, include yourself.
 {{/if}}
 
-Propose a team by providing an array of player IDs. The array must contain exactly {{gameContext.requiredPlayersForMission}} unique player IDs from the 'All Players in Game' list.
+Propose a team by providing an array of player IDs. The array must contain exactly {{gameContext.requiredPlayersForMission}} unique player IDs from the 'All Players in Game' list. Ensure the 'selectedPlayerIds' array in your JSON output has exactly {{gameContext.requiredPlayersForMission}} elements.
 
 Desired output format is JSON. Ensure your response strictly adheres to this Zod schema:
 \`\`\`json
@@ -150,16 +150,21 @@ const aiProposeTeamFlow = ai.defineFlow(
   async (input) => {
     const { output } = await aiProposeTeamPrompt(input);
     if (!output || !output.selectedPlayerIds || output.selectedPlayerIds.length !== input.gameContext.requiredPlayersForMission) {
-      console.warn("AI failed to provide a valid team proposal or correct number of players. Defaulting to a random selection. AI Output:", JSON.stringify(output), "Input:", JSON.stringify(input));
+      const actualLength = output?.selectedPlayerIds?.length;
+      const expectedLength = input.gameContext.requiredPlayersForMission;
+      console.warn(
+        `AI Captain ${input.virtualCaptain.name} (Role: ${input.virtualCaptain.role}) provided an invalid team proposal. ` +
+        `Expected ${expectedLength} players, but AI output was ${actualLength === undefined ? 'not an array or undefined' : actualLength + ' players'}. ` +
+        `AI Output (raw): ${JSON.stringify(output)}. Game Context: ${JSON.stringify(input.gameContext)}. Defaulting to random selection.`
+      );
       
-      // Fallback: select random players
       const allPlayerIds = input.gameContext.allPlayers.map(p => p.id);
       const shuffledPlayers = [...allPlayerIds].sort(() => 0.5 - Math.random());
       const fallbackTeam = shuffledPlayers.slice(0, input.gameContext.requiredPlayersForMission);
       
       return {
         selectedPlayerIds: fallbackTeam,
-        reasoning: 'AI decision failed or was invalid, defaulted to random team proposal.',
+        reasoning: 'AI decision was invalid or failed to meet player count requirements, defaulted to random team proposal.',
       };
     }
     return output;
