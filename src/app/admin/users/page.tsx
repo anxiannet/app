@@ -137,7 +137,7 @@ export default function PlayerManagementPage() {
       });
 
       if (!response.ok) {
-        let errorMessage = `Failed to update admin status (${response.status})`;
+        let errorMessage = `API request to set admin status failed. Server responded with status ${response.status || 'unknown'}.`;
         try {
           const contentType = response.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
