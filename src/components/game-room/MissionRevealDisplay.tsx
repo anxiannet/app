@@ -34,29 +34,33 @@ export function MissionRevealDisplay({
              <XCircle className="mr-2 h-8 w-8"/> {roundText}：战败!
           </p>
           <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-center">
-            <p className="font-semibold text-lg mb-2 text-destructive">
+            <p className="font-semibold text-lg mb-2 text-destructive text-center">
               原因分析 ({failCardsPlayedForDisplay || 0}):
             </p>
             {generatedFailureReason ? (
               (() => {
-                let reasonText = "未能确定具体原因。";
+                let reasonText = "未能确定具体原因。"; 
                 if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length === 1) {
                   reasonText = generatedFailureReason.selectedReasons[0];
                 } else if (generatedFailureReason.narrativeSummary) {
-                  // Remove the common AI prefixes if they exist for a cleaner display
                   let summary = generatedFailureReason.narrativeSummary;
-                  const prefixesToRemove = ["比赛失利，主要原因是：", "比赛失利，可能原因是：", "本次比赛失利，主要归咎于以下几点："];
+                  const prefixesToRemove = [
+                    "比赛失利，主要原因是：", 
+                    "比赛失利，可能原因是：", 
+                    "本次比赛失利，主要归咎于以下几点：",
+                    "比赛失利；" 
+                  ];
                   for (const prefix of prefixesToRemove) {
                     if (summary.startsWith(prefix)) {
-                      summary = summary.substring(prefix.length);
-                      break;
+                      summary = summary.substring(prefix.length).trimStart();
+                      break; 
                     }
                   }
                   reasonText = summary;
                 } else if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 1) {
                   reasonText = generatedFailureReason.selectedReasons.join("，");
                 }
-                return <p>比赛失利；{reasonText}</p>;
+                return <p>{reasonText}</p>;
               })()
             ) : failCardsPlayedForDisplay !== undefined && failCardsPlayedForDisplay > 0 ? (
               <p className="flex items-center justify-center">
@@ -73,3 +77,4 @@ export function MissionRevealDisplay({
     </div>
   );
 }
+
