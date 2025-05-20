@@ -147,7 +147,7 @@ export default function PlayerManagementPage() {
             const errorText = await response.text();
             console.error("Server returned non-JSON error response:", errorText);
             if (errorText.includes("The default Firebase app does not exist")) {
-                errorMessage = "Server Error: Firebase Admin SDK not initialized. Check server logs and ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly for the server environment.";
+                errorMessage = "API Error: The server failed to initialize Firebase Admin SDK. Please check your server logs and ensure GOOGLE_APPLICATION_CREDENTIALS is correctly set for the server environment.";
             } else if (response.status === 500) {
                 errorMessage = "Internal Server Error (500). Please check server logs for more details.";
             } else {
@@ -171,7 +171,7 @@ export default function PlayerManagementPage() {
         description: `玩家 ${users.find(u=>u.id === targetUserId)?.nickname || targetUserId} 的管理员权限已${!currentIsAdmin ? '授予' : '撤销'}。`,
       });
     } catch (err) {
-      console.error("Error updating admin status:", err); // This logs the error object thrown from the try block.
+      console.error("Error updating admin status:", err);
       const finalErrorMessage = err instanceof Error ? err.message : "操作失败";
       toast({ title: "更新失败", description: finalErrorMessage, variant: "destructive" });
     } finally {
