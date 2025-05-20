@@ -1,33 +1,41 @@
 
 "use client";
 
-import type { Player, PlayerVote } from "@/lib/types";
+import type { PlayerVote } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Brain } from "lucide-react"; // Added Brain
 
 type TeamVotingControlsProps = {
   votesToDisplay: PlayerVote[];
-  realPlayersVotedCount: number;
-  realPlayersCount: number;
   hasUserVotedOnCurrentTeam: boolean;
   isCurrentUserVirtual: boolean;
   onPlayerVote: (vote: 'approve' | 'reject') => void;
   userVote?: 'approve' | 'reject';
-  totalPlayerCountInRoom: number; // New prop
+  totalPlayerCountInRoom: number;
+  isAiVoting: boolean; // New prop
 };
 
 export function TeamVotingControls({
   votesToDisplay,
-  realPlayersVotedCount,
-  realPlayersCount,
   hasUserVotedOnCurrentTeam,
   isCurrentUserVirtual,
   onPlayerVote,
   userVote,
   totalPlayerCountInRoom,
+  isAiVoting, // New prop
 }: TeamVotingControlsProps) {
 
   const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom && totalPlayerCountInRoom > 0;
+
+  if (isAiVoting && !allVotesIn) {
+    return (
+      <div className="text-center p-4">
+        <p className="text-lg font-semibold text-primary flex items-center justify-center">
+          <Brain className="mr-2 h-5 w-5 animate-pulse" /> AI 正在投票...
+        </p>
+      </div>
+    );
+  }
 
   if (allVotesIn) {
     const approveVotes = votesToDisplay.filter(v => v.vote === 'approve').length;
@@ -47,12 +55,15 @@ export function TeamVotingControls({
     );
   }
 
+  const humanPlayersVotedCount = votesToDisplay.filter(v => !v.playerId.startsWith("virtual_")).length;
+  const humanPlayersInRoom = totalPlayerCountInRoom - votesToDisplay.filter(v => v.playerId.startsWith("virtual_")).length; // Approximation
+
   return (
     <div className="space-y-3">
       
-      {votesToDisplay.length > 0 && realPlayersVotedCount < realPlayersCount && (
+      {votesToDisplay.length > 0 && humanPlayersVotedCount < humanPlayersInRoom && (
         <p className="text-xs text-center text-muted-foreground">
-          ({realPlayersCount - realPlayersVotedCount} 人未投票)
+          ({humanPlayersInRoom - humanPlayersVotedCount} 名真实玩家未投票)
         </p>
       )}
       {!hasUserVotedOnCurrentTeam && !isCurrentUserVirtual ? (
@@ -63,7 +74,7 @@ export function TeamVotingControls({
       ) : (!isCurrentUserVirtual && userVote &&
         <p className="text-center text-green-600 font-semibold">你已投票: {userVote === 'approve' ? '同意' : '拒绝'}</p>
       )}
-      {realPlayersVotedCount < realPlayersCount && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
+      {humanPlayersVotedCount < humanPlayersInRoom && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
     </div>
   );
 }
