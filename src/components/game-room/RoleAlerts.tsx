@@ -18,9 +18,6 @@ export function RoleAlerts({ currentUserRole, roomStatus, knownUndercoversByCoac
     return null;
   }
 
-  // const coachDescription = "作为教练，你并不清楚自己的词语，但你需要通过观察和引导，帮助队员找出卧底。"; // Removed this line
-  const knownUndercoversText = knownUndercoversByCoach.length > 0 ? `你已洞察到以下玩家是卧底: ${knownUndercoversByCoach.map(u => u.name).join(', ')}。` : "";
-
   return (
     <>
       <Alert variant="default" className="bg-accent/20 border-accent text-accent-foreground">
@@ -29,7 +26,7 @@ export function RoleAlerts({ currentUserRole, roomStatus, knownUndercoversByCoac
         <AlertDescription>
           {currentUserRole === Role.Undercover && "你的任务是隐藏自己的身份，误导其他队员，并达成秘密目标。"}
           {currentUserRole === Role.TeamMember && "作为一名普通队员，你需要找出队伍中的卧底，并完成队伍的目标。"}
-          {currentUserRole === Role.Coach && knownUndercoversText.trim()}
+          {/* For Coach, the specific list of undercovers is removed from this alert. Coach still sees them in player list. */}
         </AlertDescription>
       </Alert>
 
@@ -54,4 +51,3 @@ export function RoleAlerts({ currentUserRole, roomStatus, knownUndercoversByCoac
     </>
   );
 }
-
