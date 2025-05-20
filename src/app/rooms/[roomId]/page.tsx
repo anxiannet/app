@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote, type MissionCardPlay, type MissionOutcome, type VoteHistoryEntry, type PlayerGameRecord, type WinningFactionType, type GeneratedFailureReason } from "@/lib/types";
-import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Zap, Target, History, RotateCcw, XOctagon, LogOut, Brain } from "lucide-react";
+import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Zap, Target, History, RotateCcw, XOctagon, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ import { CoachAssassinationControls } from "@/components/game-room/CoachAssassin
 import { GameOverSummary } from "@/components/game-room/GameOverSummary";
 import { VoteHistoryAccordion } from "@/components/game-room/VoteHistoryAccordion";
 
-import { db } from "@/lib/firebase"; // Firebase client SDK
+import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, serverTimestamp, Timestamp, deleteField, deleteDoc, type Unsubscribe } from "firebase/firestore";
 import { generateFailureReason } from "@/ai/flows/generate-failure-reason-flow";
 
@@ -101,14 +101,14 @@ export default function GameRoomPage() {
     for (const key in rawUpdatedFields) {
       if (Object.prototype.hasOwnProperty.call(rawUpdatedFields, key)) {
         const value = rawUpdatedFields[key as keyof GameRoom];
-        if (value !== undefined) {
+        if (value !== undefined) { // Explicitly allow deleteField() to pass through
            cleanedUpdates[key as keyof GameRoom] = value;
         }
       }
     }
       
-    if (Object.keys(cleanedUpdates).length === 0 && !Object.values(rawUpdatedFields).some(v => v === deleteField())) {
-      console.warn("updateFirestoreRoom called with only undefined values or no actual changes (excluding deleteField). Skipping update. Original updates:", rawUpdatedFields);
+    if (Object.keys(cleanedUpdates).length === 0) {
+      console.warn("updateFirestoreRoom called with no actual changes (excluding deleteField). Skipping update. Original updates:", rawUpdatedFields);
       return;
     }
   
@@ -123,8 +123,8 @@ export default function GameRoomPage() {
 
   useEffect(() => {
     if (authLoading || !user || typeof roomId !== 'string') {
-      if (!authLoading && !user) {
-        // router.push(`/login?redirect=/rooms/${roomId}`);
+      if (!authLoading && !user && typeof roomId === 'string' && roomId) {
+         router.push(`/login?redirect=/rooms/${roomId}`);
       }
       return;
     }
@@ -288,7 +288,7 @@ export default function GameRoomPage() {
           const playerDetail: {id: string; name: string; role: Role; avatarUrl?: string} = { 
             id: p.id, 
             name: p.name, 
-            role: p.role || Role.TeamMember, // Should always have a role if game finished
+            role: p.role || Role.TeamMember,
           };
           if (p.avatarUrl) playerDetail.avatarUrl = p.avatarUrl;
           return playerDetail;
@@ -323,7 +323,7 @@ export default function GameRoomPage() {
     if (!room || !room.selectedTeamForMission || !room.players || !room.teamScores || room.currentRound === undefined) return;
 
     let finalPlays: MissionCardPlay[] = [...(room.missionCardPlaysForCurrentMission || [])];
-    const playersInRoom = room.players; // Use room.players for consistent source of truth
+    const playersInRoom = room.players;
 
     room.selectedTeamForMission.forEach(playerId => {
       const player = playersInRoom.find(p => p.id === playerId);
@@ -361,14 +361,14 @@ export default function GameRoomPage() {
         };
       }
     }
-
+    
     const missionRecordData: Omit<Mission, 'generatedFailureReason' | 'cardPlays'> & { generatedFailureReason?: GeneratedFailureReason; cardPlays: MissionCardPlay[] } = {
       round: room.currentRound,
       captainId: room.currentCaptainId || "unknown_captain",
       teamPlayerIds: [...room.selectedTeamForMission],
       outcome: outcome,
       failCardsPlayed: failCardsPlayed,
-      cardPlays: finalPlays, // Store all card plays
+      cardPlays: finalPlays, 
     };
     
     if (aiGeneratedFailureReason) {
@@ -706,11 +706,9 @@ export default function GameRoomPage() {
       const allVotes = [...currentVotes, ...virtualPlayerVotes.filter(vpv => !currentVotes.some(cv => cv.playerId === vpv.playerId))];
       
       updateFirestoreRoom({ teamVotes: allVotes });
-      // Do not call processTeamVotes here directly. Let the next useEffect handle it after a delay.
     }
   }, [room, updateFirestoreRoom]);
 
-  // New useEffect to process votes after a delay, allowing results to be displayed
   useEffect(() => {
     if (
       room?.currentPhase === 'team_voting' &&
@@ -719,12 +717,11 @@ export default function GameRoomPage() {
       room.teamVotes.length === room.players.length &&
       room.players.length > 0
     ) {
-      // All votes are in
       const timer = setTimeout(() => {
-        if (room.currentPhase === 'team_voting') { // Double check phase hasn't changed
+        if (room.currentPhase === 'team_voting') { 
            processTeamVotes(room.teamVotes!);
         }
-      }, 3000); // 3-second delay to show results
+      }, 3000); 
       return () => clearTimeout(timer);
     }
   }, [room?.teamVotes, room?.currentPhase, room?.players, processTeamVotes]);
@@ -841,14 +838,12 @@ export default function GameRoomPage() {
     if (selectedCoachCandidate === actualCoach.id) {
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
-      // finalTeamScores.undercoverWins = room.totalRounds || TOTAL_ROUNDS_PER_GAME; // This was commented out by user request
-      if (finalTeamScores.teamMemberWins >=3) finalTeamScores.teamMemberWins = finalTeamScores.undercoverWins; // Ensure team member wins don't show as higher
+      if (finalTeamScores.teamMemberWins >=3) finalTeamScores.teamMemberWins = finalTeamScores.undercoverWins; 
 
     } else {
       toastTitle = "指认失败！战队方获胜！";
       const wronglyAccusedPlayer = playersInRoom.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
-      // Team members win, ensure their score reflects this if it was at 3
       if (finalTeamScores.teamMemberWins < 3) finalTeamScores.teamMemberWins = 3; 
     }
 
@@ -890,7 +885,8 @@ export default function GameRoomPage() {
                 name: playerObjectInRoom.name,
               };
               if (playerObjectInRoom.avatarUrl) cleanedPlayerObject.avatarUrl = playerObjectInRoom.avatarUrl;
-              if (playerObjectInRoom.role) cleanedPlayerObject.role = playerObjectInRoom.role;
+              // Role is intentionally not included if undefined
+              // if (playerObjectInRoom.role) cleanedPlayerObject.role = playerObjectInRoom.role;
 
 
               try {
@@ -929,7 +925,6 @@ export default function GameRoomPage() {
             name: p.name,
         };
         if (p.avatarUrl) playerObject.avatarUrl = p.avatarUrl;
-        // Role is intentionally omitted here, will be reassigned by assignRolesAndCaptain
         return playerObject; 
     });
 
@@ -1108,6 +1103,10 @@ export default function GameRoomPage() {
             selectedPlayersForMission={selectedMissionTeam}
             onTogglePlayerForMission={handlePlayerSelectionForMission}
             selectionLimitForMission={requiredPlayersForCurrentMission}
+            isCoachAssassinationModeActive={room.currentPhase === 'coach_assassination' && currentUserRole === Role.Undercover}
+            selectedCoachCandidateId={selectedCoachCandidate}
+            onSelectCoachCandidate={setSelectedCoachCandidate}
+            assassinationTargetOptionsPlayerIds={assassinationTargetOptions.map(p => p.id)}
         />
 
         <div className="md:col-span-2 space-y-4"> 
@@ -1130,7 +1129,7 @@ export default function GameRoomPage() {
             {room.status === GameRoomStatus.InProgress && (
               <Card>
                 <CardHeader>
-                  {/* Removed round/captain attempt display from here */}
+                  {/* Round/Captain attempt display removed from here */}
                 </CardHeader>
                 <CardContent className="space-y-4">
                 
@@ -1154,7 +1153,7 @@ export default function GameRoomPage() {
                           isCurrentUserVirtual={user.id.startsWith("virtual_")}
                           onPlayerVote={handlePlayerVote}
                           userVote={room.teamVotes?.find(v=>v.playerId === user.id)?.vote}
-                          totalPlayerCountInRoom={room.players.length} // Pass total player count
+                          totalPlayerCountInRoom={room.players.length}
                       />
                   )}
 
@@ -1183,9 +1182,7 @@ export default function GameRoomPage() {
                   {room.currentPhase === 'coach_assassination' && (
                       <CoachAssassinationControls
                           currentUserRole={currentUserRole}
-                          selectedCoachCandidate={selectedCoachCandidate}
-                          onSetSelectedCoachCandidate={setSelectedCoachCandidate}
-                          assassinationTargetOptions={assassinationTargetOptions}
+                          selectedCoachCandidateId={selectedCoachCandidate}
                           onConfirmCoachAssassination={handleConfirmCoachAssassination}
                       />
                   )}
