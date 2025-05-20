@@ -130,7 +130,6 @@ export default function PlayerManagementPage() {
 
     setUpdatingAdminStatus(targetUserId);
     try {
-      // In a real app, the auth token would be sent to verify the CALLER is an admin.
       const response = await fetch('/api/admin/set-admin-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -147,23 +146,21 @@ export default function PlayerManagementPage() {
           } else {
             const errorText = await response.text();
             console.error("Server returned non-JSON error response:", errorText);
-            // Try to extract a more meaningful message from common HTML error patterns
             if (errorText.includes("The default Firebase app does not exist")) {
                 errorMessage = "Server Error: Firebase Admin SDK not initialized. Check server logs and ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly for the server environment.";
             } else if (response.status === 500) {
                 errorMessage = "Internal Server Error (500). Please check server logs for more details.";
             } else {
-                errorMessage = `API request failed with status ${response.status}.`;
+                errorMessage = `API request failed with status ${response.status}. Details: ${errorText.substring(0,200)}...`;
             }
           }
         } catch (parseError) {
-          // This catch is for errors during parsing of the error response itself
           console.error("Error parsing the error response:", parseError);
+          errorMessage = `API request failed (status ${response.status}), and the error response itself could not be parsed. Check browser console for details.`;
         }
         throw new Error(errorMessage);
       }
 
-      // If response.ok is true, assume success (API route should return 200 on success)
       setUsers(prevUsers =>
         prevUsers.map(u =>
           u.id === targetUserId ? { ...u, isAdmin: !currentIsAdmin } : u
@@ -174,7 +171,7 @@ export default function PlayerManagementPage() {
         description: `玩家 ${users.find(u=>u.id === targetUserId)?.nickname || targetUserId} 的管理员权限已${!currentIsAdmin ? '授予' : '撤销'}。`,
       });
     } catch (err) {
-      console.error("Error updating admin status:", err);
+      console.error("Error updating admin status:", err); // This logs the error object thrown from the try block.
       const finalErrorMessage = err instanceof Error ? err.message : "操作失败";
       toast({ title: "更新失败", description: finalErrorMessage, variant: "destructive" });
     } finally {
