@@ -207,9 +207,10 @@ const aiProposeTeamFlow = ai.defineFlow(
   },
   async (input) => {
     const { output, usage } = await aiProposeTeamPrompt(input);
-    if (!output || !output.selectedPlayerIds || output.selectedPlayerIds.length !== input.gameContext.requiredPlayersForMission) {
-      const expectedCount = input.gameContext.requiredPlayersForMission;
-      const actualCount = output?.selectedPlayerIds?.length || 0;
+    const expectedCount = input.gameContext.requiredPlayersForMission;
+    const actualCount = output?.selectedPlayerIds?.length || 0;
+
+    if (!output || !output.selectedPlayerIds || actualCount !== expectedCount) {
       console.warn(
         `AI Propose Team Flow Warning: AI failed to provide a valid team proposal or correct number of players. Expected ${expectedCount}, got ${actualCount}. Defaulting to a random selection including self. AI Output:`,
         JSON.stringify(output),
@@ -233,24 +234,24 @@ const aiProposeTeamFlow = ai.defineFlow(
 
       const shuffledOtherPlayers = [...otherPlayerIds].sort(() => 0.5 - Math.random());
 
-      while (proposedTeamIds.length < input.gameContext.requiredPlayersForMission && shuffledOtherPlayers.length > 0) {
+      while (proposedTeamIds.length < expectedCount && shuffledOtherPlayers.length > 0) {
         proposedTeamIds.push(shuffledOtherPlayers.shift()!);
       }
        // If still not enough (e.g. very few players total), fill with any available, this should be rare.
       const allPlayersShuffledForFallback = [...input.gameContext.allPlayers.map(p => p.id)].sort(() => 0.5 - Math.random());
-      while (proposedTeamIds.length < input.gameContext.requiredPlayersForMission && allPlayersShuffledForFallback.length > 0) {
+      while (proposedTeamIds.length < expectedCount && allPlayersShuffledForFallback.length > 0) {
           const playerToAdd = allPlayersShuffledForFallback.shift()!;
           if (!proposedTeamIds.includes(playerToAdd)) {
               proposedTeamIds.push(playerToAdd);
           }
       }
       // Final trim to ensure exact count
-      proposedTeamIds = proposedTeamIds.slice(0, input.gameContext.requiredPlayersForMission);
+      proposedTeamIds = proposedTeamIds.slice(0, expectedCount);
 
 
       return {
         selectedPlayerIds: proposedTeamIds,
-        reasoning: 'AI 默认：由于LLM输出无效或玩家数量不正确。已选择自身及随机其他玩家。',
+        reasoning: `AI 默认：由于LLM输出的玩家数量 (${actualCount}) 与要求 (${expectedCount}) 不符，或输出无效。已自动选择符合数量的队伍。`,
       };
     }
     return output;
@@ -260,3 +261,4 @@ const aiProposeTeamFlow = ai.defineFlow(
 export async function decideAiTeamProposal(input: AiProposeTeamInput): Promise<AiProposeTeamOutput> {
   return aiProposeTeamFlow(input);
 }
+
