@@ -62,6 +62,7 @@ const AiProposeTeamInputSchema = z.object({
   gameContext: z.object({
     currentRound: z.number(),
     requiredPlayersForMission: z.number().describe("The exact number of players to select for the mission."),
+    currentMissionNeedsTwoFails: z.boolean().describe("Whether the current mission requires two fail cards to be sabotaged."),
     allPlayers: z.array(PlayerPerspectiveSchema)
       .describe("List of all players in the game, with roles revealed according to the virtual captain's perspective."),
     missionHistory: z.array(
@@ -101,6 +102,7 @@ Your Captain Details:
 Game Context:
 - Current Round: {{gameContext.currentRound}}
 - Players to Select for Mission: {{gameContext.requiredPlayersForMission}}
+- Current Mission Sabotage Requirement: {{#if gameContext.currentMissionNeedsTwoFails}}Requires 2 Fail Cards{{else}}Requires 1 Fail Card{{/if}}
 - All Players (from your perspective):
   {{#each gameContext.allPlayers}}
   - {{this.name}} (ID: {{this.id}}){{#if this.role}}, Role (Known to you): {{this.role}}{{/if}}
@@ -160,11 +162,14 @@ Your fellow Undercovers (from your perspective):
   {{/if}}
 {{/each}}
 Strategy:
-- Select yourself (ID: {{virtualCaptain.id}}) for the team. This is usually the best way to ensure an Undercover is on the mission.
-- If possible, select one other fellow Undercover for the team, especially if the mission requires multiple fail cards or if you want to spread suspicion.
-- Fill the remaining spots with Team Members to make the team look plausible. Avoid picking too many known/strong Team Members if it makes the team too obviously good.
-- Try to make your selections seem logical to others (e.g., based on who hasn't been on missions recently, or distributing participation).
-- Ensure you select exactly {{gameContext.requiredPlayersForMission}} players.
+1.  Always select yourself (ID: {{virtualCaptain.id}}) for the team. This is the most reliable way to ensure an Undercover is on the mission.
+2.  {{#if gameContext.currentMissionNeedsTwoFails}}
+    This mission requires 2 Fail Cards to be sabotaged. You should try to select one other fellow Undercover (from the list above, if available) for the team. This significantly increases the chances of mission failure. If no other fellow Undercover is available, proceed with just yourself.
+    {{else}}
+    This mission requires only 1 Fail Card to be sabotaged. Including just yourself is usually sufficient. If you want to spread suspicion or if there are many Team Members and few Undercovers, you might consider adding another Undercover, but it's riskier. For now, prioritize getting yourself on.
+    {{/if}}
+3.  Fill the remaining spots with players you believe are Team Members or players whose roles are unknown to you to make the team look plausible. Avoid picking too many known/strong Team Members if it makes the team too obviously good.
+4.  Ensure you select exactly {{gameContext.requiredPlayersForMission}} players.
 {{/if}}
 
 Output your decision as a JSON object containing an array of player IDs and a brief reasoning.
@@ -202,10 +207,17 @@ const aiProposeTeamFlow = ai.defineFlow(
       const expectedCount = input.gameContext.requiredPlayersForMission;
       const actualCount = output?.selectedPlayerIds?.length || 0;
       console.warn(
-        `AI failed to provide a valid team proposal or correct number of players. Expected ${expectedCount}, got ${actualCount}. Defaulting to a random selection including self. AI Output:`, 
+        `AI Propose Team Flow Warning: AI failed to provide a valid team proposal or correct number of players. Expected ${expectedCount}, got ${actualCount}. Defaulting to a random selection including self. AI Output:`, 
         JSON.stringify(output), 
-        "Input:", 
-        JSON.stringify(input, (key, value) => key === 'allPlayers' ? `[${value.length} players]` : value) // Avoid logging all player details if too verbose
+        "Input Context (summary):", 
+        JSON.stringify({
+          virtualCaptain: input.virtualCaptain,
+          currentRound: input.gameContext.currentRound,
+          requiredPlayers: input.gameContext.requiredPlayersForMission,
+          needsTwoFails: input.gameContext.currentMissionNeedsTwoFails,
+          playerCount: input.gameContext.allPlayers.length,
+          missionHistoryCount: input.gameContext.missionHistory?.length || 0,
+        })
       );
       
       // Fallback logic: select self and then random other players
