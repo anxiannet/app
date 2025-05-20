@@ -4,8 +4,9 @@
 import type { Player } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UsersRound } from "lucide-react";
+import { UsersRound, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type TeamSelectionControlsProps = {
   isVirtualCaptain: boolean;
@@ -63,31 +64,37 @@ export function TeamSelectionControls({
         {isHumanCaptain ? "请选择队员：" : "等待队长选择队员..."}
       </p>
       {isHumanCaptain && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-72 overflow-y-auto p-1">
-          {localPlayers.map((p) => (
-            <div
-              key={p.id}
-              onClick={() => handleTogglePlayerSelection(p.id)}
-              className={cn(
-                "flex flex-col items-center justify-center rounded-lg border-2 p-3 cursor-pointer transition-all duration-150 ease-in-out hover:shadow-md",
-                selectedMissionTeam.includes(p.id)
-                  ? "border-primary ring-2 ring-primary bg-primary/10 shadow-lg"
-                  : "border-muted bg-card hover:border-primary/50",
-                selectedMissionTeam.length >= requiredPlayersForCurrentMission && !selectedMissionTeam.includes(p.id)
-                  ? "opacity-50 cursor-not-allowed"
-                  : ""
-              )}
-            >
-              <Avatar className="mb-2 h-14 w-14 border">
-                <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person" />
-                <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              <span className="font-medium text-sm text-center truncate w-full">
-                {p.name}
-              </span>
-            </div>
-          ))}
-        </div>
+        <ScrollArea className="h-72 w-full rounded-md border p-2">
+          <div className="space-y-2">
+            {localPlayers.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => isHumanCaptain && handleTogglePlayerSelection(p.id)}
+                className={cn(
+                  "flex items-center p-3 rounded-lg border-2 transition-all duration-150 ease-in-out",
+                  isHumanCaptain ? "cursor-pointer" : "cursor-default",
+                  selectedMissionTeam.includes(p.id)
+                    ? "border-primary ring-2 ring-primary bg-primary/10 shadow-md"
+                    : "border-muted bg-card hover:border-primary/30",
+                  isHumanCaptain && selectedMissionTeam.length >= requiredPlayersForCurrentMission && !selectedMissionTeam.includes(p.id)
+                    ? "opacity-60 cursor-not-allowed"
+                    : "hover:shadow-sm"
+                )}
+              >
+                <Avatar className="h-10 w-10 mr-3 border">
+                  <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person" />
+                  <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <span className="font-medium text-sm flex-grow truncate">
+                  {p.name}
+                </span>
+                {selectedMissionTeam.includes(p.id) && (
+                  <CheckCircle2 className="h-5 w-5 text-primary ml-2 shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
       )}
       {isHumanCaptain && (
         <Button
@@ -99,6 +106,9 @@ export function TeamSelectionControls({
           {selectedMissionTeam.length}/{requiredPlayersForCurrentMission})
         </Button>
       )}
+       {!isHumanCaptain && !isVirtualCaptain && (
+         <p className="text-center text-muted-foreground py-4">等待队长 <span className="font-semibold text-primary">{currentCaptainName}</span> 选择队伍...</p>
+       )}
     </div>
   );
 }
