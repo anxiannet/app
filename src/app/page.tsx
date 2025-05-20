@@ -91,7 +91,7 @@ export default function LobbyPage() {
     });
 
     return () => unsubscribe(); 
-  }, [authLoading, user, toast]); // Added 'user' to dependency array for filtering
+  }, [authLoading, user, toast]); 
 
   const handleCreateRoom = async () => {
     if (!user) {
@@ -159,13 +159,20 @@ export default function LobbyPage() {
             {rooms.map((room) => {
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
               
-              let displayStatus = room.status.toUpperCase();
+              let displayStatusText = room.status.toUpperCase();
+              let displayStatusVariant: "outline" | "default" = "default";
+              let displayStatusClass = "";
+
               if (room.status === GameRoomStatus.InProgress) {
-                displayStatus = "游戏中";
+                displayStatusText = "游戏中";
+                displayStatusClass = "bg-green-500 text-white";
               } else if (room.status === GameRoomStatus.Waiting) {
-                displayStatus = "等待中";
-              } else if (room.status === GameRoomStatus.Finished) { // Should not happen due to filter
-                displayStatus = "游戏结束";
+                displayStatusText = "等待中";
+                displayStatusVariant = "outline";
+                displayStatusClass = "border-yellow-500 text-yellow-600";
+              } else if (room.status === GameRoomStatus.Finished) { 
+                displayStatusText = "游戏结束";
+                displayStatusClass = "bg-gray-500 text-white";
               }
 
 
@@ -186,21 +193,19 @@ export default function LobbyPage() {
                         </Badge>
                       )}
                     </div>
-                    <CardDescription>最大玩家数: {room.maxPlayers}</CardDescription>
+                    {/* CardDescription for max players removed */}
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="flex items-center text-sm text-muted-foreground">
-                      <Users className="mr-2 h-4 w-4" />
-                      <span>{room.players.length} / {room.maxPlayers} 玩家</span>
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <div className="flex items-center">
+                        <Users className="mr-2 h-4 w-4" />
+                        <span>{room.players.length} / {room.maxPlayers} 玩家</span>
+                      </div>
+                       <Badge variant={displayStatusVariant} className={cn("font-semibold", displayStatusClass)}>
+                        {displayStatusText}
+                      </Badge>
                     </div>
-                    <div className="flex items-center text-sm">
-                      状态: <Badge variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"} className={cn(
-                        "ml-1 font-semibold",
-                        room.status === GameRoomStatus.Waiting && "border-yellow-500 text-yellow-600",
-                        room.status === GameRoomStatus.InProgress && "bg-green-500 text-white",
-                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white" // Should not be seen
-                      )}>{displayStatus}</Badge>
-                    </div>
+                    {/* Status display div removed */}
                     <Image
                       src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}
                       alt={room.name}
