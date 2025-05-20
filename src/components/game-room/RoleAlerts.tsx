@@ -14,19 +14,19 @@ type RoleAlertsProps = {
 };
 
 export function RoleAlerts({ currentUserRole, roomStatus, knownUndercoversByCoach, fellowUndercovers, isSoleUndercover }: RoleAlertsProps) {
-  if (!currentUserRole || roomStatus !== GameRoomStatus.InProgress) {
+  if (!currentUserRole || roomStatus !== GameRoomStatus.InProgress || currentUserRole === Role.Coach) {
     return null;
   }
 
   return (
     <>
+      {/* This alert will now only show for TeamMember and Undercover */}
       <Alert variant="default" className="bg-accent/20 border-accent text-accent-foreground">
         <Info className="h-5 w-5 text-accent" />
         <AlertTitle className="font-semibold">你的角色: {currentUserRole}</AlertTitle>
         <AlertDescription>
           {currentUserRole === Role.Undercover && "你的任务是隐藏自己的身份，误导其他队员，并达成秘密目标。"}
           {currentUserRole === Role.TeamMember && "作为一名普通队员，你需要找出队伍中的卧底，并完成队伍的目标。"}
-          {/* For Coach, the specific list of undercovers is removed from this alert. Coach still sees them in player list. */}
         </AlertDescription>
       </Alert>
 
