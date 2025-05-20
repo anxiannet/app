@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -17,7 +18,7 @@ export function SiteHeader() {
         </Link>
         <nav className="flex items-center space-x-4">
           <Button variant="ghost" asChild>
-            <Link href="/">Lobby</Link>
+            <Link href="/">大厅</Link>
           </Button>
           {/* Add other navigation links here if needed */}
           <AuthButton />
