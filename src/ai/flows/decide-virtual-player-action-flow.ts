@@ -6,17 +6,27 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { Role, type PlayerPerspective, type Mission } from '@/lib/types';
+import { Role, type Mission } from '@/lib/types'; // Renamed to avoid conflict
 import Handlebars from 'handlebars';
+
+// Define PlayerPerspective locally if it's causing issues or to ensure it's what we expect
+const PlayerPerspectiveSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  role: z.nativeEnum(Role).optional().describe("Role of this player, if known to the virtual player."),
+  avatarUrl: z.string().optional(),
+});
+type PlayerPerspective = z.infer<typeof PlayerPerspectiveSchema>;
+
 
 // Register Handlebars helpers
 Handlebars.registerHelper('findPlayerNameById', function (playerId, playersList) {
   if (!Array.isArray(playersList)) {
-    console.warn('[Handlebars Helper] findPlayerNameById: playersList is not an array. PlayerId:', playerId);
-    return '未知玩家列表';
+    console.warn('[Handlebars Helper] findPlayerNameById: playersList is not an array. PlayerId:', playerId, 'List:', playersList);
+    return `未知玩家(${playerId ? String(playerId).slice(0,5) : 'N/A'})`;
   }
   const player = playersList.find((p: PlayerPerspective) => p.id === playerId);
-  return player ? player.name : `未知玩家(${playerId ? playerId.slice(0,5) : 'N/A'})`;
+  return player ? player.name : `未知玩家(${playerId ? String(playerId).slice(0,5) : 'N/A'})`;
 });
 Handlebars.registerHelper('eq', function (a, b) { return a === b; });
 Handlebars.registerHelper('gt', function (a, b) { return a > b; });
@@ -41,13 +51,8 @@ const VirtualPlayerVoteInputSchema = z.object({
     currentRound: z.number(),
     captainId: z.string().describe("ID of the current captain who proposed the team."),
     proposedTeamIds: z.array(z.string()).describe("IDs of players on the proposed mission team."),
-    allPlayers: z.array(
-      z.object({
-        id: z.string(),
-        name: z.string(),
-        role: z.nativeEnum(Role).optional().describe("Role of this player, if known to the virtual player."),
-      })
-    ).describe("List of all players in the game, with roles revealed according to the virtual player's perspective."),
+    allPlayers: z.array(PlayerPerspectiveSchema) // Use the locally defined schema
+      .describe("List of all players in the game, with roles revealed according to the virtual player's perspective."),
     missionHistory: z.array(
       z.object({
         round: z.number(),
@@ -55,7 +60,12 @@ const VirtualPlayerVoteInputSchema = z.object({
         teamPlayerIds: z.array(z.string()),
         outcome: z.string(), // 'success' | 'fail'
         failCardsPlayed: z.number().optional(),
-        cardPlays: z.array(z.object({ playerId: z.string(), card: z.string(), role: z.nativeEnum(Role).optional() })).optional(),
+        cardPlays: z.array(z.object({ 
+          playerId: z.string(), 
+          card: z.string(), 
+          // Role in cardPlays is part of PlayerPerspective, so it's revealed based on viewer.
+          // The AI prompt will look up the player in allPlayers to get their perceived role.
+        })).optional(), 
       })
     ).optional().describe("History of past missions, with roles in cardPlays revealed based on perspective."),
     teamScores: z.object({
@@ -64,6 +74,7 @@ const VirtualPlayerVoteInputSchema = z.object({
     }),
     captainChangesThisRound: z.number(),
     maxCaptainChangesPerRound: z.number(),
+    maxRejectionsBeforeLoss: z.number().describe("Number of rejections this round that would result in a loss if the current vote is also a rejection."),
   }),
 });
 export type VirtualPlayerVoteInput = z.infer<typeof VirtualPlayerVoteInputSchema>;
@@ -106,11 +117,13 @@ Mission History (from your perspective):
   - Fail Cards: {{this.failCardsPlayed}}
     {{#each this.cardPlays}}
       {{#if (eq this.card "fail")}}
-        {{#if this.role}}
-  - Saboteur (Known to you): {{findPlayerNameById this.playerId ../../../gameContext.allPlayers}} (Role: {{this.role}})
-        {{else}}
-  - Saboteur (Role Unknown to you): {{findPlayerNameById this.playerId ../../../gameContext.allPlayers}}
-        {{/if}}
+        {{#with (lookup ../../../gameContext.allPlayers (findIndex ../../../gameContext.allPlayers (p => eq p.id this.playerId)))}}
+          {{#if this.role}}
+  - Saboteur (Known to you): {{this.name}} (Role: {{this.role}})
+          {{else}}
+  - Saboteur (Role Unknown to you): {{this.name}}
+          {{/if}}
+        {{/with}}
       {{/if}}
     {{/each}}
   {{/if}}
@@ -125,7 +138,7 @@ You are a {{virtualPlayer.role}}. Your primary goal is to help the Team Members 
 Strategy:
 - If you strongly suspect an Undercover is on the proposed team based on game history or player behavior, vote 'reject'.
 - If the team looks trustworthy (e.g., known good players, or players you have no negative information about), vote 'approve'.
-- If you are NOT on this proposed team: Be more critical. If you have significant doubts about any member of the proposed team, or if you believe a better team composition is likely with the next captain, you should vote 'reject'. However, if the number of rejections this round ({{gameContext.captainChangesThisRound}}) is high (e.g., 3 or more out of {{gameContext.maxCaptainChangesPerRound}}), you should be more inclined to vote 'approve' to avoid losing the round due to excessive rejections, unless the team is clearly disastrous.
+- If you are NOT on this proposed team (i.e., {{#unless (isPlayerOnTeam virtualPlayer.id gameContext.proposedTeamIds)}}you are not on the team{{else}}you are on the team{{/unless}}): Be more critical. If you have significant doubts about any member of the proposed team, or if you believe a better team composition is likely with the next captain, you should vote 'reject'. However, if the number of rejections this round ({{gameContext.captainChangesThisRound}}) is high (e.g., 3 or more out of {{gameContext.maxCaptainChangesPerRound}}), you should be more inclined to vote 'approve' to avoid losing the round due to excessive rejections, unless the team is clearly disastrous.
 - Consider the current round number and mission player count. Early rounds with fewer players are less risky.
 - If a team has failed previously, be more suspicious of players from that failed team.
 - If the captaincy has changed many times this round ({{gameContext.captainChangesThisRound}} out of {{gameContext.maxCaptainChangesPerRound}}), the situation is becoming dire. Approving a less-than-ideal team might be necessary to avoid losing by too many rejections, unless you are very confident it's a bad team.
@@ -143,14 +156,17 @@ Strategy:
 
 {{#if (eq virtualPlayer.role "卧底")}}
 You are an {{virtualPlayer.role}}. Your goal is to sabotage missions or cause enough team rejections to win. You know your fellow Undercover agents.
+Your fellow Undercovers: {{#each gameContext.allPlayers}}{{#if (and (eq this.role "卧底") (not (eq this.id ../virtualPlayer.id))) }}{{this.name}} (ID: {{this.id}}), {{/if}}{{/each}}
+
 Strategy:
-- Identify if you or any fellow Undercover agents are on the proposed team.
-  Your fellow Undercovers: {{#each gameContext.allPlayers}}{{#if (and (eq this.role "卧底") (not (eq this.id ../virtualPlayer.id))) }}{{this.name}}, {{/if}}{{/each}}
-- If the proposed team includes at least one Undercover (yourself or an ally): Generally vote 'approve' to get Undercovers on missions.
-- If the proposed team consists ONLY of Team Members (and/or the Coach): Generally vote 'reject' to prevent them from succeeding, unless:
-  - Rejecting would be too suspicious (e.g., you're the only one rejecting, or it's early game).
-  - Rejections this round ({{gameContext.captainChangesThisRound}}) are very high (e.g., one away from {{gameContext.maxCaptainChangesPerRound}}), and your rejection would make Undercovers win. In this specific case, voting 'approve' for a non-Undercover team might be a strategic way to make Team Members lose the round by rejections.
-- Try to appear like a Team Member in your voting patterns if it benefits your long-term strategy.
+1.  **Assess the Proposed Team:** Check if any Undercover agent (yourself - ID {{virtualPlayer.id}} - or any of your fellow Undercovers listed above) is on the \`gameContext.proposedTeamIds\`.
+2.  **Decision Logic:**
+    *   **If the proposed team INCLUDES at least one Undercover (yourself or an ally):** Your primary goal is to get Undercovers onto missions to potentially sabotage them. Therefore, vote 'approve'.
+    *   **If the proposed team DOES NOT INCLUDE any Undercover agents (i.e., it consists only of Team Members and/or the Coach):**
+        *   Your primary goal is to prevent Team Members from succeeding. Therefore, your default action is to vote 'reject'.
+        *   **Critical Exception:** If the number of rejections this round (\\\`{{gameContext.captainChangesThisRound}}\\\`) is exactly \\\`{{gameContext.maxRejectionsBeforeLoss}}\\\`, and your 'reject' vote would cause the Team Members to lose the round due to too many rejections (thus giving the Undercover faction an immediate win for the game or round), then strategically vote 'approve'. This forces the Team Members to lose by rejections.
+        *   In all other scenarios where no Undercover is on the team, stick to voting 'reject'.
+    *   Try to make your vote appear plausible if it aligns with these core strategies, but prioritize actions that lead to an Undercover victory.
 {{/if}}
 
 Output your decision and a brief reasoning. Your response MUST be a JSON object matching this Zod schema:
@@ -177,6 +193,9 @@ const virtualPlayerVoteFlow = ai.defineFlow(
     outputSchema: VirtualPlayerVoteOutputSchema,
   },
   async (input) => {
+    // Log the input being sent to the prompt for debugging
+    // console.log('AI VOTE FLOW INPUT:', JSON.stringify(input, null, 2));
+
     const { output, usage } = await virtualPlayerVotePrompt(input);
     if (!output || (output.vote !== 'approve' && output.vote !== 'reject')) {
       console.warn("AI failed to provide a valid vote. Defaulting to 'approve'. AI Output:", JSON.stringify(output), "Input:", JSON.stringify(input));
@@ -193,5 +212,3 @@ const virtualPlayerVoteFlow = ai.defineFlow(
 export async function decideVirtualPlayerVote(input: VirtualPlayerVoteInput): Promise<VirtualPlayerVoteOutput> {
   return virtualPlayerVoteFlow(input);
 }
-
-    
