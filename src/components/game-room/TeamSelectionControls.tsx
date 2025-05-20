@@ -40,7 +40,6 @@ export function TeamSelectionControls({
           {requiredPlayersForCurrentMission}
         </span>{" "}
         名玩家。
-        {isHumanCaptain ? "" : `等待队长 ${currentCaptainName || ''} 在左侧玩家列表中选择队员...`}
       </p>
       
       {isHumanCaptain && (
@@ -54,7 +53,7 @@ export function TeamSelectionControls({
         </Button>
       )}
        {!isHumanCaptain && !isVirtualCaptain && (
-         <p className="text-center text-muted-foreground py-4">等待队长 <span className="font-semibold text-primary">{currentCaptainName}</span> 在左侧玩家列表中选择队员...</p>
+         <p className="text-center text-muted-foreground py-4">等待队长 <span className="font-semibold text-primary">{currentCaptainName}</span> 选择队员...</p>
        )}
     </div>
   );
