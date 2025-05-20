@@ -21,7 +21,15 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
 
   const hostName = localPlayers.find(p => p.id === room.hostId)?.name || '未知';
 
-  const displayStatus = room.status === GameRoomStatus.InProgress ? "游戏中" : room.status === GameRoomStatus.Waiting ? "等待中" : room.status.toUpperCase();
+  let displayStatus = room.status.toUpperCase();
+  if (room.status === GameRoomStatus.InProgress) {
+    displayStatus = "游戏中";
+  } else if (room.status === GameRoomStatus.Waiting) {
+    displayStatus = "等待中";
+  } else if (room.status === GameRoomStatus.Finished) {
+    displayStatus = "游戏结束";
+  }
+
 
   return (
     <Card className="shadow-xl">
@@ -42,7 +50,7 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={onPromptTerminateGame} // Changed to trigger dialog
+                onClick={onPromptTerminateGame} 
                 className="transition-transform hover:scale-105 active:scale-95"
                 title="终止游戏"
               >

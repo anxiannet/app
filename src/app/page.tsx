@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase"; // Firebase client SDK
-import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, Timestamp } from "firebase/firestore";
+import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, Timestamp, doc, deleteDoc } from "firebase/firestore";
 
 export default function LobbyPage() {
   const [rooms, setRooms] = useState<GameRoom[]>([]);
@@ -30,14 +30,35 @@ export default function LobbyPage() {
     const roomsCollection = collection(db, "rooms");
     const q = query(roomsCollection, orderBy("createdAt", "desc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       let fetchedRooms: GameRoom[] = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         players: doc.data().players || [], 
       } as GameRoom));
 
-      fetchedRooms = fetchedRooms.filter(room => room.status !== GameRoomStatus.Finished && room.players.length > 0);
+      // Auto-close empty rooms
+      const roomsToDelete: string[] = [];
+      fetchedRooms = fetchedRooms.filter(room => {
+        if ((!room.players || room.players.length === 0) && room.status === GameRoomStatus.Waiting) {
+          roomsToDelete.push(room.id);
+          return false; 
+        }
+        return true;
+      });
+
+      for (const roomIdToDelete of roomsToDelete) {
+        try {
+          await deleteDoc(doc(db, "rooms", roomIdToDelete));
+          console.log(`Room ${roomIdToDelete} deleted because it was empty.`);
+        } catch (error) {
+          console.error(`Error deleting empty room ${roomIdToDelete}:`, error);
+        }
+      }
+      
+      // Filter out finished rooms
+      fetchedRooms = fetchedRooms.filter(room => room.status !== GameRoomStatus.Finished);
+
 
       const statusPriority: { [key in GameRoomStatus]: number } = {
         [GameRoomStatus.InProgress]: 1,
@@ -72,7 +93,7 @@ export default function LobbyPage() {
     const newRoomName = `房间 ${Math.floor(Math.random() * 1000) + 1}`; 
     const newRoomData: Omit<GameRoom, "id"> = { 
       name: newRoomName,
-      players: [{ ...user }], 
+      players: [{ id: user.id, name: user.name, avatarUrl: user.avatarUrl || undefined }], 
       maxPlayers: 10,
       status: GameRoomStatus.Waiting,
       hostId: user.id,
@@ -127,7 +148,16 @@ export default function LobbyPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
-              const displayStatus = room.status === GameRoomStatus.InProgress ? "游戏中" : room.status.toUpperCase();
+              
+              let displayStatus = room.status.toUpperCase();
+              if (room.status === GameRoomStatus.InProgress) {
+                displayStatus = "游戏中";
+              } else if (room.status === GameRoomStatus.Waiting) {
+                displayStatus = "等待中";
+              } else if (room.status === GameRoomStatus.Finished) {
+                displayStatus = "游戏结束";
+              }
+
 
               return (
                 <Card
@@ -158,6 +188,7 @@ export default function LobbyPage() {
                         "ml-1 font-semibold",
                         room.status === GameRoomStatus.Waiting && "border-yellow-500 text-yellow-600",
                         room.status === GameRoomStatus.InProgress && "bg-green-500 text-white",
+                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white"
                       )}>{displayStatus}</Badge>
                     </div>
                     <Image
