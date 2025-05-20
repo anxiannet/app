@@ -77,8 +77,17 @@ export default function LobbyPage() {
       };
 
       fetchedRooms.sort((a, b) => {
+        const isUserInA = user && a.players.some(p => p.id === user.id);
+        const isUserInB = user && b.players.some(p => p.id === user.id);
+
+        if (isUserInA && !isUserInB) return -1; // A comes first
+        if (!isUserInA && isUserInB) return 1;  // B comes first
+
+        // If both are joined or both are not joined, sort by status
         const statusDiff = statusPriority[a.status] - statusPriority[b.status];
         if (statusDiff !== 0) return statusDiff;
+        
+        // If status is the same, sort by player count (descending)
         return (b.players?.length || 0) - (a.players?.length || 0);
       });
 
@@ -213,7 +222,6 @@ export default function LobbyPage() {
                           data-ai-hint="game concept art"
                         />
                       </CardContent>
-                      {/* CardFooter and explicit Join/Return button removed */}
                     </Card>
                   </a>
                 </Link>
@@ -225,3 +233,4 @@ export default function LobbyPage() {
     </div>
   );
 }
+
