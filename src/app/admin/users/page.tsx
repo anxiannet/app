@@ -145,10 +145,16 @@ export default function PlayerManagementPage() {
             const errorData = await response.json();
             errorMessage = errorData.message || errorMessage;
           } else {
-            // If not JSON, it might be an HTML error page from Next.js or server
             const errorText = await response.text();
             console.error("Server returned non-JSON error response:", errorText);
-            // Keep generic message, or you could try to extract a title from HTML if needed
+            // Try to extract a more meaningful message from common HTML error patterns
+            if (errorText.includes("The default Firebase app does not exist")) {
+                errorMessage = "Server Error: Firebase Admin SDK not initialized. Check server logs and ensure GOOGLE_APPLICATION_CREDENTIALS is set correctly for the server environment.";
+            } else if (response.status === 500) {
+                errorMessage = "Internal Server Error (500). Please check server logs for more details.";
+            } else {
+                errorMessage = `API request failed with status ${response.status}.`;
+            }
           }
         } catch (parseError) {
           // This catch is for errors during parsing of the error response itself
@@ -169,8 +175,8 @@ export default function PlayerManagementPage() {
       });
     } catch (err) {
       console.error("Error updating admin status:", err);
-      const errorMessage = err instanceof Error ? err.message : "操作失败";
-      toast({ title: "更新失败", description: errorMessage, variant: "destructive" });
+      const finalErrorMessage = err instanceof Error ? err.message : "操作失败";
+      toast({ title: "更新失败", description: finalErrorMessage, variant: "destructive" });
     } finally {
       setUpdatingAdminStatus(null);
     }
