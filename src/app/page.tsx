@@ -193,19 +193,9 @@ export default function LobbyPage() {
                         </Badge>
                       )}
                     </div>
-                    {/* CardDescription for max players removed */}
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <div className="flex items-center">
-                        <Users className="mr-2 h-4 w-4" />
-                        <span>{room.players.length} / {room.maxPlayers} 玩家</span>
-                      </div>
-                       <Badge variant={displayStatusVariant} className={cn("font-semibold", displayStatusClass)}>
-                        {displayStatusText}
-                      </Badge>
-                    </div>
-                    {/* Status display div removed */}
+                    {/* Player count and status badge removed */}
                     <Image
                       src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}
                       alt={room.name}
