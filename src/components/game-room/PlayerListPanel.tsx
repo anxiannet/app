@@ -72,7 +72,8 @@ export function PlayerListPanel({
               
               const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) && 
                                       (room.currentPhase === 'team_voting' || 
-                                       room.currentPhase === 'mission_execution');
+                                       room.currentPhase === 'mission_execution' ||
+                                       room.currentPhase === 'mission_reveal'); // Added mission_reveal
               
               const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
               const canBeSelected = isSelectionModeActive && (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
@@ -110,7 +111,7 @@ export function PlayerListPanel({
                   </div>
 
                   <span className="font-medium text-sm text-center mt-2 truncate w-full">{p.name}</span>
-                  {isCurrentUser && <span className="text-xs text-muted-foreground">(You)</span>}
+                  {/* The (You) indicator was here and has been removed */}
 
                   <div className="flex items-center space-x-1 mt-1.5 h-5"> {/* Fixed height for badges container */}
                     {playerVote && (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_execution' || room.currentPhase === 'coach_assassination' || room.currentPhase === 'game_over' || room.currentPhase === 'mission_reveal') && (
@@ -118,7 +119,7 @@ export function PlayerListPanel({
                         {playerVote === 'approve' ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
                       </Badge>
                     )}
-                    {missionCardPlayed && (
+                    {missionCardPlayed && room.status === GameRoomStatus.Finished && (
                       <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
                          {missionCardPlayed === 'success' ? <MissionCardSuccessIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
                       </Badge>
