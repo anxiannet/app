@@ -37,7 +37,6 @@ export default function LobbyPage() {
         players: doc.data().players || [],
       } as GameRoom));
 
-      // Auto-close empty rooms
       const roomsToDelete: string[] = [];
       fetchedRooms = fetchedRooms.filter(room => {
         if ((!room.players || room.players.length === 0) && room.status === GameRoomStatus.Waiting) {
@@ -57,16 +56,15 @@ export default function LobbyPage() {
         }
       }
       
-      // Filter rooms based on status and user participation
       fetchedRooms = fetchedRooms.filter(room => {
         if (room.status === GameRoomStatus.Finished) {
-          return false; // Always hide finished rooms
+          return false; 
         }
         if (room.status === GameRoomStatus.InProgress) {
-          if (!user) return false; // Hide in-progress rooms if user is not logged in
-          return room.players.some(p => p.id === user.id); // Show only if user is a player
+          if (!user) return false; 
+          return room.players.some(p => p.id === user.id); 
         }
-        return true; // Show waiting rooms
+        return true; 
       });
 
 
@@ -185,17 +183,24 @@ export default function LobbyPage() {
                   )}
                 >
                   <CardHeader>
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-start">
                       <CardTitle className="text-primary truncate">{room.name}</CardTitle>
-                      {isUserInRoom && (
-                        <Badge variant="secondary" className="ml-2 bg-primary/20 text-primary border-primary/50">
-                          <CheckSquare className="mr-1 h-3 w-3" /> 已加入
+                      <div className="flex items-center space-x-2">
+                        <Badge variant={displayStatusVariant} className={cn("text-xs", displayStatusClass)}>
+                          {displayStatusText}
                         </Badge>
-                      )}
+                        {isUserInRoom && (
+                          <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/50">
+                            <CheckSquare className="mr-1 h-3 w-3" /> 已加入
+                          </Badge>
+                        )}
+                      </div>
                     </div>
+                     <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
+                        <Users className="mr-2 h-4 w-4" /> {room.players?.length || 0} / {room.maxPlayers} 玩家
+                      </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {/* Player count and status badge removed */}
                     <Image
                       src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}
                       alt={room.name}
