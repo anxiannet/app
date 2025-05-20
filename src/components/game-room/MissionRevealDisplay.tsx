@@ -23,7 +23,6 @@ export function MissionRevealDisplay({
   const roundText = currentRound !== undefined ? `第 ${currentRound} 场比赛` : "本场比赛";
   return (
     <div className="space-y-3 text-center">
-      {/* <h3 className="text-lg font-semibold">比赛结果揭晓!</h3> Removed this heading */}
       {missionOutcomeForDisplay === 'success' ? (
         <p className="text-2xl font-bold text-green-500 flex items-center justify-center">
           <CheckCircle2 className="mr-2 h-8 w-8"/> {roundText}：胜利!
@@ -34,11 +33,12 @@ export function MissionRevealDisplay({
             <XCircle className="mr-2 h-8 w-8"/> {roundText}：战败!
           </p>
           {generatedFailureReason && generatedFailureReason.narrativeSummary ? (
-            <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow">
-              <p className="font-semibold mb-1">可能原因分析:</p>
-              <p>{generatedFailureReason.narrativeSummary}</p>
+            <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-left">
+              <p>
+                <span className="font-semibold">原因分析:</span> {generatedFailureReason.narrativeSummary}
+              </p>
               {generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 0 && (
-                <ul className="list-disc list-inside text-left mt-2 text-xs pl-4">
+                <ul className="list-disc list-inside mt-2 text-xs pl-4">
                   {generatedFailureReason.selectedReasons.map((reason, index) => (
                     <li key={index}>{reason}</li>
                   ))}
@@ -59,4 +59,3 @@ export function MissionRevealDisplay({
     </div>
   );
 }
-
