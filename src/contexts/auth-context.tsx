@@ -105,10 +105,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error: any) {
       console.error("Login error:", error);
       let errorMessage = "登录失败，请稍后再试。";
-      if (error.code === "auth/user-not-found" || error.code === "auth/invalid-credential") {
-        errorMessage = "昵称或密码错误。";
-      } else if (error.code === "auth/wrong-password") {
-        errorMessage = "密码错误。";
+      if (error.code === "auth/invalid-credential" || 
+          error.code === "auth/user-not-found" || 
+          error.code === "auth/wrong-password") {
+        errorMessage = "您输入的昵称或密码不正确，请检查后重试。";
       } else if (error.code === "auth/invalid-email") {
         errorMessage = "昵称格式无效 (不能用作邮箱)。"
       } else if (error.code === "auth/configuration-not-found") {
@@ -195,5 +195,7 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+    
 
     
