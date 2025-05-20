@@ -34,17 +34,19 @@ export function TeamVotingControls({
 }: TeamVotingControlsProps) {
   return (
     <div className="space-y-3">
+      {/* Removed redundant display:
       <div className="mb-2 text-center text-sm text-muted-foreground p-2 bg-background/50 rounded-md border">
         {currentRound !== undefined && captainChangesThisRound !== undefined && (
           <p>第 {currentRound} 场比赛，第 {captainChangesThisRound + 1} 次组队</p>
         )}
       </div>
+      */}
       <h3 className="text-lg font-semibold text-center">为队伍投票</h3>
       <p className="text-center text-muted-foreground">队长 <span className="font-bold text-accent">{currentCaptainName}</span> 提议以下队伍执行比赛:</p>
       <ul className="text-center font-medium list-disc list-inside bg-muted/30 p-2 rounded-md">{proposedTeamNames.join(', ')}</ul>
       {votesToDisplay.length > 0 && (
         <p className="text-xs text-center text-muted-foreground">
-          已投票: {votesToDisplay.filter(v => v.vote === 'approve').length} 同意, {votesToDisplay.filter(v => v.vote === 'reject').length} 拒绝. 
+          已投票: {votesToDisplay.filter(v => v.vote === 'approve').length} 同意, {votesToDisplay.filter(v => v.vote === 'reject').length} 拒绝.
           ({realPlayersCount - realPlayersVotedCount} 人未投票)
         </p>
       )}
@@ -53,7 +55,7 @@ export function TeamVotingControls({
           <Button onClick={() => onPlayerVote('approve')} className="bg-green-500 hover:bg-green-600 text-white"><ThumbsUp className="mr-2 h-5 w-5"/> 同意</Button>
           <Button onClick={() => onPlayerVote('reject')} variant="destructive"><ThumbsDown className="mr-2 h-5 w-5"/> 拒绝</Button>
         </div>
-      ) : (!isCurrentUserVirtual && userVote && 
+      ) : (!isCurrentUserVirtual && userVote &&
         <p className="text-center text-green-600 font-semibold">你已投票: {userVote === 'approve' ? '同意' : '拒绝'}</p>
       )}
       {realPlayersVotedCount < realPlayersCount && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
