@@ -45,9 +45,7 @@ export function AuthButton() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              玩家 ID: {user.id}
-            </p>
+            {/* Player ID display removed */}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
