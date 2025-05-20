@@ -26,7 +26,7 @@ export function AuthButton() {
   if (!user) {
     return (
       <Button asChild className="transition-transform hover:scale-105 active:scale-95">
-        <Link href="/login">Login</Link>
+        <Link href="/login">登录</Link>
       </Button>
     );
   }
