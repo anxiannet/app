@@ -2,18 +2,57 @@
 'use server';
 /**
  * @fileOverview AI agent for virtual captain team proposal.
- * This flow is currently NOT USED as AI decision-making has been simplified.
- * Keeping the file structure for potential future re-integration.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { Role } from '@/lib/types';
-// import type { PlayerPerspective, Mission } from '@/lib/types'; PlayerPerspective removed
-// import Handlebars from 'handlebars';
+import { Role, type PlayerPerspective as PlayerPerspectiveType } from '@/lib/types'; // Renamed import to avoid conflict
+import Handlebars from 'handlebars';
+
+// Define PlayerPerspective locally to ensure it's what we expect for the schema
+const PlayerPerspectiveSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  role: z.nativeEnum(Role).optional().describe("Role of this player, if known to the virtual player."),
+  avatarUrl: z.string().optional(),
+});
+type PlayerPerspective = z.infer<typeof PlayerPerspectiveSchema>;
 
 
-// Placeholder Schemas (not actively used by game logic if AI is disabled)
+// Register Handlebars helpers
+if (typeof Handlebars.helpers['findPlayerNameById'] === 'undefined') {
+  Handlebars.registerHelper('findPlayerNameById', function (playerId, playersList) {
+    if (!Array.isArray(playersList)) {
+      console.warn('[Handlebars Helper] findPlayerNameById: playersList is not an array. PlayerId:', playerId, 'List:', playersList);
+      return `未知玩家(${playerId ? String(playerId).slice(0,5) : 'N/A'})`;
+    }
+    const player = playersList.find((p: PlayerPerspective) => p.id === playerId);
+    return player ? player.name : `未知玩家(${playerId ? String(playerId).slice(0,5) : 'N/A'})`;
+  });
+}
+if (typeof Handlebars.helpers['eq'] === 'undefined') {
+  Handlebars.registerHelper('eq', function (a, b) { return a === b; });
+}
+if (typeof Handlebars.helpers['gt'] === 'undefined') {
+  Handlebars.registerHelper('gt', function (a, b) { return a > b; });
+}
+if (typeof Handlebars.helpers['lookup'] === 'undefined') {
+  Handlebars.registerHelper('lookup', function (obj, field) { return obj && obj[field]; });
+}
+if (typeof Handlebars.helpers['findIndex'] === 'undefined') {
+  Handlebars.registerHelper('findIndex', function<T>(array: T[], predicateFn: (item: T, index: number, array: T[]) => boolean) {
+    if (!Array.isArray(array)) return -1;
+    return array.findIndex(predicateFn);
+  });
+}
+if (typeof Handlebars.helpers['isPlayerOnTeam'] === 'undefined') {
+  Handlebars.registerHelper('isPlayerOnTeam', function (playerId, teamPlayerIds) {
+    if (!Array.isArray(teamPlayerIds)) return false;
+    return teamPlayerIds.includes(playerId);
+  });
+}
+
+
 const AiProposeTeamInputSchema = z.object({
   virtualCaptain: z.object({
     id: z.string(),
@@ -23,13 +62,8 @@ const AiProposeTeamInputSchema = z.object({
   gameContext: z.object({
     currentRound: z.number(),
     requiredPlayersForMission: z.number().describe("The exact number of players to select for the mission."),
-    allPlayers: z.array(
-      z.object({ // Simplified from PlayerPerspective
-        id: z.string(),
-        name: z.string(),
-        role: z.nativeEnum(Role).optional().describe("Role of this player, if known to the virtual captain."),
-      })
-    ).describe("List of all players in the game, with roles revealed according to the virtual captain's perspective."),
+    allPlayers: z.array(PlayerPerspectiveSchema)
+      .describe("List of all players in the game, with roles revealed according to the virtual captain's perspective."),
     missionHistory: z.array(
       z.object({
         round: z.number(),
@@ -57,42 +91,155 @@ const AiProposeTeamOutputSchema = z.object({
 });
 export type AiProposeTeamOutput = z.infer<typeof AiProposeTeamOutputSchema>;
 
+const promptTemplate = `
+You are an AI agent acting as the captain in the social deduction game '暗线' (Anxian). Your goal is to propose a mission team of exactly {{gameContext.requiredPlayersForMission}} players to help your faction win.
 
-// The actual AI decision logic is removed/commented out from the game.
-// This function would not be called if AI decision-making is disabled.
+Your Captain Details:
+- Name: {{virtualCaptain.name}} (ID: {{virtualCaptain.id}})
+- Role: {{virtualCaptain.role}}
+
+Game Context:
+- Current Round: {{gameContext.currentRound}}
+- Players to Select for Mission: {{gameContext.requiredPlayersForMission}}
+- All Players (from your perspective):
+  {{#each gameContext.allPlayers}}
+  - {{this.name}} (ID: {{this.id}}){{#if this.role}}, Role (Known to you): {{this.role}}{{/if}}
+  {{/each}}
+- Current Team Scores: Team Members {{gameContext.teamScores.teamMemberWins}} - Undercovers {{gameContext.teamScores.undercoverWins}}
+- Captain changes this round: {{gameContext.captainChangesThisRound}} (out of max {{gameContext.maxCaptainChangesPerRound}})
+
+Mission History (from your perspective):
+{{#each gameContext.missionHistory}}
+  Round {{this.round}}:
+  - Captain: {{findPlayerNameById this.captainId ../gameContext.allPlayers}}
+  - Team: {{#each this.teamPlayerIds}}{{findPlayerNameById this ../../gameContext.allPlayers}}, {{/each}}
+  - Outcome: {{this.outcome}}
+  {{#if this.failCardsPlayed}}
+  - Fail Cards: {{this.failCardsPlayed}}
+  {{/if}}
+{{else}}
+  No mission history yet.
+{{/each}}
+
+Strategic Considerations for Team Proposal based on your Role:
+
+{{#if (eq virtualCaptain.role "队员")}}
+You are a {{virtualCaptain.role}}. Your primary goal is to help the Team Members win.
+Strategy:
+- Select yourself (ID: {{virtualCaptain.id}}) for the team.
+- Select other players you believe are Team Members.
+- Avoid players you suspect are Undercover based on past mission failures or voting patterns.
+- Prioritize players who have not been on many failed missions.
+- If unsure, try to distribute mission participation.
+- Ensure you select exactly {{gameContext.requiredPlayersForMission}} players.
+{{/if}}
+
+{{#if (eq virtualCaptain.role "教练")}}
+You are the {{virtualCaptain.role}}. You know who the Undercover agents are. Your goal is to ensure missions succeed by forming a team of only Team Members (and possibly yourself).
+Known Undercover Agents (from your perspective):
+{{#each gameContext.allPlayers}}
+  {{#if (eq this.role "卧底")}}
+  - {{this.name}} (ID: {{this.id}})
+  {{/if}}
+{{/each}}
+Strategy:
+- You MUST NOT select any known Undercover agents for the mission team.
+- Select yourself (ID: {{virtualCaptain.id}}) for the team.
+- Fill the remaining {{subtract gameContext.requiredPlayersForMission 1}} spots with players you know are *not* Undercover (i.e., Team Members).
+- If you do not have enough non-Undercover players (excluding yourself) to fill the team, this is a critical situation for the prompt writer, but you must still select exactly {{gameContext.requiredPlayersForMission}} players *excluding* any known Undercovers. This might mean selecting fewer non-Undercovers than ideal if the player count is very low and Undercover count is high.
+- Your primary objective is a mission success; therefore, proposing a team entirely of Team Members (and yourself) is paramount.
+- Ensure you select exactly {{gameContext.requiredPlayersForMission}} players.
+{{/if}}
+
+{{#if (eq virtualCaptain.role "卧底")}}
+You are an {{virtualCaptain.role}}. Your goal is to sabotage missions or make the Team Members lose. You know your fellow Undercover agents.
+Your fellow Undercovers (from your perspective):
+{{#each gameContext.allPlayers}}
+  {{#if (and (eq this.role "卧底") (not (eq this.id ../virtualCaptain.id)))}}
+  - {{this.name}} (ID: {{this.id}}),
+  {{/if}}
+{{/each}}
+Strategy:
+- Select yourself (ID: {{virtualCaptain.id}}) for the team. This is usually the best way to ensure an Undercover is on the mission.
+- If possible, select one other fellow Undercover for the team, especially if the mission requires multiple fail cards or if you want to spread suspicion.
+- Fill the remaining spots with Team Members to make the team look plausible. Avoid picking too many known/strong Team Members if it makes the team too obviously good.
+- Try to make your selections seem logical to others (e.g., based on who hasn't been on missions recently, or distributing participation).
+- Ensure you select exactly {{gameContext.requiredPlayersForMission}} players.
+{{/if}}
+
+Output your decision as a JSON object containing an array of player IDs and a brief reasoning.
+The array \`selectedPlayerIds\` MUST contain exactly {{gameContext.requiredPlayersForMission}} unique player IDs.
+Your response MUST be a JSON object matching this Zod schema:
+\`\`\`json
+{{{outputSchema}}}
+\`\`\`
+Example: { "selectedPlayerIds": ["player_id_1", "player_id_2"], "reasoning": "Selected myself and a trustworthy player." }
+
+Your team proposal:
+`;
+
+// Register the 'subtract' helper
+Handlebars.registerHelper('subtract', function(a, b) {
+  return a - b;
+});
+
+const aiProposeTeamPrompt = ai.definePrompt({
+  name: 'aiProposeTeamPrompt',
+  input: { schema: AiProposeTeamInputSchema },
+  output: { schema: AiProposeTeamOutputSchema },
+  prompt: (input) => Handlebars.compile(promptTemplate)({ ...input, outputSchema: JSON.stringify(AiProposeTeamOutputSchema.jsonSchema, null, 2) }),
+});
+
+const aiProposeTeamFlow = ai.defineFlow(
+  {
+    name: 'aiProposeTeamFlow',
+    inputSchema: AiProposeTeamInputSchema,
+    outputSchema: AiProposeTeamOutputSchema,
+  },
+  async (input) => {
+    const { output, usage } = await aiProposeTeamPrompt(input);
+    if (!output || !output.selectedPlayerIds || output.selectedPlayerIds.length !== input.gameContext.requiredPlayersForMission) {
+      const expectedCount = input.gameContext.requiredPlayersForMission;
+      const actualCount = output?.selectedPlayerIds?.length || 0;
+      console.warn(
+        `AI failed to provide a valid team proposal or correct number of players. Expected ${expectedCount}, got ${actualCount}. Defaulting to a random selection including self. AI Output:`, 
+        JSON.stringify(output), 
+        "Input:", 
+        JSON.stringify(input, (key, value) => key === 'allPlayers' ? `[${value.length} players]` : value) // Avoid logging all player details if too verbose
+      );
+      
+      // Fallback logic: select self and then random other players
+      let proposedTeamIds = [input.virtualCaptain.id];
+      const otherPlayerIds = input.gameContext.allPlayers
+        .filter(p => p.id !== input.virtualCaptain.id)
+        .map(p => p.id);
+
+      const shuffledOtherPlayers = [...otherPlayerIds].sort(() => 0.5 - Math.random());
+
+      while (proposedTeamIds.length < input.gameContext.requiredPlayersForMission && shuffledOtherPlayers.length > 0) {
+        proposedTeamIds.push(shuffledOtherPlayers.shift()!);
+      }
+       // If still not enough (e.g. very few players total), fill with any available, this should be rare.
+      const allPlayersShuffledForFallback = [...input.gameContext.allPlayers.map(p => p.id)].sort(() => 0.5 - Math.random());
+      while (proposedTeamIds.length < input.gameContext.requiredPlayersForMission && allPlayersShuffledForFallback.length > 0) {
+          const playerToAdd = allPlayersShuffledForFallback.shift()!;
+          if (!proposedTeamIds.includes(playerToAdd)) {
+              proposedTeamIds.push(playerToAdd);
+          }
+      }
+      // Final trim to ensure exact count
+      proposedTeamIds = proposedTeamIds.slice(0, input.gameContext.requiredPlayersForMission);
+
+
+      return {
+        selectedPlayerIds: proposedTeamIds,
+        reasoning: 'AI default due to invalid output or incorrect player count from LLM. Selected self and random others.',
+      };
+    }
+    return output;
+  }
+);
+
 export async function decideAiTeamProposal(input: AiProposeTeamInput): Promise<AiProposeTeamOutput> {
-    console.warn(`decideAiTeamProposal called for ${input.virtualCaptain.name}, but AI decision-making is disabled. Defaulting to random selection.`);
-    
-    const allPlayerIds = input.gameContext.allPlayers.map(p => p.id);
-    // Ensure captain is on the team if possible and not already over limit
-    let team = [];
-    if (input.gameContext.requiredPlayersForMission > 0 && !team.includes(input.virtualCaptain.id)) {
-        team.push(input.virtualCaptain.id);
-    }
-
-    const otherPlayers = allPlayerIds.filter(id => id !== input.virtualCaptain.id);
-    const shuffledOtherPlayers = [...otherPlayers].sort(() => 0.5 - Math.random());
-
-    while (team.length < input.gameContext.requiredPlayersForMission && shuffledOtherPlayers.length > 0) {
-        team.push(shuffledOtherPlayers.shift()!);
-    }
-    
-    // If team is still not full (e.g. captain was the only player or very few players)
-    // This case should ideally be handled by game rules (min players for mission > 0)
-    // For robustness, if team is still too small, fill with any available players (even if it means re-adding captain, though unlikely)
-    const allPlayersShuffled = [...allPlayerIds].sort(() => 0.5 - Math.random());
-    while (team.length < input.gameContext.requiredPlayersForMission && allPlayersShuffled.length > 0) {
-        const playerToAdd = allPlayersShuffled.shift()!;
-        if (!team.includes(playerToAdd)) {
-            team.push(playerToAdd);
-        }
-    }
-    // Final trim if somehow overfilled, though logic above should prevent this.
-    team = team.slice(0, input.gameContext.requiredPlayersForMission);
-
-
-  return {
-    selectedPlayerIds: team,
-    reasoning: 'AI decision-making disabled, defaulted to random selection including self.',
-  };
+  return aiProposeTeamFlow(input);
 }
