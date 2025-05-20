@@ -34,7 +34,7 @@ export default function LobbyPage() {
       let fetchedRooms: GameRoom[] = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        players: doc.data().players || [], 
+        players: doc.data().players || [],
       } as GameRoom));
 
       // Auto-close empty rooms
@@ -42,7 +42,8 @@ export default function LobbyPage() {
       fetchedRooms = fetchedRooms.filter(room => {
         if ((!room.players || room.players.length === 0) && room.status === GameRoomStatus.Waiting) {
           roomsToDelete.push(room.id);
-          return false; 
+          console.log(`Room ${room.id} marked for deletion as it is empty and waiting.`);
+          return false;
         }
         return true;
       });
@@ -56,8 +57,17 @@ export default function LobbyPage() {
         }
       }
       
-      // Filter out finished rooms
-      fetchedRooms = fetchedRooms.filter(room => room.status !== GameRoomStatus.Finished);
+      // Filter rooms based on status and user participation
+      fetchedRooms = fetchedRooms.filter(room => {
+        if (room.status === GameRoomStatus.Finished) {
+          return false; // Always hide finished rooms
+        }
+        if (room.status === GameRoomStatus.InProgress) {
+          if (!user) return false; // Hide in-progress rooms if user is not logged in
+          return room.players.some(p => p.id === user.id); // Show only if user is a player
+        }
+        return true; // Show waiting rooms
+      });
 
 
       const statusPriority: { [key in GameRoomStatus]: number } = {
@@ -81,7 +91,7 @@ export default function LobbyPage() {
     });
 
     return () => unsubscribe(); 
-  }, [authLoading, toast]);
+  }, [authLoading, user, toast]); // Added 'user' to dependency array for filtering
 
   const handleCreateRoom = async () => {
     if (!user) {
@@ -154,7 +164,7 @@ export default function LobbyPage() {
                 displayStatus = "游戏中";
               } else if (room.status === GameRoomStatus.Waiting) {
                 displayStatus = "等待中";
-              } else if (room.status === GameRoomStatus.Finished) {
+              } else if (room.status === GameRoomStatus.Finished) { // Should not happen due to filter
                 displayStatus = "游戏结束";
               }
 
@@ -188,7 +198,7 @@ export default function LobbyPage() {
                         "ml-1 font-semibold",
                         room.status === GameRoomStatus.Waiting && "border-yellow-500 text-yellow-600",
                         room.status === GameRoomStatus.InProgress && "bg-green-500 text-white",
-                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white"
+                        room.status === GameRoomStatus.Finished && "bg-gray-500 text-white" // Should not be seen
                       )}>{displayStatus}</Badge>
                     </div>
                     <Image
