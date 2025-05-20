@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Brain, Zap, CheckCircle2 as SelectedIcon, Target, Trash2 } from "lucide-react";
+import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Brain, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type PlayerListPanelProps = {
@@ -28,7 +28,7 @@ type PlayerListPanelProps = {
   selectedCoachCandidateId?: string | null;
   onSelectCoachCandidate?: (playerId: string) => void;
   assassinationTargetOptionsPlayerIds?: string[];
-  onRemoveVirtualPlayer?: (playerId: string) => void; // New prop
+  onRemoveVirtualPlayer?: (playerId: string) => void;
 };
 
 export function PlayerListPanel({ 
@@ -131,7 +131,7 @@ export function PlayerListPanel({
                       className="absolute top-0 right-0 h-6 w-6 text-destructive hover:bg-destructive/10 z-10"
                       onClick={(e) => {
                         e.stopPropagation(); // Prevent card click
-                        onRemoveVirtualPlayer(p.id);
+                        if (onRemoveVirtualPlayer) onRemoveVirtualPlayer(p.id);
                       }}
                       title={`移除 ${p.name}`}
                     >
@@ -199,5 +199,6 @@ export function PlayerListPanel({
 
 // Re-add mission card icons for clarity if they were accidentally removed
 const MissionCardSuccessIcon = CheckCircle2;
-const MissionCardFailIcon = Trash2; // Or XCircle, using Trash2 for consistency with remove icon, can be XCircle if preferred
+const MissionCardFailIcon = XCircle;
+
 
