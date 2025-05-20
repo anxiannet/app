@@ -20,18 +20,18 @@ export function MissionRevealDisplay({
   generatedFailureReason,
   onProceedToNextRoundOrGameOver,
 }: MissionRevealDisplayProps) {
-  const roundText = currentRound !== undefined ? `第 ${currentRound} 场比赛：` : "比赛：";
+  const roundText = currentRound !== undefined ? `第 ${currentRound} 场比赛` : "本场比赛";
   return (
     <div className="space-y-3 text-center">
-      <h3 className="text-lg font-semibold">比赛结果揭晓!</h3>
+      {/* <h3 className="text-lg font-semibold">比赛结果揭晓!</h3> Removed this heading */}
       {missionOutcomeForDisplay === 'success' ? (
         <p className="text-2xl font-bold text-green-500 flex items-center justify-center">
-          <CheckCircle2 className="mr-2 h-8 w-8"/> {roundText}胜利!
+          <CheckCircle2 className="mr-2 h-8 w-8"/> {roundText}：胜利!
         </p>
       ) : (
         <>
           <p className="text-2xl font-bold text-destructive flex items-center justify-center">
-            <XCircle className="mr-2 h-8 w-8"/> {roundText}战败!
+            <XCircle className="mr-2 h-8 w-8"/> {roundText}：战败!
           </p>
           {generatedFailureReason && generatedFailureReason.narrativeSummary ? (
             <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow">
@@ -59,3 +59,4 @@ export function MissionRevealDisplay({
     </div>
   );
 }
+
