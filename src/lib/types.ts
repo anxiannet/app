@@ -17,15 +17,6 @@ export type Player = User & {
   role?: Role;
 };
 
-// Represents a player's information from the perspective of another player (e.g., an AI agent)
-// Roles are only revealed if the viewing player is supposed to know them.
-export type PlayerPerspective = {
-  id: string;
-  name: string;
-  role?: Role; // This role is conditional based on the viewer's role
-};
-
-
 export enum GameRoomStatus {
   Waiting = "waiting",
   InProgress = "in-progress",
@@ -128,3 +119,4 @@ export type PlayerGameRecord = {
   fullVoteHistory?: VoteHistoryEntry[];
   missionHistory?: Mission[];
 };
+

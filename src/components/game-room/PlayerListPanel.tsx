@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Brain, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, CheckCircle2, XCircle } from "lucide-react";
+import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, CheckCircle2, XCircle } from "lucide-react"; // Removed Brain
 import { cn } from "@/lib/utils";
 
 type PlayerListPanelProps = {
@@ -58,7 +58,7 @@ export function PlayerListPanel({
       if (canBeSelectedCurrently) {
         onTogglePlayerForMission(playerId);
       }
-    } else if (isCoachAssassinationModeActive && onSelectCoachCandidate && assassinationTargetOptionsPlayerIds.includes(playerId)) {
+    } else if (isCoachAssassinationModeActive && onSelectCoachCandidate && assassinationTargetOptionsPlayerIds.includes(playerId) && currentUserRole === Role.Undercover) {
       onSelectCoachCandidate(playerId);
     }
   };
@@ -111,10 +111,15 @@ export function PlayerListPanel({
                 if (isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "border-primary ring-2 ring-primary bg-primary/10");
                 if (user.id === room.currentCaptainId && !canBeClickedForTeamSelection && !isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
               } else if (isCoachAssassinationModeActive) {
-                if (isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "cursor-pointer hover:border-destructive");
-                if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
-                if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
+                 if (currentUserRole === Role.Undercover) {
+                    if (isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "cursor-pointer hover:border-destructive");
+                    if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
+                    if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
+                 } else {
+                    cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed"); // Non-undercovers cannot select
+                 }
               }
+
 
               const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
 
@@ -130,7 +135,7 @@ export function PlayerListPanel({
                       size="icon"
                       className="absolute top-0 right-0 h-6 w-6 text-destructive hover:bg-destructive/10 z-10"
                       onClick={(e) => {
-                        e.stopPropagation(); // Prevent card click
+                        e.stopPropagation(); 
                         if (onRemoveVirtualPlayer) onRemoveVirtualPlayer(p.id);
                       }}
                       title={`移除 ${p.name}`}
@@ -146,9 +151,7 @@ export function PlayerListPanel({
                     {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
                       <Crown className="absolute -top-2 -right-2 h-6 w-6 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
                     )}
-                    {isVirtualPlayer && (
-                      <Brain className="absolute -bottom-1 -right-1 h-4 w-4 text-blue-400 bg-background rounded-full p-0.5" title="Virtual Player"/>
-                    )}
+                    {/* Brain icon removed for virtual players */}
                     {isOnMissionTeamForDisplay && (
                        <Zap className="absolute -top-2 -left-2 h-5 w-5 text-orange-400 bg-background rounded-full p-0.5" title="On Mission Team" />
                     )}
@@ -197,8 +200,5 @@ export function PlayerListPanel({
   );
 }
 
-// Re-add mission card icons for clarity if they were accidentally removed
 const MissionCardSuccessIcon = CheckCircle2;
 const MissionCardFailIcon = XCircle;
-
-

@@ -3,7 +3,7 @@
 
 import type { PlayerVote } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown, Brain } from "lucide-react"; // Added Brain
+import { ThumbsUp, ThumbsDown } from "lucide-react"; 
 
 type TeamVotingControlsProps = {
   votesToDisplay: PlayerVote[];
@@ -12,7 +12,7 @@ type TeamVotingControlsProps = {
   onPlayerVote: (vote: 'approve' | 'reject') => void;
   userVote?: 'approve' | 'reject';
   totalPlayerCountInRoom: number;
-  isAiVoting: boolean; // New prop
+  // isAiVoting: boolean; // AI logic removed
 };
 
 export function TeamVotingControls({
@@ -22,20 +22,12 @@ export function TeamVotingControls({
   onPlayerVote,
   userVote,
   totalPlayerCountInRoom,
-  isAiVoting, // New prop
+  // isAiVoting, // AI logic removed
 }: TeamVotingControlsProps) {
 
   const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom && totalPlayerCountInRoom > 0;
 
-  if (isAiVoting && !allVotesIn) {
-    return (
-      <div className="text-center p-4">
-        <p className="text-lg font-semibold text-primary flex items-center justify-center">
-          <Brain className="mr-2 h-5 w-5 animate-pulse" /> AI 正在投票...
-        </p>
-      </div>
-    );
-  }
+  // AI voting message removed
 
   if (allVotesIn) {
     const approveVotes = votesToDisplay.filter(v => v.vote === 'approve').length;
@@ -56,12 +48,16 @@ export function TeamVotingControls({
   }
 
   const humanPlayersVotedCount = votesToDisplay.filter(v => !v.playerId.startsWith("virtual_")).length;
-  const humanPlayersInRoom = totalPlayerCountInRoom - votesToDisplay.filter(v => v.playerId.startsWith("virtual_")).length; // Approximation
+  // Calculate total human players by subtracting virtual players from total players
+  const virtualPlayerCount = Array.from(new Set(votesToDisplay.filter(v => v.playerId.startsWith("virtual_")).map(v => v.playerId))).length;
+  const humanPlayersInRoom = totalPlayerCountInRoom - virtualPlayerCount;
+
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 pt-4"> {/* Added pt-4 for spacing */}
       
-      {votesToDisplay.length > 0 && humanPlayersVotedCount < humanPlayersInRoom && (
+      {/* Removed redundant captain/team display */}
+      {votesToDisplay.length > 0 && humanPlayersVotedCount < humanPlayersInRoom && humanPlayersInRoom > 0 && (
         <p className="text-xs text-center text-muted-foreground">
           ({humanPlayersInRoom - humanPlayersVotedCount} 名真实玩家未投票)
         </p>
@@ -74,7 +70,8 @@ export function TeamVotingControls({
       ) : (!isCurrentUserVirtual && userVote &&
         <p className="text-center text-green-600 font-semibold">你已投票: {userVote === 'approve' ? '同意' : '拒绝'}</p>
       )}
-      {humanPlayersVotedCount < humanPlayersInRoom && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
+      {humanPlayersInRoom > 0 && humanPlayersVotedCount < humanPlayersInRoom && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
+      {humanPlayersInRoom === 0 && votesToDisplay.length < totalPlayerCountInRoom && <p className="text-sm text-center text-muted-foreground">等待虚拟玩家投票...</p>}
     </div>
   );
 }

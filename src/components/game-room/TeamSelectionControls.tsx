@@ -2,36 +2,41 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { UsersRound, Brain } from "lucide-react"; // Added Brain icon
+import { UsersRound } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import type { Player } from "@/lib/types";
+import { CheckCircle2 as SelectedIcon } from "lucide-react";
+
 
 type TeamSelectionControlsProps = {
   currentCaptainName?: string;
   isHumanCaptain: boolean;
-  isAiActing: boolean; // New prop
+  // isAiActing: boolean; // AI logic removed
   requiredPlayersForCurrentMission: number;
   selectedMissionTeamLength: number;
   onHumanProposeTeam: () => void;
+  // Props below are for when PlayerListPanel is NOT used directly for selection
+  // localPlayersForSelection?: Player[];
+  // selectedPlayersForMission?: string[];
+  // onTogglePlayerForMission?: (playerId: string) => void;
 };
 
 export function TeamSelectionControls({
   currentCaptainName,
   isHumanCaptain,
-  isAiActing, // New prop
+  // isAiActing, // AI logic removed
   requiredPlayersForCurrentMission,
   selectedMissionTeamLength,
   onHumanProposeTeam,
+  // localPlayersForSelection = [],
+  // selectedPlayersForMission = [],
+  // onTogglePlayerForMission,
 }: TeamSelectionControlsProps) {
-  if (!isHumanCaptain && isAiActing) { // Show AI acting message if it's AI captain's turn
-    return (
-      <div className="text-center p-4">
-        <p className="text-lg font-semibold text-primary flex items-center justify-center">
-          <Brain className="mr-2 h-5 w-5 animate-pulse" /> {currentCaptainName} (AI) 正在选择队伍...
-        </p>
-      </div>
-    );
-  }
   
-  if (!isHumanCaptain && !isAiActing) { // Show waiting message if it's AI captain but AI is not yet acting (should be brief)
+  // AI acting message removed as AI decision logic is removed
+  if (!isHumanCaptain ) { 
      return (
          <p className="text-center text-muted-foreground py-4">等待队长 <span className="font-semibold text-primary">{currentCaptainName}</span> 选择队员...</p>
        );
@@ -48,12 +53,13 @@ export function TeamSelectionControls({
         </span>{" "}
         名玩家。
       </p>
+      {/* Selection list removed, selection now happens in PlayerListPanel */}
       
       {isHumanCaptain && (
         <Button
           onClick={onHumanProposeTeam}
           className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95"
-          disabled={selectedMissionTeamLength !== requiredPlayersForCurrentMission || isAiActing}
+          disabled={selectedMissionTeamLength !== requiredPlayersForCurrentMission}
         >
           <UsersRound className="mr-2 h-5 w-5" /> 提交队伍 (
           {selectedMissionTeamLength}/{requiredPlayersForCurrentMission})
