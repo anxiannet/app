@@ -109,6 +109,11 @@ export default function LobbyPage() {
       return;
     }
 
+    if (!user.isAdmin) {
+      toast({ title: "权限不足", description: "只有管理员才能创建房间。", variant: "destructive" });
+      return;
+    }
+
     const newRoomName = `房间 ${Math.floor(Math.random() * 1000) + 1}`; 
     const newRoomData: Omit<GameRoom, "id"> = { 
       name: newRoomName,
@@ -148,21 +153,24 @@ export default function LobbyPage() {
         <p className="mt-4 text-xl text-muted-foreground">
           解开谜团，揭露隐藏，赢取胜利。
         </p>
-        <div className="mt-8">
-          <Button
-            size="lg"
-            onClick={handleCreateRoom}
-            className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
-          >
-            <PlusCircle className="mr-2 h-6 w-6" /> 创建新房间
-          </Button>
-        </div>
+        {user?.isAdmin && (
+          <div className="mt-8">
+            <Button
+              size="lg"
+              onClick={handleCreateRoom}
+              className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
+              disabled={!user || !user.isAdmin}
+            >
+              <PlusCircle className="mr-2 h-6 w-6" /> 创建新房间
+            </Button>
+          </div>
+        )}
       </section>
 
       <section>
         <h2 className="text-3xl font-semibold mb-6 text-center text-foreground/80">可用房间</h2>
         {rooms.length === 0 ? (
-          <p className="text-center text-muted-foreground">暂无可用房间。创建一个吧？</p>
+          <p className="text-center text-muted-foreground">暂无可用房间。{user?.isAdmin ? "创建一个吧？" : ""}</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
@@ -233,4 +241,3 @@ export default function LobbyPage() {
     </div>
   );
 }
-
