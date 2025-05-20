@@ -9,7 +9,7 @@ import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, Us
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Added Card, CardContent
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { RoomHeader } from "@/components/game-room/RoomHeader";
 import { PlayerListPanel } from "@/components/game-room/PlayerListPanel";
@@ -40,10 +40,10 @@ const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: 
 const MISSIONS_CONFIG: { [playerCount: number]: number[] } = {
   5: [2, 3, 2, 3, 3],
   6: [2, 3, 4, 3, 4],
-  7: [2, 3, 3, 4, 4], // Rule: Round 4 with 7+ players needs 2 fail cards
-  8: [3, 4, 4, 5, 5], // Rule: Round 4 with 7+ players needs 2 fail cards
-  9: [3, 4, 4, 5, 5], // Rule: Round 4 with 7+ players needs 2 fail cards
-  10: [3, 4, 4, 5, 5], // Rule: Round 4 with 7+ players needs 2 fail cards
+  7: [2, 3, 3, 4, 4], 
+  8: [3, 4, 4, 5, 5], 
+  9: [3, 4, 4, 5, 5], 
+  10: [3, 4, 4, 5, 5], 
 };
 
 const MIN_PLAYERS_TO_START = 5;
@@ -85,24 +85,14 @@ export default function GameRoomPage() {
     if (!roomId || typeof roomId !== 'string') return;
     const roomRef = doc(db, "rooms", roomId);
 
-    const updatesForFirestore: { [key: string]: any } = {};
-    for (const key in rawUpdatedFields) {
-        if (Object.prototype.hasOwnProperty.call(rawUpdatedFields, key)) {
-            const value = rawUpdatedFields[key as keyof GameRoom];
-            if (value !== undefined || value === deleteField()) { 
-                updatesForFirestore[key] = value;
-            }
-        }
-    }
-    
-    if (Object.keys(updatesForFirestore).length === 0) {
-        return;
-    }
-
+    // The caller is responsible for ensuring `rawUpdatedFields` is clean.
+    // Specifically, for top-level fields, use `deleteField()` to remove them,
+    // or simply don't include the key if it's an optional field not being set.
+    // For objects within arrays (like in arrayUnion), ensure those objects are clean.
     try {
-        await updateDoc(roomRef, updatesForFirestore);
+        await updateDoc(roomRef, rawUpdatedFields);
     } catch (error) {
-        console.error("Error updating room in Firestore:", error, "Attempted updates:", updatesForFirestore, "Original input:", rawUpdatedFields);
+        console.error("Error updating room in Firestore:", error, "Attempted updates:", rawUpdatedFields);
         toast({ title: "更新房间失败", description: `无法在服务器上更新房间状态。Error: ${(error as Error).message}`, variant: "destructive" });
     }
   }, [roomId, toast]);
@@ -111,8 +101,8 @@ export default function GameRoomPage() {
   useEffect(() => {
     if (authLoading || !user || typeof roomId !== 'string') {
       if (!authLoading && !user) {
-        toast({ title: "需要登录", description: "请登录后访问房间。", variant: "destructive" });
-        router.push(`/login?redirect=/rooms/${roomId}`);
+        // Redirect handled by useAuth or login page usually. If still needed:
+        // router.push(`/login?redirect=/rooms/${roomId}`);
       }
       return;
     }
@@ -136,13 +126,11 @@ export default function GameRoomPage() {
             const playerExists = initialRoomData.players.some(p => p.id === user.id);
             
             if (!playerExists && initialRoomData.status === GameRoomStatus.Waiting && initialRoomData.players.length < initialRoomData.maxPlayers) {
-                const newPlayerForFirestore: { id: string; name: string; avatarUrl?: string } = {
+                const newPlayerForFirestore: Player = { // Ensure Player type is used
                     id: user.id,
                     name: user.name,
+                    ...(user.avatarUrl && { avatarUrl: user.avatarUrl }),
                 };
-                if (user.avatarUrl) {
-                    newPlayerForFirestore.avatarUrl = user.avatarUrl;
-                }
                 await updateDoc(roomRef, {
                     players: arrayUnion(newPlayerForFirestore)
                 });
@@ -176,7 +164,6 @@ export default function GameRoomPage() {
               totalRounds: roomData.totalRounds || TOTAL_ROUNDS_PER_GAME,
               maxCaptainChangesPerRound: roomData.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND,
               selectedTeamForMission: roomData.selectedTeamForMission || [],
-              generatedFailureReason: roomData.generatedFailureReason || undefined,
             };
             setRoom(validatedRoom);
              if (validatedRoom.selectedTeamForMission) {
@@ -351,19 +338,22 @@ export default function GameRoomPage() {
       }
     }
 
-    const missionRecord: Mission = {
+    const missionRecordData: Omit<Mission, 'generatedFailureReason'> & { generatedFailureReason?: GeneratedFailureReason } = {
       round: room.currentRound,
       captainId: room.currentCaptainId || "unknown_captain",
       teamPlayerIds: [...room.selectedTeamForMission],
       outcome: outcome,
       failCardsPlayed: failCardsPlayed,
-      cardPlays: [...finalPlays], 
-      generatedFailureReason: aiGeneratedFailureReason,
+      cardPlays: [...finalPlays],
     };
+
+    if (aiGeneratedFailureReason) {
+      missionRecordData.generatedFailureReason = aiGeneratedFailureReason;
+    }
 
     await updateFirestoreRoom({
         teamScores: newTeamScores,
-        missionHistory: arrayUnion(missionRecord) as any, 
+        missionHistory: arrayUnion(missionRecordData) as any, 
         currentPhase: 'mission_reveal',
         missionOutcomeForDisplay: outcome,
         failCardsPlayedForDisplay: failCardsPlayed,
@@ -458,10 +448,8 @@ export default function GameRoomPage() {
             id: playerData.id,
             name: playerData.name,
             role: rolesToAssign[index],
+            ...(playerData.avatarUrl && { avatarUrl: playerData.avatarUrl }),
         };
-        if (playerData.avatarUrl !== undefined) {
-            newPlayer.avatarUrl = playerData.avatarUrl;
-        }
         return newPlayer;
     });
     const firstCaptainIndex = Math.floor(Math.random() * updatedPlayers.length);
@@ -525,8 +513,9 @@ export default function GameRoomPage() {
     const virtualPlayerName = availableNames[Math.floor(Math.random() * availableNames.length)];
     const virtualPlayerId = `virtual_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     
-    const newVirtualPlayer: {id: string; name: string; avatarUrl?: string } = {
-      id: virtualPlayerId, name: virtualPlayerName,
+    const newVirtualPlayer: Player = { // Ensure Player type is used
+      id: virtualPlayerId, 
+      name: virtualPlayerName,
       avatarUrl: `https://placehold.co/100x100.png?text=${encodeURIComponent(virtualPlayerName.charAt(0))}`,
     };
     await updateFirestoreRoom({ players: arrayUnion(newVirtualPlayer) as any });
@@ -545,7 +534,6 @@ export default function GameRoomPage() {
     toast({ title: "队伍已提议", description: "玩家现在将对提议的队伍进行投票。" });
   };
 
-  // Updated for PlayerListPanel selection
   const handlePlayerSelectionForMission = (playerId: string) => {
     if (!room || !user || room.currentCaptainId !== user.id || room.currentPhase !== 'team_selection' || !room.missionPlayerCounts || room.currentRound === undefined) {
       return;
@@ -559,9 +547,7 @@ export default function GameRoomPage() {
         if (prevSelected.length < requiredPlayers) {
           return [...prevSelected, playerId];
         }
-        // Optional: toast if trying to select more than required
-        // toast({ title: "队伍选择已满", description: `此比赛只能选择 ${requiredPlayers} 名玩家。`});
-        return prevSelected; // Do not add if limit reached
+        return prevSelected;
       }
     });
   };
@@ -805,10 +791,13 @@ export default function GameRoomPage() {
     if (selectedCoachCandidate === actualCoach.id) {
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
+       // Keep undercoverWins as is, don't set to totalRounds
     } else {
       toastTitle = "指认失败！战队方获胜！";
       const wronglyAccusedPlayer = localPlayers.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
+      // Ensure teamMemberWins reflects their mission wins if assassination fails
+      // No change needed here if teamMemberWins was already >=3
     }
 
     const finalUpdates: Partial<GameRoom> = {
@@ -844,12 +833,12 @@ export default function GameRoomPage() {
         } else if (room.players.some(p => p.id === user.id)) { 
             const playerObjectInRoom = room.players.find(p => p.id === user.id);
             if (playerObjectInRoom) {
-              const cleanedPlayerObject: {id: string; name: string; avatarUrl?: string; role?: Role} = {
+              const cleanedPlayerObject: Player = { // Use Player type
                 id: playerObjectInRoom.id,
                 name: playerObjectInRoom.name,
+                ...(playerObjectInRoom.avatarUrl && { avatarUrl: playerObjectInRoom.avatarUrl }),
+                ...(playerObjectInRoom.role && { role: playerObjectInRoom.role }),
               };
-              if (playerObjectInRoom.avatarUrl !== undefined) cleanedPlayerObject.avatarUrl = playerObjectInRoom.avatarUrl;
-              if (playerObjectInRoom.role !== undefined) cleanedPlayerObject.role = playerObjectInRoom.role;
 
               try {
                   await updateDoc(roomRef, {
@@ -862,6 +851,7 @@ export default function GameRoomPage() {
               }
             }
         } else {
+             // If user not in room (e.g., already removed by another client's action), just toast
              toast({ title: "已返回大厅" });
         }
     } else {
@@ -882,13 +872,12 @@ export default function GameRoomPage() {
     const newGameInstanceId = `gameinst_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const currentPlayersWithResetRoles = room.players.map(p => {
-        const playerObject: { id: string; name: string; avatarUrl?: string } = {
+        const playerObject: Player = { // Use Player type, ensure only defined fields
             id: p.id,
             name: p.name,
+            ...(p.avatarUrl && { avatarUrl: p.avatarUrl }),
+            // Role is intentionally omitted here, will be reassigned
         };
-        if (p.avatarUrl !== undefined) {
-            playerObject.avatarUrl = p.avatarUrl;
-        }
         return playerObject; 
     });
 
@@ -1080,7 +1069,7 @@ export default function GameRoomPage() {
             {room.status === GameRoomStatus.InProgress && (
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-primary">游戏控制 / 状态</CardTitle>
+                   {/* Intentionally empty to remove "游戏控制 / 状态" and "第 X 场比赛，第 Y 次组队" */}
                 </CardHeader>
                 <CardContent className="space-y-4">
                 
@@ -1097,10 +1086,6 @@ export default function GameRoomPage() {
 
                   {room.currentPhase === 'team_voting' && (
                       <TeamVotingControls
-                          currentRound={room.currentRound}
-                          captainChangesThisRound={room.captainChangesThisRound}
-                          currentCaptainName={localPlayers.find(p=>p.id === room.currentCaptainId)?.name}
-                          proposedTeamNames={(room.selectedTeamForMission || []).map(playerId => localPlayers.find(p=>p.id === playerId)?.name || '未知玩家')}
                           votesToDisplay={votesToDisplay}
                           realPlayersVotedCount={realPlayersVotedCount}
                           realPlayersCount={realPlayersCount}
