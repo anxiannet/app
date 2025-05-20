@@ -11,15 +11,30 @@ import { Label } from "@/components/ui/label";
 import { MessageCircle } from "lucide-react"; // Placeholder for WeChat icon
 
 export default function LoginPage() {
-  const { login, user } = useAuth();
+  const { login, user, loading } = useAuth();
   const router = useRouter();
   const [name, setName] = useState("");
+  const [redirectPath, setRedirectPath] = useState("/");
 
   useEffect(() => {
-    if (user) {
-      router.push("/"); // Redirect if already logged in
+    // Get redirect path from query params
+    const queryParams = new URLSearchParams(window.location.search);
+    const redirect = queryParams.get("redirect");
+    if (redirect) {
+      setRedirectPath(redirect);
     }
-  }, [user, router]);
+  }, []);
+
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.push(redirectPath);
+    }
+  }, [user, loading, router, redirectPath]);
+
+  if (loading) {
+    return <div className="text-center py-10">加载中...</div>;
+  }
 
   if (user) {
     return null; // Return null while redirecting
@@ -29,7 +44,7 @@ export default function LoginPage() {
     e.preventDefault();
     if (name.trim()) {
       login(name.trim());
-      // No need to push here, useEffect will handle it after user state updates
+      // useEffect will handle the redirect
     }
   };
 
@@ -64,9 +79,7 @@ export default function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="text-center">
-          <p className="text-xs text-muted-foreground">
-            微信登录为演示功能。
-          </p>
+          {/* Content removed as requested */}
         </CardFooter>
       </Card>
     </div>
