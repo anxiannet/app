@@ -15,6 +15,8 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { db } from "@/lib/firebase"; // Firebase client SDK
 import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, Timestamp, doc, deleteDoc } from "firebase/firestore";
+import { MIN_PLAYERS_TO_START, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, MISSIONS_CONFIG } from "@/lib/game-config";
+
 
 export default function LobbyPage() {
   const [rooms, setRooms] = useState<GameRoom[]>([]);
@@ -115,6 +117,10 @@ export default function LobbyPage() {
     }
 
     const newRoomName = `房间 ${Math.floor(Math.random() * 1000) + 1}`; 
+    const defaultPlayerCountForMissions = MIN_PLAYERS_TO_START;
+    const missionPlayerCountsForNewRoom = MISSIONS_CONFIG[defaultPlayerCountForMissions] || MISSIONS_CONFIG[5];
+
+
     const newRoomData: Omit<GameRoom, "id"> = { 
       name: newRoomName,
       players: [{ id: user.id, name: user.name, avatarUrl: user.avatarUrl || undefined }], 
@@ -125,9 +131,9 @@ export default function LobbyPage() {
       teamScores: { teamMemberWins: 0, undercoverWins: 0 },
       missionHistory: [],
       fullVoteHistory: [],
-      missionPlayerCounts: [], 
-      totalRounds: 5,
-      maxCaptainChangesPerRound: 5,
+      missionPlayerCounts: missionPlayerCountsForNewRoom, 
+      totalRounds: TOTAL_ROUNDS_PER_GAME,
+      maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND,
     };
 
     try {
@@ -159,7 +165,6 @@ export default function LobbyPage() {
               size="lg"
               onClick={handleCreateRoom}
               className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
-              disabled={!user || !user.isAdmin}
             >
               <PlusCircle className="mr-2 h-6 w-6" /> 创建新房间
             </Button>
