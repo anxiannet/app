@@ -57,7 +57,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // User is signed in, fetch their profile from Firestore
         if (!db) {
           console.error("Firestore db is not initialized. Cannot fetch user profile.");
           setUser(null);
@@ -70,24 +69,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           const userData = userDocSnap.data();
           setUser({
             id: firebaseUser.uid,
-            name: userData.nickname, // Use nickname from Firestore
-            avatarUrl: userData.avatarUrl
+            name: userData.nickname, 
+            avatarUrl: userData.avatarUrl,
+            isAdmin: userData.isAdmin || false, // Fetch isAdmin field
           });
         } else {
-          // This case should ideally not happen if signup creates a profile
-          // For robustness, create a profile if missing, or log out
           console.warn(`User profile not found in Firestore for UID: ${firebaseUser.uid}. Logging out.`);
           await signOut(auth);
           setUser(null);
         }
       } else {
-        // User is signed out
         setUser(null);
       }
       setLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, [toast]);
 
   const login = async (nicknameAsEmail: string, password: string) => {
@@ -97,18 +94,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setLoading(true);
     try {
-      // For Firebase auth, "email" cannot be empty.
-      // We are using nickname as email here.
-      const emailToUse = `${nicknameAsEmail}@anxian.game`; // Append a dummy domain
-      console.log(`Attempting to sign in with email: ${emailToUse} and password: ${password ? '******' : 'EMPTY'}`); // Added console log
+      const emailToUse = `${nicknameAsEmail}@anxian.game`;
+      console.log(`Attempting to sign in with email: ${emailToUse}`);
       await signInWithEmailAndPassword(auth, emailToUse, password);
-      // onAuthStateChanged will handle fetching profile and setting user state
     } catch (error: any) {
       console.error("Login error:", error);
       let errorMessage = "登录失败，请稍后再试。";
       if (error.code === "auth/invalid-credential" ||
-          error.code === "auth/user-not-found" ||
-          error.code === "auth/wrong-password") {
+          error.code === "auth/user-not-found" || // Older code, still sometimes used
+          error.code === "auth/wrong-password") { // Older code
         errorMessage = "您输入的昵称或密码不正确，请检查后重试。";
       } else if (error.code === "auth/invalid-email") {
         errorMessage = "昵称格式无效 (不能用作邮箱)。"
@@ -116,10 +110,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         errorMessage = "Firebase认证配置错误。请检查应用的API密钥和项目设置，并确保在Firebase控制台中启用了Email/Password登录方式。";
       }
       toast({ title: "登录失败", description: errorMessage, variant: "destructive" });
-      setLoading(false); // Explicitly set loading to false on error
-      throw error; // Re-throw to allow component to handle
+      setLoading(false); 
+      throw error; 
     }
-    // setLoading(false) will be handled by onAuthStateChanged
   };
 
   const signup = async (nicknameAsEmail: string, password: string) => {
@@ -129,22 +122,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     setLoading(true);
     try {
-      // For Firebase auth, "email" cannot be empty and must be a valid email format.
-      // We are using nickname + a dummy domain as email here.
       const emailToUse = `${nicknameAsEmail}@anxian.game`;
       const userCredential = await createUserWithEmailAndPassword(auth, emailToUse, password);
       const firebaseUser = userCredential.user;
       const randomAvatar = PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)];
 
-      // Store additional user info (nickname, avatar) in Firestore
       const userDocRef = doc(db, "users", firebaseUser.uid);
       await setDoc(userDocRef, {
         uid: firebaseUser.uid,
-        nickname: nicknameAsEmail, // Store the original nickname
+        nickname: nicknameAsEmail, 
         avatarUrl: randomAvatar,
         createdAt: new Date().toISOString(),
+        isAdmin: false, // Default to not admin
       });
-      // onAuthStateChanged will handle setting user state
     } catch (error: any) {
       console.error("Signup error:", error);
       let errorMessage = "注册失败，请稍后再试。";
@@ -158,10 +148,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
          errorMessage = "Firebase认证配置错误。请检查应用的API密钥和项目设置。";
       }
       toast({ title: "注册失败", description: errorMessage, variant: "destructive" });
-      setLoading(false); // Explicitly set loading to false on error
-      throw error; // Re-throw to allow component to handle
+      setLoading(false); 
+      throw error; 
     }
-     // setLoading(false) will be handled by onAuthStateChanged
   };
 
   const logout = async () => {
@@ -172,13 +161,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     try {
       await signOut(auth);
-      // onAuthStateChanged will set user to null
       router.push("/");
     } catch (error) {
       console.error("Logout error:", error);
       toast({ title: "登出失败", description: "无法登出，请稍后再试。", variant: "destructive" });
-    } finally {
-        // setLoading(false) will be handled by onAuthStateChanged or if an error occurs before signOut promise resolves
     }
   };
 

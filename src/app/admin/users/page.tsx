@@ -2,6 +2,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
 import { collection, getDocs, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,29 +18,48 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton"; // For loading state
+import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, Users, ShieldCheck } from "lucide-react";
 
 interface FirestoreUser {
-  id: string; // Document ID, which is the UID
+  id: string;
   uid: string;
   nickname: string;
   avatarUrl?: string;
-  createdAt: string | Timestamp; // Firestore timestamp or ISO string
+  createdAt: string | Timestamp;
   isAdmin?: boolean;
 }
 
-export default function UserManagementPage() {
+export default function PlayerManagementPage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [users, setUsers] = useState<FirestoreUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+    if (!user) {
+      router.push("/login?redirect=/admin/users");
+      return;
+    }
+    if (!user.isAdmin) {
+      setAccessDenied(true);
+      // Optionally redirect immediately or show access denied message
+      // router.push("/"); 
+      setIsLoading(false);
+      return;
+    }
+    setAccessDenied(false);
+
     const fetchUsers = async () => {
       setIsLoading(true);
       setError(null);
       if (!db) {
-        setError("Firestore is not initialized. Cannot fetch users.");
+        setError("Firestore is not initialized. Cannot fetch players.");
         setIsLoading(false);
         return;
       }
@@ -60,15 +81,15 @@ export default function UserManagementPage() {
         });
         setUsers(fetchedUsers);
       } catch (err) {
-        console.error("Error fetching users:", err);
-        setError("Failed to fetch users. See console for details.");
+        console.error("Error fetching players:", err);
+        setError("Failed to fetch players. See console for details.");
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchUsers();
-  }, []);
+  }, [user, authLoading, router]);
 
   const formatDate = (dateValue: string | Timestamp): string => {
     if (!dateValue) return "N/A";
@@ -84,18 +105,32 @@ export default function UserManagementPage() {
     }
   };
 
+  if (authLoading || (isLoading && !accessDenied)) {
+    return <div className="text-center py-10">加载中...</div>;
+  }
+
+  if (accessDenied) {
+    return (
+      <div className="text-center py-10">
+        <h1 className="text-2xl font-bold text-destructive">访问被拒绝</h1>
+        <p className="text-muted-foreground">您没有权限查看此页面。</p>
+        <Button onClick={() => router.push("/")} className="mt-4">返回首页</Button>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       <header className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-primary flex items-center">
           <Users className="mr-3 h-8 w-8" />
-          用户管理
+          玩家管理
         </h1>
       </header>
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle>用户列表</CardTitle>
+          <CardTitle>玩家列表</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && (
@@ -119,7 +154,7 @@ export default function UserManagementPage() {
           )}
           {!isLoading && !error && users.length === 0 && (
             <p className="text-muted-foreground text-center py-4">
-              没有找到用户。
+              没有找到玩家。
             </p>
           )}
           {!isLoading && !error && users.length > 0 && (
@@ -129,37 +164,37 @@ export default function UserManagementPage() {
                   <TableRow>
                     <TableHead className="w-[80px]">头像</TableHead>
                     <TableHead>昵称</TableHead>
-                    <TableHead>用户 ID (UID)</TableHead>
+                    <TableHead>玩家 ID (UID)</TableHead>
                     <TableHead>权限</TableHead>
                     <TableHead>注册日期</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
-                    <TableRow key={user.id}>
+                  {users.map((u) => (
+                    <TableRow key={u.id}>
                       <TableCell>
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={user.avatarUrl} alt={user.nickname} data-ai-hint="avatar person" />
+                          <AvatarImage src={u.avatarUrl} alt={u.nickname} data-ai-hint="avatar person" />
                           <AvatarFallback>
-                            {user.nickname?.charAt(0).toUpperCase()}
+                            {u.nickname?.charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                       </TableCell>
-                      <TableCell className="font-medium">{user.nickname}</TableCell>
+                      <TableCell className="font-medium">{u.nickname}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className="font-mono text-xs">
-                          {user.uid || user.id}
+                          {u.uid || u.id}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {user.isAdmin && (
+                        {u.isAdmin && (
                           <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
                             <ShieldCheck className="mr-1 h-4 w-4" />
                             管理员
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>{formatDate(user.createdAt)}</TableCell>
+                      <TableCell>{formatDate(u.createdAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

@@ -5,6 +5,7 @@ export type User = {
   id: string; // Firebase Auth UID
   name: string; // Nickname
   avatarUrl?: string;
+  isAdmin?: boolean; // Added for admin privileges
 };
 
 export enum Role {
