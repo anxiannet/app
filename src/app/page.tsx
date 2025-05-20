@@ -28,22 +28,17 @@ export default function LobbyPage() {
 
     setIsLoadingRooms(true);
     const roomsCollection = collection(db, "rooms");
-    // We can add more complex queries here, e.g., to filter by status on the server-side if needed
-    // For now, client-side filtering for finished and sorting.
     const q = query(roomsCollection, orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       let fetchedRooms: GameRoom[] = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
-        // Ensure players array exists, default to empty if undefined from Firestore
         players: doc.data().players || [], 
       } as GameRoom));
 
-      // Filter out finished rooms for display
       fetchedRooms = fetchedRooms.filter(room => room.status !== GameRoomStatus.Finished && room.players.length > 0);
 
-      // Sorting logic
       const statusPriority: { [key in GameRoomStatus]: number } = {
         [GameRoomStatus.InProgress]: 1,
         [GameRoomStatus.Waiting]: 2,
@@ -64,7 +59,7 @@ export default function LobbyPage() {
       setIsLoadingRooms(false);
     });
 
-    return () => unsubscribe(); // Cleanup listener on component unmount
+    return () => unsubscribe(); 
   }, [authLoading, toast]);
 
   const handleCreateRoom = async () => {
@@ -74,19 +69,18 @@ export default function LobbyPage() {
       return;
     }
 
-    const newRoomName = `房间 ${Math.floor(Math.random() * 1000) + 1}`; // More unique default name
-    const newRoomData: Omit<GameRoom, "id"> = { // Omit id as Firestore generates it
+    const newRoomName = `房间 ${Math.floor(Math.random() * 1000) + 1}`; 
+    const newRoomData: Omit<GameRoom, "id"> = { 
       name: newRoomName,
-      players: [{ ...user }], // Host is the first player
+      players: [{ ...user }], 
       maxPlayers: 10,
       status: GameRoomStatus.Waiting,
       hostId: user.id,
-      createdAt: serverTimestamp() as Timestamp, // Use serverTimestamp for consistent time
-      // Initialize other GameRoom fields as needed for a new room
+      createdAt: serverTimestamp() as Timestamp, 
       teamScores: { teamMemberWins: 0, undercoverWins: 0 },
       missionHistory: [],
       fullVoteHistory: [],
-      missionPlayerCounts: [], // Will be set when game starts
+      missionPlayerCounts: [], 
       totalRounds: 5,
       maxCaptainChangesPerRound: 5,
     };
@@ -133,7 +127,7 @@ export default function LobbyPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
-              // Filtering of finished rooms is now done in useEffect
+              const displayStatus = room.status === GameRoomStatus.InProgress ? "游戏中" : room.status.toUpperCase();
 
               return (
                 <Card
@@ -164,7 +158,7 @@ export default function LobbyPage() {
                         "ml-1 font-semibold",
                         room.status === GameRoomStatus.Waiting && "border-yellow-500 text-yellow-600",
                         room.status === GameRoomStatus.InProgress && "bg-green-500 text-white",
-                      )}>{room.status.toUpperCase()}</Badge>
+                      )}>{displayStatus}</Badge>
                     </div>
                     <Image
                       src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}

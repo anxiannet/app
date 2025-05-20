@@ -12,14 +12,16 @@ type RoomHeaderProps = {
   room: GameRoom;
   localPlayers: Player[];
   getPhaseDescription: (phase?: GameRoomPhase) => string;
-  isHost: boolean; // Added prop
-  onForceEndGame: () => void; // Added prop
+  isHost: boolean; 
+  onForceEndGame: () => void; 
 };
 
 export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, onForceEndGame }: RoomHeaderProps) {
   if (!room) return null;
 
   const hostName = localPlayers.find(p => p.id === room.hostId)?.name || '未知';
+
+  const displayStatus = room.status === GameRoomStatus.InProgress ? "游戏中" : room.status.toUpperCase();
 
   return (
     <Card className="shadow-xl">
@@ -34,7 +36,7 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
               variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"} 
               className={`ml-auto ${room.status === GameRoomStatus.Waiting ? "border-yellow-500 text-yellow-500" : room.status === GameRoomStatus.InProgress ? "bg-green-500 text-white" : "bg-gray-500 text-white"}`}
             >
-              {room.status.toUpperCase()}
+              {displayStatus}
             </Badge>
             {isHost && room.status === GameRoomStatus.InProgress && (
               <Button
@@ -66,4 +68,3 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
     </Card>
   );
 }
-
