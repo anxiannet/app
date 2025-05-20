@@ -49,7 +49,7 @@ export function PlayerListPanel({
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
               const playerVote = playerVoteInfo?.vote;
               
-              const missionCardPlayed = (room.currentPhase === 'mission_reveal' || room.status === GameRoomStatus.Finished) ? 
+              const missionCardPlayed = (room.status === GameRoomStatus.Finished) ? 
                 missionPlaysToDisplay.find(cp => cp.playerId === p.id)?.card : undefined;
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
