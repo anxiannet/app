@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -36,35 +37,35 @@ export default function LoginPage() {
     <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center py-12">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold text-primary">暗线 Login</CardTitle>
-          <CardDescription>Sign in to join the mystery.</CardDescription>
+          <CardTitle className="text-3xl font-bold text-primary">暗线 登录</CardTitle>
+          <CardDescription>登录以加入这场神秘之旅。</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-muted-foreground">Enter Your Nickname</Label>
+              <Label htmlFor="name" className="text-muted-foreground">请输入您的昵称</Label>
               <Input
                 id="name"
                 type="text"
-                placeholder="e.g. ShadowSleuth"
+                placeholder="例如：暗影神探"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
                 className="focus:ring-accent focus:border-accent"
               />
             </div>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95"
               disabled={!name.trim()}
             >
-              <MessageCircle className="mr-2 h-5 w-5" /> Login with Nickname (Simulated)
+              <MessageCircle className="mr-2 h-5 w-5" /> 使用昵称登录 (模拟)
             </Button>
           </form>
         </CardContent>
         <CardFooter className="text-center">
           <p className="text-xs text-muted-foreground">
-            WeChat login is simulated for demonstration.
+            微信登录为演示功能。
           </p>
         </CardFooter>
       </Card>
