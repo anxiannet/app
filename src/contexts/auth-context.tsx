@@ -88,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe(); // Cleanup subscription on unmount
-  }, [toast]);
+  }, [toast]); // router removed as it's not directly used in this effect
 
   const login = async (nicknameAsEmail: string, password: string) => {
     if (!auth) {
@@ -111,6 +111,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         errorMessage = "密码错误。";
       } else if (error.code === "auth/invalid-email") {
         errorMessage = "昵称格式无效 (不能用作邮箱)。"
+      } else if (error.code === "auth/configuration-not-found") {
+        errorMessage = "Firebase认证配置错误。请检查应用的API密钥和项目设置，并确保在Firebase控制台中启用了Email/Password登录方式。";
       }
       toast({ title: "登录失败", description: errorMessage, variant: "destructive" });
       setLoading(false); // Explicitly set loading to false on error
@@ -151,6 +153,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         errorMessage = "密码太弱，请使用更强的密码。";
       } else if (error.code === "auth/invalid-email") {
         errorMessage = "昵称格式无效 (不能用作邮箱)。"
+      } else if (error.code === "auth/configuration-not-found") {
+         errorMessage = "Firebase认证配置错误。请检查应用的API密钥和项目设置。";
       }
       toast({ title: "注册失败", description: errorMessage, variant: "destructive" });
       setLoading(false); // Explicitly set loading to false on error
@@ -191,3 +195,5 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+    
