@@ -6,10 +6,6 @@ import { Button } from "@/components/ui/button";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
 
 type TeamVotingControlsProps = {
-  currentRound?: number;
-  captainChangesThisRound?: number;
-  currentCaptainName?: string;
-  proposedTeamNames: string[];
   votesToDisplay: PlayerVote[];
   realPlayersVotedCount: number;
   realPlayersCount: number;
@@ -17,13 +13,10 @@ type TeamVotingControlsProps = {
   isCurrentUserVirtual: boolean;
   onPlayerVote: (vote: 'approve' | 'reject') => void;
   userVote?: 'approve' | 'reject';
+  totalPlayerCountInRoom: number; // New prop
 };
 
 export function TeamVotingControls({
-  currentRound,
-  captainChangesThisRound,
-  currentCaptainName,
-  proposedTeamNames,
   votesToDisplay,
   realPlayersVotedCount,
   realPlayersCount,
@@ -31,11 +24,33 @@ export function TeamVotingControls({
   isCurrentUserVirtual,
   onPlayerVote,
   userVote,
+  totalPlayerCountInRoom,
 }: TeamVotingControlsProps) {
+
+  const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom && totalPlayerCountInRoom > 0;
+
+  if (allVotesIn) {
+    const approveVotes = votesToDisplay.filter(v => v.vote === 'approve').length;
+    const rejectVotes = votesToDisplay.filter(v => v.vote === 'reject').length;
+    const outcomeText = approveVotes > rejectVotes ? "队伍已批准!" : "队伍被否决!";
+
+    return (
+      <div className="text-center space-y-2 p-4">
+        <p className="text-lg font-semibold">
+          投票结果: {approveVotes} 同意, {rejectVotes} 拒绝
+        </p>
+        <p className={`text-md font-bold ${approveVotes > rejectVotes ? 'text-green-600' : 'text-red-500'}`}>
+          {outcomeText}
+        </p>
+        <p className="text-sm text-muted-foreground">正在进入下一阶段...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       
-      {votesToDisplay.length > 0 && (
+      {votesToDisplay.length > 0 && realPlayersVotedCount < realPlayersCount && (
         <p className="text-xs text-center text-muted-foreground">
           ({realPlayersCount - realPlayersVotedCount} 人未投票)
         </p>
@@ -52,4 +67,3 @@ export function TeamVotingControls({
     </div>
   );
 }
-
