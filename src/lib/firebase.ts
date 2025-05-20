@@ -3,7 +3,7 @@
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { initializeFirestore, getFirestore, type Firestore } from "firebase/firestore"; // Added getFirestore for direct init
+import { initializeFirestore, getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,9 +19,9 @@ let app: FirebaseApp | undefined = undefined;
 let auth: Auth | undefined = undefined;
 let db: Firestore | undefined = undefined;
 
-const PROXY_HOST = "black-rain-7f1e.bostage.workers.dev";
+const PROXY_HOST = "black-rain-7f1e.bostage.workers.dev"; // Your Cloudflare Worker domain
 
-if (typeof window !== "undefined") { // Only run on client
+if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
     apiKey: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0,5) + "..." : "MISSING_OR_UNDEFINED_API_KEY",
     authDomain: firebaseConfig.authDomain || "MISSING_OR_UNDEFINED_AUTH_DOMAIN",
@@ -57,23 +57,21 @@ if (typeof window !== "undefined") { // Only run on client
       try {
         console.log(`Attempting to initialize Firebase for project ID: ${firebaseConfig.projectId}`);
         app = initializeApp(firebaseConfig);
-        auth = getAuth(app); // Auth will use default endpoints
+        auth = getAuth(app);
 
-        // --- TEMPORARILY COMMENTED OUT PROXY CONFIGURATION FOR DIAGNOSIS ---
-        // const firestoreHostWithServicePath = `${PROXY_HOST}/firestore`;
-        // console.log(`Attempting to initialize Firestore with proxy host: ${firestoreHostWithServicePath}`);
-        // db = initializeFirestore(app, {
-        //   host: firestoreHostWithServicePath,
-        //   ssl: true, 
-        //   ignoreUndefinedProperties: true, 
-        // });
-        // console.log(`Firestore configured to use proxy: ${firestoreHostWithServicePath}.`);
-        // --- END OF TEMPORARY PROXY COMMENT OUT ---
-
-        // --- USING DIRECT FIRESTORE INITIALIZATION FOR DIAGNOSIS ---
-        console.log("Attempting to initialize Firestore directly (proxy bypassed for diagnosis).");
-        db = getFirestore(app); // Standard initialization
-        // --- END OF DIRECT FIRESTORE INITIALIZATION ---
+        console.log(`Attempting to initialize Firestore with proxy host: ${PROXY_HOST}`);
+        db = initializeFirestore(app, {
+          host: PROXY_HOST, // Using your worker domain
+          ssl: true,        // Assuming your worker is served over HTTPS
+          ignoreUndefinedProperties: true,
+        });
+        console.log(`Firestore configured to use proxy host: ${PROXY_HOST}. The Firebase SDK will append paths like /v1/projects/... to this host.`);
+        console.warn(
+          "IMPORTANT: Your Cloudflare Worker script (as provided earlier) expects a service prefix in the path (e.g., /firestore/v1/...). " +
+          "If this Firestore configuration results in errors like 'Unknown service' or 'unavailable', " +
+          "it's likely because the SDK is sending requests to `https://${PROXY_HOST}/v1/...` and your worker isn't routing them correctly. " +
+          "The worker might need adjustment to handle paths without the '/firestore' prefix if it's accessed via this specific host for Firestore."
+        );
         
         console.warn("Firebase Auth and Storage are NOT configured to use any proxy with the current client SDK setup. They will use default Google endpoints.");
         console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}.`);
@@ -92,29 +90,23 @@ if (typeof window !== "undefined") { // Only run on client
       app = getApps()[0];
       auth = getAuth(app); 
       
-      // --- TEMPORARILY COMMENTED OUT PROXY CONFIGURATION FOR DIAGNOSIS ---
-      // const firestoreHostWithServicePath = `${PROXY_HOST}/firestore`;
-      // console.log(`Re-initializing Firestore on existing app instance with proxy host (if not already proxied): ${firestoreHostWithServicePath}`);
-      // if (!db || (db && !(db.settings && (db.settings as any).host?.includes(PROXY_HOST)))) {
-      //   db = initializeFirestore(app, {
-      //     host: firestoreHostWithServicePath,
-      //     ssl: true,
-      //     ignoreUndefinedProperties: true,
-      //   });
-      //   console.log(`Firestore re-configured to use proxy: ${firestoreHostWithServicePath}.`);
-      // } else {
-      //   console.log("Firestore already initialized, possibly with proxy settings. Current host:", (db.settings as any)?.host);
-      // }
-      // --- END OF TEMPORARY PROXY COMMENT OUT ---
-
-      // --- USING DIRECT FIRESTORE INITIALIZATION FOR DIAGNOSIS ---
-      if (!db) { // If db wasn't initialized at all before
-        console.log("Attempting to initialize Firestore directly on existing app instance (proxy bypassed for diagnosis).");
-        db = getFirestore(app); // Standard initialization
+      if (!db || (db && !(db.settings && (db.settings as any).host === PROXY_HOST))) {
+        console.log(`Re-initializing Firestore on existing app instance with proxy host: ${PROXY_HOST}`);
+        db = initializeFirestore(app, {
+          host: PROXY_HOST,
+          ssl: true,
+          ignoreUndefinedProperties: true,
+        });
+        console.log(`Firestore re-configured to use proxy host: ${PROXY_HOST}.`);
+        console.warn(
+          "IMPORTANT: Your Cloudflare Worker script (as provided earlier) expects a service prefix in the path (e.g., /firestore/v1/...). " +
+          "If this Firestore configuration results in errors like 'Unknown service' or 'unavailable', " +
+          "it's likely because the SDK is sending requests to `https://${PROXY_HOST}/v1/...` and your worker isn't routing them correctly. " +
+          "The worker might need adjustment to handle paths without the '/firestore' prefix if it's accessed via this specific host for Firestore."
+        );
       } else {
-        console.log("Firestore already initialized. Current host (if custom):", (db.settings as any)?.host);
+        console.log("Firestore already initialized, possibly with proxy settings. Current host:", (db.settings as any)?.host);
       }
-      // --- END OF DIRECT FIRESTORE INITIALIZATION ---
     }
   } else {
     console.error("Firebase initialization SKIPPED due to missing critical configuration (API Key or Project ID). The app will not function correctly.");
@@ -122,3 +114,5 @@ if (typeof window !== "undefined") { // Only run on client
 }
 
 export { app, auth, db };
+
+    
