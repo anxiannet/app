@@ -84,7 +84,7 @@ export type AiProposeTeamInput = z.infer<typeof AiProposeTeamInputSchema>;
 
 const AiProposeTeamOutputSchema = z.object({
   selectedPlayerIds: z.array(z.string()).describe("An array of player IDs selected for the mission team."),
-  reasoning: z.string().optional().describe("A brief explanation of why the AI made this team proposal."),
+  reasoning: z.string().optional().describe("A brief explanation in CHINESE (简体中文) of why the AI made this team proposal."),
 });
 export type AiProposeTeamOutput = z.infer<typeof AiProposeTeamOutputSchema>;
 
@@ -175,13 +175,14 @@ Strategy:
 4.  Ensure you select exactly {{gameContext.requiredPlayersForMission}} players.
 {{/if}}
 
-Output your decision as a JSON object containing an array of player IDs and a brief reasoning.
+Output your decision as a JSON object.
 The array \`selectedPlayerIds\` MUST contain exactly {{gameContext.requiredPlayersForMission}} unique player IDs.
+The \`reasoning\` field MUST be a brief explanation in CHINESE (简体中文) for why you made this team proposal.
 Your response MUST be a JSON object matching this Zod schema:
 \`\`\`json
 {{{outputSchema}}}
 \`\`\`
-Example: { "selectedPlayerIds": ["player_id_1", "player_id_2"], "reasoning": "Selected myself and a trustworthy player." }
+Example: { "selectedPlayerIds": ["player_id_1", "player_id_2"], "reasoning": "我选择了自己和一个值得信赖的队员。" }
 
 Your team proposal:
 `;
@@ -249,7 +250,7 @@ const aiProposeTeamFlow = ai.defineFlow(
 
       return {
         selectedPlayerIds: proposedTeamIds,
-        reasoning: 'AI default due to invalid output or incorrect player count from LLM. Selected self and random others.',
+        reasoning: 'AI 默认：由于LLM输出无效或玩家数量不正确。已选择自身及随机其他玩家。',
       };
     }
     return output;
