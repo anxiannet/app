@@ -37,7 +37,7 @@ export function PlayerListPanel({
     <Card className="md:col-span-1 h-full flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center">
-          <Users className="mr-2 h-6 w-6 text-primary" /> Players ({localPlayers.length}/{room.maxPlayers})
+          <Users className="mr-2 h-6 w-6 text-primary" /> 玩家 ({localPlayers.length}/{room.maxPlayers})
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-grow overflow-y-auto p-2">
