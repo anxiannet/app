@@ -31,10 +31,7 @@ Handlebars.registerHelper('findPlayerNameById', function (playerId, playersList)
 Handlebars.registerHelper('eq', function (a, b) { return a === b; });
 Handlebars.registerHelper('gt', function (a, b) { return a > b; });
 Handlebars.registerHelper('lookup', function (obj, field) { return obj && obj[field]; });
-Handlebars.registerHelper('findIndex', function<T>(array: T[], predicateFn: (item: T, index: number, array: T[]) => boolean) {
-  if (!Array.isArray(array)) return -1;
-  return array.findIndex(predicateFn);
-});
+// Removed problematic findIndex helper
 Handlebars.registerHelper('isPlayerOnTeam', function (playerId, teamPlayerIds) {
   if (!Array.isArray(teamPlayerIds)) return false;
   return teamPlayerIds.includes(playerId);
@@ -63,8 +60,6 @@ const VirtualPlayerVoteInputSchema = z.object({
         cardPlays: z.array(z.object({ 
           playerId: z.string(), 
           card: z.string(), 
-          // Role in cardPlays is part of PlayerPerspective, so it's revealed based on viewer.
-          // The AI prompt will look up the player in allPlayers to get their perceived role.
         })).optional(), 
       })
     ).optional().describe("History of past missions, with roles in cardPlays revealed based on perspective."),
@@ -98,7 +93,7 @@ Game Context:
 - Captain: {{findPlayerNameById gameContext.captainId gameContext.allPlayers}} (ID: {{gameContext.captainId}})
 - Proposed Mission Team:
   {{#each gameContext.proposedTeamIds}}
-  - {{findPlayerNameById this ../gameContext.allPlayers}} (ID: {{this}})
+  - {{findPlayerNameById this @root.gameContext.allPlayers}} (ID: {{this}})
   {{/each}}
 - All Players (from your perspective):
   {{#each gameContext.allPlayers}}
@@ -110,20 +105,23 @@ Game Context:
 Mission History (from your perspective):
 {{#each gameContext.missionHistory}}
   Round {{this.round}}:
-  - Captain: {{findPlayerNameById this.captainId ../gameContext.allPlayers}}
-  - Team: {{#each this.teamPlayerIds}}{{findPlayerNameById this ../../gameContext.allPlayers}}, {{/each}}
+  - Captain: {{findPlayerNameById this.captainId @root.gameContext.allPlayers}}
+  - Team: {{#each this.teamPlayerIds}}{{findPlayerNameById this @root.gameContext.allPlayers}}, {{/each}}
   - Outcome: {{this.outcome}}
   {{#if this.failCardsPlayed}}
   - Fail Cards: {{this.failCardsPlayed}}
-    {{#each this.cardPlays}}
+    {{#each this.cardPlays}} {{!-- Current context 'this' is a cardPlay object --}}
       {{#if (eq this.card "fail")}}
-        {{#with (lookup ../../../gameContext.allPlayers (findIndex ../../../gameContext.allPlayers (p => eq p.id this.playerId)))}}
-          {{#if this.role}}
+        {{#each @root.gameContext.allPlayers}} {{!-- Iterate through all players in the game --}}
+          {{#if (eq this.id ../../this.playerId)}} {{!-- If current player's ID matches the cardPlay's playerId --}}
+            {{!-- Now 'this' refers to the player from allPlayers who played the fail card --}}
+            {{#if this.role}}
   - Saboteur (Known to you): {{this.name}} (Role: {{this.role}})
-          {{else}}
+            {{else}}
   - Saboteur (Role Unknown to you): {{this.name}}
+            {{/if}}
           {{/if}}
-        {{/with}}
+        {{/each}}
       {{/if}}
     {{/each}}
   {{/if}}
@@ -168,7 +166,7 @@ Strategy:
     *   **If the proposed team INCLUDES at least one Undercover (yourself or an ally):** Your primary goal is to get Undercovers onto missions to potentially sabotage them. Therefore, vote 'approve'.
     *   **If the proposed team DOES NOT INCLUDE any Undercover agents (i.e., it consists only of Team Members and/or the Coach):**
         *   Your primary goal is to prevent Team Members from succeeding. Therefore, your default action is to vote 'reject'.
-        *   **Critical Exception:** If the number of rejections this round (\\\`{{gameContext.captainChangesThisRound}}\\\`) is exactly \\\`{{gameContext.maxRejectionsBeforeLoss}}\\\`, and your 'reject' vote would cause the Team Members to lose the round due to too many rejections (thus giving the Undercover faction an immediate win for the game or round), then strategically vote 'approve'. This forces the Team Members to lose by rejections.
+        *   **Critical Exception:** If the number of rejections this round (\`{{gameContext.captainChangesThisRound}}\`) is exactly \`{{gameContext.maxRejectionsBeforeLoss}}\`, and your 'reject' vote would cause the Team Members to lose the round due to too many rejections (thus giving the Undercover faction an immediate win for the game or round), then strategically vote 'approve'. This forces the Team Members to lose by rejections.
         *   In all other scenarios where no Undercover is on the team, stick to voting 'reject'.
     *   Try to make your vote appear plausible if it aligns with these core strategies, but prioritize actions that lead to an Undercover victory.
 {{/if}}
@@ -216,4 +214,3 @@ const virtualPlayerVoteFlow = ai.defineFlow(
 export async function decideVirtualPlayerVote(input: VirtualPlayerVoteInput): Promise<VirtualPlayerVoteOutput> {
   return virtualPlayerVoteFlow(input);
 }
-

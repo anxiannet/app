@@ -39,12 +39,7 @@ if (typeof Handlebars.helpers['gt'] === 'undefined') {
 if (typeof Handlebars.helpers['lookup'] === 'undefined') {
   Handlebars.registerHelper('lookup', function (obj, field) { return obj && obj[field]; });
 }
-if (typeof Handlebars.helpers['findIndex'] === 'undefined') {
-  Handlebars.registerHelper('findIndex', function<T>(array: T[], predicateFn: (item: T, index: number, array: T[]) => boolean) {
-    if (!Array.isArray(array)) return -1;
-    return array.findIndex(predicateFn);
-  });
-}
+// Removed findIndex helper as it's not used or was problematic
 if (typeof Handlebars.helpers['isPlayerOnTeam'] === 'undefined') {
   Handlebars.registerHelper('isPlayerOnTeam', function (playerId, teamPlayerIds) {
     if (!Array.isArray(teamPlayerIds)) return false;
@@ -114,8 +109,8 @@ Game Context:
 Mission History (from your perspective):
 {{#each gameContext.missionHistory}}
   Round {{this.round}}:
-  - Captain: {{findPlayerNameById this.captainId ../gameContext.allPlayers}}
-  - Team: {{#each this.teamPlayerIds}}{{findPlayerNameById this ../../gameContext.allPlayers}}, {{/each}}
+  - Captain: {{findPlayerNameById this.captainId @root.gameContext.allPlayers}}
+  - Team: {{#each this.teamPlayerIds}}{{findPlayerNameById this @root.gameContext.allPlayers}}, {{/each}}
   - Outcome: {{this.outcome}}
   {{#if this.failCardsPlayed}}
   - Fail Cards: {{this.failCardsPlayed}}
@@ -136,7 +131,7 @@ Strategy:
 - Avoid selecting players who were captains of previously FAILED missions. These players might be Undercover or poor leaders.
   Previously failed mission captains to consider avoiding:
   {{#each gameContext.failedMissionCaptainIds}}
-  - {{findPlayerNameById this ../../gameContext.allPlayers}} (ID: {{this}})
+  - {{findPlayerNameById this @root.gameContext.allPlayers}} (ID: {{this}})
   {{/each}}
 {{/if}}
 - Prioritize players who have not been on many failed missions.
@@ -264,4 +259,3 @@ const aiProposeTeamFlow = ai.defineFlow(
 export async function decideAiTeamProposal(input: AiProposeTeamInput): Promise<AiProposeTeamOutput> {
   return aiProposeTeamFlow(input);
 }
-
