@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton"; // For loading state
-import { AlertTriangle, Users } from "lucide-react";
+import { AlertTriangle, Users, ShieldCheck } from "lucide-react";
 
 interface FirestoreUser {
   id: string; // Document ID, which is the UID
@@ -25,6 +25,7 @@ interface FirestoreUser {
   nickname: string;
   avatarUrl?: string;
   createdAt: string | Timestamp; // Firestore timestamp or ISO string
+  isAdmin?: boolean;
 }
 
 export default function UserManagementPage() {
@@ -53,7 +54,8 @@ export default function UserManagementPage() {
             uid: data.uid,
             nickname: data.nickname,
             avatarUrl: data.avatarUrl,
-            createdAt: data.createdAt, // Keep as Firestore Timestamp or ISO string
+            createdAt: data.createdAt,
+            isAdmin: data.isAdmin || false,
           });
         });
         setUsers(fetchedUsers);
@@ -128,6 +130,7 @@ export default function UserManagementPage() {
                     <TableHead className="w-[80px]">头像</TableHead>
                     <TableHead>昵称</TableHead>
                     <TableHead>用户 ID (UID)</TableHead>
+                    <TableHead>权限</TableHead>
                     <TableHead>注册日期</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -147,6 +150,14 @@ export default function UserManagementPage() {
                         <Badge variant="outline" className="font-mono text-xs">
                           {user.uid || user.id}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {user.isAdmin && (
+                          <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
+                            <ShieldCheck className="mr-1 h-4 w-4" />
+                            管理员
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>{formatDate(user.createdAt)}</TableCell>
                     </TableRow>
