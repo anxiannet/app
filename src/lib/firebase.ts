@@ -21,8 +21,6 @@ let db: Firestore | undefined = undefined;
 
 // Firestore Proxy Configuration
 const FIRESTORE_PROXY_HOST = "black-rain-7f1e.bostage.workers.dev"; // Your Cloudflare Worker for Firestore
-// Authentication Proxy (Note: Client SDK has limited direct support for this type of proxying)
-// const AUTH_PROXY_HOST = "auth-jolly-bread-8cd4.bostage.workers.dev"; // Your Cloudflare Worker for Auth
 
 if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
@@ -61,27 +59,21 @@ if (typeof window !== "undefined") {
         console.log(`Attempting to initialize Firebase for project ID: ${firebaseConfig.projectId}`);
         app = initializeApp(firebaseConfig);
         
-        // Initialize Auth (will use default Google endpoints)
         auth = getAuth(app);
         console.log("Firebase Auth initialized to use default Google endpoints.");
         console.warn(
-          "Firebase Auth Proxying: The Firebase JS SDK for Authentication does not have a straightforward client-side configuration to route all API calls " +
-          `through a path-based proxy like 'https://${"auth-jolly-bread-8cd4.bostage.workers.dev"}/auth/...'. ` +
+          "Firebase Auth Proxying: The Firebase JS SDK for Authentication is NOT configured to use a proxy with the current setup. " +
           "Authentication requests will go directly to Google's identitytoolkit.googleapis.com."
         );
 
-        // Initialize Firestore with proxy
-        // The host should be the domain of your worker. The SDK will append /v1/projects/...
-        // Your worker script expects "/firestore" as the first path segment.
-        // So, the host setting needs to include "/firestore" for your worker to route correctly.
-        const firestoreHostWithServicePath = `${FIRESTORE_PROXY_HOST}/firestore`;
-        console.log(`Attempting to initialize Firestore with proxy host: ${firestoreHostWithServicePath}`);
+        // Initialize Firestore with the new simpler proxy configuration
+        console.log(`Attempting to initialize Firestore with proxy host: ${FIRESTORE_PROXY_HOST}`);
         db = initializeFirestore(app, {
-          host: firestoreHostWithServicePath, 
+          host: FIRESTORE_PROXY_HOST, // Just the domain of your worker
           ssl: true,        // Assuming your worker is served over HTTPS
           ignoreUndefinedProperties: true,
         });
-        console.log(`Firestore configured to use proxy host: ${firestoreHostWithServicePath}. The Firebase SDK will append paths like /v1/projects/... after this.`);
+        console.log(`Firestore configured to use proxy host: ${FIRESTORE_PROXY_HOST}. The Firebase SDK will append paths like /v1/projects/... directly to this host.`);
         
         console.warn("Firebase Storage is NOT configured to use any proxy with the current client SDK setup. It will use default Google endpoints.");
         console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}.`);
@@ -100,10 +92,8 @@ if (typeof window !== "undefined") {
       app = getApps()[0];
       auth = getAuth(app); 
       
-      // Ensure Firestore is initialized with proxy settings if app was already initialized
-      // Check if db is already initialized and if its settings match the desired proxy
       const currentDbHost = db && (db.settings as any)?.host;
-      const targetFirestoreHost = `${FIRESTORE_PROXY_HOST}/firestore`;
+      const targetFirestoreHost = FIRESTORE_PROXY_HOST;
 
       if (!db || currentDbHost !== targetFirestoreHost) {
         console.log(`Re-initializing Firestore on existing app instance with proxy host: ${targetFirestoreHost}`);
