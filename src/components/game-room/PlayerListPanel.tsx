@@ -7,8 +7,10 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, CheckCircle2, XCircle } from "lucide-react"; // Removed Brain
+import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 
 type PlayerListPanelProps = {
   localPlayers: Player[];
@@ -31,11 +33,11 @@ type PlayerListPanelProps = {
   onRemoveVirtualPlayer?: (playerId: string) => void;
 };
 
-export function PlayerListPanel({ 
-  localPlayers, 
-  user, 
-  room, 
-  currentUserRole, 
+export function PlayerListPanel({
+  localPlayers,
+  user,
+  room,
+  currentUserRole,
   votesToDisplay,
   missionPlaysToDisplay,
   getRoleIcon,
@@ -77,31 +79,31 @@ export function PlayerListPanel({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-2 gap-3">
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
-              
-              const playerHasVoted = votesToDisplay.some(v => v.playerId === p.id);
-              
-              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) ? 
+              const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
+              const hasVoted = !!playerVoteInfo;
+
+              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) ?
                 room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id) : undefined;
               const missionCardPlayed = missionCardPlayInfo?.card;
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
-              
-              const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) && 
-                                      (room.currentPhase === 'team_selection' || 
+
+              const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) &&
+                                      (room.currentPhase === 'team_selection' ||
                                        room.currentPhase === 'team_voting' ||
                                        room.currentPhase === 'mission_execution' ||
-                                       room.currentPhase === 'mission_reveal'); 
-              
+                                       room.currentPhase === 'mission_reveal');
+
               const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
-              
+
               const isSelectableForCoachAssassination = isCoachAssassinationModeActive && assassinationTargetOptionsPlayerIds.includes(p.id);
               const isSelectedAsCoachCandidate = isCoachAssassinationModeActive && selectedCoachCandidateId === p.id;
 
-              const canBeClickedForTeamSelection = isSelectionModeActive && user.id === room.currentCaptainId && 
+              const canBeClickedForTeamSelection = isSelectionModeActive && user.id === room.currentCaptainId &&
                                                (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
-              
+
               const canBeClicked = (isSelectionModeActive && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
-              
+
               let cardClassName = "relative flex flex-col items-center justify-start p-3 rounded-lg border-2 bg-card shadow-sm h-auto min-h-[120px] transition-all";
               if (isCurrentUser && !isSelectionModeActive && !isCoachAssassinationModeActive) cardClassName = cn(cardClassName, "border-primary ring-1 ring-primary");
               else cardClassName = cn(cardClassName, "border-muted");
@@ -123,9 +125,11 @@ export function PlayerListPanel({
 
               const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
 
+              const allVotesIn = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length;
+
               return (
-                <div 
-                  key={p.id} 
+                <div
+                  key={p.id}
                   onClick={canBeClicked ? () => handlePlayerCardClick(p.id) : undefined}
                   className={cardClassName}
                 >
@@ -135,7 +139,7 @@ export function PlayerListPanel({
                       size="icon"
                       className="absolute top-0 right-0 h-6 w-6 text-destructive hover:bg-destructive/10 z-10"
                       onClick={(e) => {
-                        e.stopPropagation(); 
+                        e.stopPropagation();
                         if (onRemoveVirtualPlayer) onRemoveVirtualPlayer(p.id);
                       }}
                       title={`移除 ${p.name}`}
@@ -151,7 +155,6 @@ export function PlayerListPanel({
                     {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
                       <Crown className="absolute -top-2 -right-2 h-6 w-6 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
                     )}
-                    {/* Brain icon removed for virtual players */}
                     {isOnMissionTeamForDisplay && (
                        <Zap className="absolute -top-2 -left-2 h-5 w-5 text-orange-400 bg-background rounded-full p-0.5" title="On Mission Team" />
                     )}
@@ -164,19 +167,32 @@ export function PlayerListPanel({
                   </div>
 
                   <span className="font-medium text-sm text-center mt-2 truncate w-full">{p.name}</span>
-                  
+
                   <div className="flex items-center space-x-1 mt-1.5 h-5">
-                    {playerHasVoted && room.currentPhase === 'team_voting' && (
-                       <Badge variant="outline" className="px-1.5 py-0.5 text-xs border-blue-500 text-blue-600">
-                         <VotedIcon className="h-3 w-3" />
-                       </Badge>
+                    {room.currentPhase === 'team_voting' && hasVoted && (
+                      allVotesIn ? (
+                        playerVoteInfo?.vote === 'approve' ? (
+                          <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white">
+                            <ThumbsUp className="h-3 w-3" />
+                          </Badge>
+                        ) : (
+                          <Badge variant="destructive" className="px-1.5 py-0.5 text-xs">
+                            <ThumbsDown className="h-3 w-3" />
+                          </Badge>
+                        )
+                      ) : (
+                        <Badge variant="outline" className="px-1.5 py-0.5 text-xs border-blue-500 text-blue-600">
+                          <VotedIcon className="h-3 w-3" />
+                        </Badge>
+                      )
                     )}
+
                     {missionCardPlayed && room.status === GameRoomStatus.Finished && (
                        <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
-                         {missionCardPlayed === 'success' ? <MissionCardSuccessIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
+                         {missionCardPlayed === 'success' ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
                        </Badge>
                     )}
-                    
+
                     {room.status === GameRoomStatus.InProgress && p.role && (
                       <>
                         {isCurrentUser && (<Badge variant="secondary" className="flex items-center gap-1 text-xs px-1.5 py-0.5">{getRoleIcon(p.role)} {p.role}</Badge>)}
@@ -200,5 +216,4 @@ export function PlayerListPanel({
   );
 }
 
-const MissionCardSuccessIcon = CheckCircle2;
-const MissionCardFailIcon = XCircle;
+    
