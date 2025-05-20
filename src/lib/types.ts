@@ -51,6 +51,7 @@ export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_executio
 export type PlayerVote = {
   playerId: string;
   vote: 'approve' | 'reject';
+  // reasoning?: string; // Removed AI reasoning
 };
 
 export type VoteHistoryEntry = {
@@ -121,3 +122,10 @@ export type PlayerGameRecord = {
   missionHistory?: Mission[];
 };
 
+// PlayerPerspective is no longer needed as AI decision logic is removed
+// export type PlayerPerspective = {
+//   id: string;
+//   name: string;
+//   role?: Role; // Role is only present if known to the viewing AI player
+//   avatarUrl?: string;
+// };

@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX, HelpCircle, Swords } from "lucide-react"; // Added Shield, HelpCircle, Swords
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -125,7 +125,7 @@ export function PlayerListPanel({
 
               const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
 
-              const allVotesIn = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length;
+              const allVotesIn = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
 
               return (
                 <div
@@ -164,6 +164,7 @@ export function PlayerListPanel({
                     {isSelectedAsCoachCandidate && (
                       <Target className="absolute -bottom-1 -left-1 h-5 w-5 text-red-500 bg-background rounded-full p-0.5" title="Targeted Candidate"/>
                     )}
+                    {/* Brain icon for virtual players removed */}
                   </div>
 
                   <span className="font-medium text-sm text-center mt-2 truncate w-full">{p.name}</span>
@@ -189,7 +190,7 @@ export function PlayerListPanel({
 
                     {missionCardPlayed && room.status === GameRoomStatus.Finished && (
                        <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
-                         {missionCardPlayed === 'success' ? <ThumbsUp className="h-3 w-3" /> : <ThumbsDown className="h-3 w-3" />}
+                         {missionCardPlayed === 'success' ? <ShieldCheck className="h-3 w-3" /> : <ShieldX className="h-3 w-3" />}
                        </Badge>
                     )}
 
@@ -215,5 +216,3 @@ export function PlayerListPanel({
     </Card>
   );
 }
-
-    

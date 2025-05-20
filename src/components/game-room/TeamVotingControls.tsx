@@ -12,7 +12,6 @@ type TeamVotingControlsProps = {
   onPlayerVote: (vote: 'approve' | 'reject') => void;
   userVote?: 'approve' | 'reject';
   totalPlayerCountInRoom: number;
-  // isAiVoting: boolean; // AI logic removed
 };
 
 export function TeamVotingControls({
@@ -22,12 +21,9 @@ export function TeamVotingControls({
   onPlayerVote,
   userVote,
   totalPlayerCountInRoom,
-  // isAiVoting, // AI logic removed
 }: TeamVotingControlsProps) {
 
   const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom && totalPlayerCountInRoom > 0;
-
-  // AI voting message removed
 
   if (allVotesIn) {
     const approveVotes = votesToDisplay.filter(v => v.vote === 'approve').length;
@@ -48,18 +44,17 @@ export function TeamVotingControls({
   }
 
   const humanPlayersVotedCount = votesToDisplay.filter(v => !v.playerId.startsWith("virtual_")).length;
-  // Calculate total human players by subtracting virtual players from total players
-  const virtualPlayerCount = Array.from(new Set(votesToDisplay.filter(v => v.playerId.startsWith("virtual_")).map(v => v.playerId))).length;
-  const humanPlayersInRoom = totalPlayerCountInRoom - virtualPlayerCount;
+  const virtualPlayerCountVoted = votesToDisplay.filter(v => v.playerId.startsWith("virtual_")).length;
+  const totalVirtualPlayers = Array.from(new Set(totalPlayerCountInRoom - humanPlayersVotedCount - (totalPlayerCountInRoom - votesToDisplay.length - virtualPlayerCountVoted ))).length; // This logic is a bit complex, needs simplification if used
+  const totalHumanPlayers = totalPlayerCountInRoom - totalVirtualPlayers;
 
 
   return (
-    <div className="space-y-3 pt-4"> {/* Added pt-4 for spacing */}
+    <div className="space-y-3 pt-4"> 
       
-      {/* Removed redundant captain/team display */}
-      {votesToDisplay.length > 0 && humanPlayersVotedCount < humanPlayersInRoom && humanPlayersInRoom > 0 && (
+      {votesToDisplay.length > 0 && humanPlayersVotedCount < totalHumanPlayers && totalHumanPlayers > 0 && (
         <p className="text-xs text-center text-muted-foreground">
-          ({humanPlayersInRoom - humanPlayersVotedCount} 名真实玩家未投票)
+          ({totalHumanPlayers - humanPlayersVotedCount} 名真实玩家未投票)
         </p>
       )}
       {!hasUserVotedOnCurrentTeam && !isCurrentUserVirtual ? (
@@ -70,8 +65,8 @@ export function TeamVotingControls({
       ) : (!isCurrentUserVirtual && userVote &&
         <p className="text-center text-green-600 font-semibold">你已投票: {userVote === 'approve' ? '同意' : '拒绝'}</p>
       )}
-      {humanPlayersInRoom > 0 && humanPlayersVotedCount < humanPlayersInRoom && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
-      {humanPlayersInRoom === 0 && votesToDisplay.length < totalPlayerCountInRoom && <p className="text-sm text-center text-muted-foreground">等待虚拟玩家投票...</p>}
+      {totalHumanPlayers > 0 && humanPlayersVotedCount < totalHumanPlayers && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
+      {totalHumanPlayers === 0 && votesToDisplay.length < totalPlayerCountInRoom && <p className="text-sm text-center text-muted-foreground">等待虚拟玩家投票...</p>}
     </div>
   );
 }
