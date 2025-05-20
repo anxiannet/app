@@ -131,7 +131,7 @@ export default function LoginPage() {
                 type="button" // Important: type="button" to prevent form submission by login
                 variant="outline"
                 className="w-full transition-transform hover:scale-105 active:scale-95"
-                disabled={isSubmitting} // Changed this line
+                disabled={!nickname.trim() || !password.trim() || isSubmitting}
               >
                 <UserPlus className="mr-2 h-5 w-5" /> {isSubmitting ? "处理中..." : "注册"}
               </Button>
