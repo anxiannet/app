@@ -29,7 +29,7 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-3xl text-primary flex items-center">{room.name}</CardTitle>
-            <CardDescription>房间 ID: {room.id} | 主持人: {hostName}</CardDescription>
+            <CardDescription>主持人: {hostName}</CardDescription>
           </div>
           <div className="flex items-center gap-2"> {/* Wrapper for badge and button */}
             <Badge 
