@@ -1,7 +1,44 @@
+# Settings for Cloud Run
+runConfig:
+  minInstances: 2
+#   maxInstances: 100
+#  concurrency: 100
+#   cpu: 2
+#   memoryMiB: 1024
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: anxiannet.firebaseapp.com
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    secret: myApiKey
+
+
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: anxiannet.firebaseapp.com
+
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: anxiannet
+
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: 363669076717
+
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:363669076717:web:768b718a3014a43fa2aae4
+
+    
+
+
+
+
+
 # Settings for Backend (on Cloud Run).
 # See https://firebase.google.com/docs/app-hosting/configure#cloud-run
-runConfig:
-  minInstances: 0
+# runConfig:
+#   minInstances: 0
   # maxInstances: 100
   # concurrency: 80
   # cpu: 1
