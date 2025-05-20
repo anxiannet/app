@@ -39,11 +39,27 @@ if (typeof Handlebars.helpers['gt'] === 'undefined') {
 if (typeof Handlebars.helpers['lookup'] === 'undefined') {
   Handlebars.registerHelper('lookup', function (obj, field) { return obj && obj[field]; });
 }
-// Removed findIndex helper as it's not used or was problematic
 if (typeof Handlebars.helpers['isPlayerOnTeam'] === 'undefined') {
   Handlebars.registerHelper('isPlayerOnTeam', function (playerId, teamPlayerIds) {
     if (!Array.isArray(teamPlayerIds)) return false;
     return teamPlayerIds.includes(playerId);
+  });
+}
+if (typeof Handlebars.helpers['not'] === 'undefined') {
+  Handlebars.registerHelper('not', function (value) {
+    return !value;
+  });
+}
+if (typeof Handlebars.helpers['and'] === 'undefined') {
+  Handlebars.registerHelper('and', function () {
+    // Convert arguments to an array and remove the last one (options object)
+    const conditions = Array.prototype.slice.call(arguments, 0, -1);
+    for (let i = 0; i < conditions.length; i++) {
+      if (!conditions[i]) {
+        return false;
+      }
+    }
+    return true;
   });
 }
 
@@ -261,4 +277,3 @@ const aiProposeTeamFlow = ai.defineFlow(
 export async function decideAiTeamProposal(input: AiProposeTeamInput): Promise<AiProposeTeamOutput> {
   return aiProposeTeamFlow(input);
 }
-

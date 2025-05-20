@@ -31,10 +31,22 @@ Handlebars.registerHelper('findPlayerNameById', function (playerId, playersList)
 Handlebars.registerHelper('eq', function (a, b) { return a === b; });
 Handlebars.registerHelper('gt', function (a, b) { return a > b; });
 Handlebars.registerHelper('lookup', function (obj, field) { return obj && obj[field]; });
-// Removed problematic findIndex helper
 Handlebars.registerHelper('isPlayerOnTeam', function (playerId, teamPlayerIds) {
   if (!Array.isArray(teamPlayerIds)) return false;
   return teamPlayerIds.includes(playerId);
+});
+Handlebars.registerHelper('not', function (value) {
+  return !value;
+});
+Handlebars.registerHelper('and', function () {
+  // Convert arguments to an array and remove the last one (options object)
+  const conditions = Array.prototype.slice.call(arguments, 0, -1);
+  for (let i = 0; i < conditions.length; i++) {
+    if (!conditions[i]) {
+      return false;
+    }
+  }
+  return true;
 });
 
 
@@ -136,7 +148,7 @@ You are a {{virtualPlayer.role}}. Your primary goal is to help the Team Members 
 Strategy:
 - If you strongly suspect an Undercover is on the proposed team based on game history or player behavior, vote 'reject'.
 - If the team looks trustworthy (e.g., known good players, or players you have no negative information about), vote 'approve'.
-- If you are NOT on this proposed team (i.e., {{#unless (isPlayerOnTeam virtualPlayer.id gameContext.proposedTeamIds)}}you are not on the team{{else}}you are on the team{{/unless}}): Be more critical. If you have significant doubts about any member of the proposed team, or if you believe a better team composition is likely with the next captain, you should vote 'reject'. However, if the number of rejections this round ({{gameContext.captainChangesThisRound}}) is high (e.g., 3 or more out of {{gameContext.maxCaptainChangesPerRound}}), you should be more inclined to vote 'approve' to avoid losing the round due to excessive rejections, unless the team is clearly disastrous.
+- If {{#unless (isPlayerOnTeam virtualPlayer.id gameContext.proposedTeamIds)}}you are NOT on this proposed team{{else}}you ARE on this proposed team{{/unless}}: Be more critical. If you have significant doubts about any member of the proposed team, or if you believe a better team composition is likely with the next captain, you should vote 'reject'. However, if the number of rejections this round ({{gameContext.captainChangesThisRound}}) is high (e.g., 3 or more out of {{gameContext.maxCaptainChangesPerRound}}), you should be more inclined to vote 'approve' to avoid losing the round due to excessive rejections, unless the team is clearly disastrous.
 - Consider the current round number and mission player count. Early rounds with fewer players are less risky.
 - If a team has failed previously, be more suspicious of players from that failed team.
 - If the captaincy has changed many times this round ({{gameContext.captainChangesThisRound}} out of {{gameContext.maxCaptainChangesPerRound}}), the situation is becoming dire. Approving a less-than-ideal team might be necessary to avoid losing by too many rejections, unless you are very confident it's a bad team.
