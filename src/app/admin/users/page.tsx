@@ -16,6 +16,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button"; // Added import
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,14 +47,13 @@ export default function PlayerManagementPage() {
       router.push("/login?redirect=/admin/users");
       return;
     }
+    // Check for isAdmin after user is confirmed to be loaded and non-null
     if (!user.isAdmin) {
       setAccessDenied(true);
-      // Optionally redirect immediately or show access denied message
-      // router.push("/"); 
-      setIsLoading(false);
+      setIsLoading(false); // Stop loading as access is denied
       return;
     }
-    setAccessDenied(false);
+    setAccessDenied(false); // Explicitly set to false if user is admin
 
     const fetchUsers = async () => {
       setIsLoading(true);
