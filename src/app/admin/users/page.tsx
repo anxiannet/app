@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { collection, getDocs, orderBy, query, Timestamp } from "firebase/firestore";
@@ -16,11 +16,12 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button"; // Added import
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Users, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Users, ShieldCheck, Search as SearchIcon } from "lucide-react";
 
 interface FirestoreUser {
   id: string;
@@ -38,6 +39,7 @@ export default function PlayerManagementPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     if (authLoading) {
@@ -47,13 +49,12 @@ export default function PlayerManagementPage() {
       router.push("/login?redirect=/admin/users");
       return;
     }
-    // Check for isAdmin after user is confirmed to be loaded and non-null
     if (!user.isAdmin) {
       setAccessDenied(true);
-      setIsLoading(false); // Stop loading as access is denied
+      setIsLoading(false);
       return;
     }
-    setAccessDenied(false); // Explicitly set to false if user is admin
+    setAccessDenied(false);
 
     const fetchUsers = async () => {
       setIsLoading(true);
@@ -90,6 +91,15 @@ export default function PlayerManagementPage() {
 
     fetchUsers();
   }, [user, authLoading, router]);
+
+  const filteredUsers = useMemo(() => {
+    if (!searchTerm) {
+      return users;
+    }
+    return users.filter((u) =>
+      u.nickname.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [users, searchTerm]);
 
   const formatDate = (dateValue: string | Timestamp): string => {
     if (!dateValue) return "N/A";
@@ -128,9 +138,22 @@ export default function PlayerManagementPage() {
         </h1>
       </header>
 
+      <div className="mb-4">
+        <div className="relative">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="搜索玩家昵称..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 w-full md:w-1/3"
+          />
+        </div>
+      </div>
+
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle>玩家列表</CardTitle>
+          <CardTitle>玩家列表 ({filteredUsers.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && (
@@ -152,25 +175,24 @@ export default function PlayerManagementPage() {
               <p>{error}</p>
             </div>
           )}
-          {!isLoading && !error && users.length === 0 && (
+          {!isLoading && !error && filteredUsers.length === 0 && (
             <p className="text-muted-foreground text-center py-4">
-              没有找到玩家。
+              {searchTerm ? `没有找到昵称包含 "${searchTerm}" 的玩家。` : "没有找到玩家。"}
             </p>
           )}
-          {!isLoading && !error && users.length > 0 && (
+          {!isLoading && !error && filteredUsers.length > 0 && (
             <ScrollArea className="max-h-[60vh] w-full">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-[80px]">头像</TableHead>
                     <TableHead>昵称</TableHead>
-                    <TableHead>玩家 ID (UID)</TableHead>
                     <TableHead>权限</TableHead>
                     <TableHead>注册日期</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((u) => (
+                  {filteredUsers.map((u) => (
                     <TableRow key={u.id}>
                       <TableCell>
                         <Avatar className="h-10 w-10">
@@ -181,11 +203,6 @@ export default function PlayerManagementPage() {
                         </Avatar>
                       </TableCell>
                       <TableCell className="font-medium">{u.nickname}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {u.uid || u.id}
-                        </Badge>
-                      </TableCell>
                       <TableCell>
                         {u.isAdmin && (
                           <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
