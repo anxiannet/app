@@ -166,7 +166,7 @@ export default function GameHistoryPage() {
                               <h4 className="text-sm font-semibold mb-2 mt-2 text-primary">比赛过程回顾:</h4>
                               <div className="space-y-2">
                                 {record.missionHistory.map((mission, mIdx) => (
-                                  <div key={`mission-hist-${mIdx}`} className="p-2 border rounded-md bg-muted/20 text-xs">
+                                  <div key={`mission-hist-${record.gameInstanceId}-${mIdx}`} className="p-2 border rounded-md bg-muted/20 text-xs">
                                     <p className="font-semibold">第 {mission.round} 场比赛: 
                                       <span className={cn(mission.outcome === 'success' ? "text-green-600" : "text-red-500")}>
                                         {mission.outcome === 'success' ? " 比赛成功" : " 比赛失败"}
@@ -175,7 +175,7 @@ export default function GameHistoryPage() {
                                         <span className="text-muted-foreground text-xs"> ({mission.generatedFailureReason.narrativeSummary})</span>
                                       )}
                                       {mission.outcome === 'fail' && !mission.generatedFailureReason?.narrativeSummary && mission.failCardsPlayed > 0 && (
-                                         <span className="text-muted-foreground text-xs"> (检测到 {mission.failCardsPlayed} 个破坏行动)</span>
+                                         <span className="text-muted-foreground text-xs"> (因 {mission.failCardsPlayed} 个破坏行动而失败)</span>
                                       )}
                                     </p>
                                     <p>出战队伍: {mission.teamPlayerIds.map(pid => {
@@ -186,7 +186,7 @@ export default function GameHistoryPage() {
                                     {mission.outcome === 'fail' && mission.cardPlays && mission.cardPlays.length > 0 && (
                                       <p>破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
                                         const player = record.playersInGame.find(p => p.id === cp.playerId);
-                                        return player ? player.name : '未知玩家'; // Role removed for consistency
+                                        return player ? player.name : '未知玩家'; 
                                       }).join(', ')}</p>
                                     )}
                                   </div>
@@ -222,6 +222,8 @@ export default function GameHistoryPage() {
                                                         }
                                                     } else if (missionForRound.outcome === 'fail' && missionForRound.generatedFailureReason?.narrativeSummary) {
                                                         missionOutcomeText += ` (${missionForRound.generatedFailureReason.narrativeSummary})`;
+                                                    } else if (missionForRound.outcome === 'fail' && !missionForRound.generatedFailureReason?.narrativeSummary && missionForRound.failCardsPlayed > 0) {
+                                                        missionOutcomeText += ` (因 ${missionForRound.failCardsPlayed} 个破坏行动而失败)`;
                                                     }
                                                 }
                                                 

@@ -8,7 +8,7 @@ import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 type MissionRevealDisplayProps = {
   currentRound?: number;
   missionOutcomeForDisplay?: MissionOutcome;
-  failCardsPlayedForDisplay?: number; // Keep for potential fallback or different display modes
+  failCardsPlayedForDisplay?: number;
   generatedFailureReason?: GeneratedFailureReason;
   onProceedToNextRoundOrGameOver: () => void;
 };
@@ -48,7 +48,7 @@ export function MissionRevealDisplay({
              // Fallback if AI reason is not available but we know there were fail cards
             <p className="text-sm text-muted-foreground flex items-center justify-center">
               <AlertTriangle className="mr-1 h-4 w-4 text-orange-500" />
-              检测到 {failCardsPlayedForDisplay} 个破坏行动。
+              比赛因 {failCardsPlayedForDisplay} 个破坏行动而失败。
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">比赛因未知原因失败。</p>
