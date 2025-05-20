@@ -16,6 +16,10 @@ import Handlebars from 'handlebars';
 
 // Helper to find a player by ID (name for display in prompt)
 Handlebars.registerHelper('findPlayerNameById', function (playerId, playersList) {
+  if (!Array.isArray(playersList)) {
+    console.warn(`findPlayerNameById: playersList is not an array for playerId ${playerId}. playersList:`, playersList);
+    return '未知玩家 (列表错误)';
+  }
   const player = playersList.find((p: PlayerPerspective) => p.id === playerId);
   return player ? player.name : '未知玩家';
 });
