@@ -10,6 +10,16 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import { RoomHeader } from "@/components/game-room/RoomHeader";
 import { PlayerListPanel } from "@/components/game-room/PlayerListPanel";
@@ -80,20 +90,35 @@ export default function GameRoomPage() {
   const [selectedMissionTeam, setSelectedMissionTeam] = useState<string[]>([]);
   const [humanUndercoverCardChoice, setHumanUndercoverCardChoice] = useState<'success' | 'fail' | null>(null);
   const [selectedCoachCandidate, setSelectedCoachCandidate] = useState<string | null>(null);
+  const [showTerminateConfirmDialog, setShowTerminateConfirmDialog] = useState(false);
+
 
   const updateFirestoreRoom = useCallback(async (rawUpdatedFields: Partial<GameRoom>) => {
     if (!roomId || typeof roomId !== 'string') return;
     const roomRef = doc(db, "rooms", roomId);
-
-    // The caller is responsible for ensuring `rawUpdatedFields` is clean.
-    // Specifically, for top-level fields, use `deleteField()` to remove them,
-    // or simply don't include the key if it's an optional field not being set.
-    // For objects within arrays (like in arrayUnion), ensure those objects are clean.
+  
+    const cleanedUpdates: Partial<GameRoom> = {};
+    for (const key in rawUpdatedFields) {
+      if (Object.prototype.hasOwnProperty.call(rawUpdatedFields, key)) {
+        const value = rawUpdatedFields[key as keyof GameRoom];
+        if (value !== undefined) {
+          cleanedUpdates[key as keyof GameRoom] = value;
+        }
+      }
+    }
+  
+    if (Object.keys(cleanedUpdates).length === 0 && Object.keys(rawUpdatedFields).some(k => rawUpdatedFields[k as keyof GameRoom] === deleteField())) {
+      // If only deleteField() operations are present, allow updateDoc
+    } else if (Object.keys(cleanedUpdates).length === 0) {
+      console.warn("updateFirestoreRoom called with only undefined values or no actual changes. Skipping update.");
+      return;
+    }
+  
     try {
-        await updateDoc(roomRef, rawUpdatedFields);
+      await updateDoc(roomRef, cleanedUpdates);
     } catch (error) {
-        console.error("Error updating room in Firestore:", error, "Attempted updates:", rawUpdatedFields);
-        toast({ title: "更新房间失败", description: `无法在服务器上更新房间状态。Error: ${(error as Error).message}`, variant: "destructive" });
+      console.error("Error updating room in Firestore:", error, "Attempted (cleaned) updates:", cleanedUpdates, "Original updates:", rawUpdatedFields);
+      toast({ title: "更新房间失败", description: `无法在服务器上更新房间状态。Error: ${(error as Error).message}`, variant: "destructive" });
     }
   }, [roomId, toast]);
 
@@ -101,7 +126,6 @@ export default function GameRoomPage() {
   useEffect(() => {
     if (authLoading || !user || typeof roomId !== 'string') {
       if (!authLoading && !user) {
-        // Redirect handled by useAuth or login page usually. If still needed:
         // router.push(`/login?redirect=/rooms/${roomId}`);
       }
       return;
@@ -126,7 +150,7 @@ export default function GameRoomPage() {
             const playerExists = initialRoomData.players.some(p => p.id === user.id);
             
             if (!playerExists && initialRoomData.status === GameRoomStatus.Waiting && initialRoomData.players.length < initialRoomData.maxPlayers) {
-                const newPlayerForFirestore: Player = { // Ensure Player type is used
+                const newPlayerForFirestore: Player = {
                     id: user.id,
                     name: user.name,
                     ...(user.avatarUrl && { avatarUrl: user.avatarUrl }),
@@ -205,10 +229,10 @@ export default function GameRoomPage() {
     if (finalRoomState.coachCandidateId && actualCoach) {
         const targetedPlayer = allPlayersInGame.find(p => p.id === finalRoomState.coachCandidateId);
         if (finalRoomState.coachCandidateId === actualCoach.id) {
-            winningFaction = Role.Undercover;
+            winningFaction = Role.Undercover; // Undercover win by assassination
             gameSummaryMessage = `卧底阵营胜利! (通过指认教练: ${actualCoach.name} 是教练!)`;
         } else {
-            winningFaction = Role.TeamMember;
+            winningFaction = Role.TeamMember; // TeamMember win by failed assassination
             gameSummaryMessage = `战队阵营胜利! (教练指认失败: ${targetedPlayer?.name || '被指认者'} 不是教练。实际教练: ${actualCoach.name})`;
         }
     } else if (undercoverMissionWins >= 3 && undercoverMissionWins > teamMemberMissionWins) {
@@ -349,7 +373,11 @@ export default function GameRoomPage() {
 
     if (aiGeneratedFailureReason) {
       missionRecordData.generatedFailureReason = aiGeneratedFailureReason;
+    } else {
+      // Ensure the key is not present if there's no reason
+      delete (missionRecordData as Partial<Mission>).generatedFailureReason;
     }
+
 
     await updateFirestoreRoom({
         teamScores: newTeamScores,
@@ -444,14 +472,15 @@ export default function GameRoomPage() {
     rolesToAssign = rolesToAssign.slice(0, playerCount).sort(() => Math.random() - 0.5); 
 
     const updatedPlayers = localPlayers.map((playerData, index) => {
-        const newPlayer: Player = {
-            id: playerData.id,
-            name: playerData.name,
-            role: rolesToAssign[index],
-            ...(playerData.avatarUrl && { avatarUrl: playerData.avatarUrl }),
-        };
-        return newPlayer;
+      const newPlayer: Player = {
+          id: playerData.id,
+          name: playerData.name,
+          role: rolesToAssign[index],
+      };
+      if (playerData.avatarUrl) newPlayer.avatarUrl = playerData.avatarUrl;
+      return newPlayer;
     });
+
     const firstCaptainIndex = Math.floor(Math.random() * updatedPlayers.length);
     const missionPlayerCounts = MISSIONS_CONFIG[playerCount] || MISSIONS_CONFIG[Object.keys(MISSIONS_CONFIG).map(Number).sort((a,b)=> a-b)[0]];
     const newGameInstanceId = `gameinst_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -513,7 +542,7 @@ export default function GameRoomPage() {
     const virtualPlayerName = availableNames[Math.floor(Math.random() * availableNames.length)];
     const virtualPlayerId = `virtual_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     
-    const newVirtualPlayer: Player = { // Ensure Player type is used
+    const newVirtualPlayer: Player = { 
       id: virtualPlayerId, 
       name: virtualPlayerName,
       avatarUrl: `https://placehold.co/100x100.png?text=${encodeURIComponent(virtualPlayerName.charAt(0))}`,
@@ -791,13 +820,15 @@ export default function GameRoomPage() {
     if (selectedCoachCandidate === actualCoach.id) {
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${actualCoach.name} 是教练！`;
-       // Keep undercoverWins as is, don't set to totalRounds
+      // Ensure teamMemberWins does not incorrectly show as winning if assassination succeeds
+      if (finalTeamScores.teamMemberWins >= 3) { 
+        // Optional: reduce teamMemberWins to prevent it looking like they won on points
+        // finalTeamScores.teamMemberWins = finalTeamScores.undercoverWins >=3 ? finalTeamScores.undercoverWins : 2; 
+      }
     } else {
       toastTitle = "指认失败！战队方获胜！";
       const wronglyAccusedPlayer = localPlayers.find(p => p.id === selectedCoachCandidate);
       toastDescription = `${wronglyAccusedPlayer?.name || '被指认者'} 不是教练。`;
-      // Ensure teamMemberWins reflects their mission wins if assassination fails
-      // No change needed here if teamMemberWins was already >=3
     }
 
     const finalUpdates: Partial<GameRoom> = {
@@ -833,12 +864,13 @@ export default function GameRoomPage() {
         } else if (room.players.some(p => p.id === user.id)) { 
             const playerObjectInRoom = room.players.find(p => p.id === user.id);
             if (playerObjectInRoom) {
-              const cleanedPlayerObject: Player = { // Use Player type
+              const cleanedPlayerObject: Player = {
                 id: playerObjectInRoom.id,
                 name: playerObjectInRoom.name,
-                ...(playerObjectInRoom.avatarUrl && { avatarUrl: playerObjectInRoom.avatarUrl }),
-                ...(playerObjectInRoom.role && { role: playerObjectInRoom.role }),
               };
+              if (playerObjectInRoom.avatarUrl) cleanedPlayerObject.avatarUrl = playerObjectInRoom.avatarUrl;
+              if (playerObjectInRoom.role) cleanedPlayerObject.role = playerObjectInRoom.role;
+
 
               try {
                   await updateDoc(roomRef, {
@@ -851,7 +883,6 @@ export default function GameRoomPage() {
               }
             }
         } else {
-             // If user not in room (e.g., already removed by another client's action), just toast
              toast({ title: "已返回大厅" });
         }
     } else {
@@ -872,12 +903,12 @@ export default function GameRoomPage() {
     const newGameInstanceId = `gameinst_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const currentPlayersWithResetRoles = room.players.map(p => {
-        const playerObject: Player = { // Use Player type, ensure only defined fields
+        const playerObject: Player = {
             id: p.id,
             name: p.name,
-            ...(p.avatarUrl && { avatarUrl: p.avatarUrl }),
-            // Role is intentionally omitted here, will be reassigned
         };
+        if (p.avatarUrl) playerObject.avatarUrl = p.avatarUrl;
+        // Role is intentionally omitted here, will be reassigned
         return playerObject; 
     });
 
@@ -907,6 +938,14 @@ export default function GameRoomPage() {
     toast({ title: "游戏已重置", description: "房间已重置为等待状态。主持人可以开始新游戏。" });
   };
 
+  const requestForceEndGame = () => {
+    if (!room || !user || room.hostId !== user.id || room.status !== GameRoomStatus.InProgress) {
+        toast({ title: "错误", description: "当前无法终止游戏。", variant: "destructive" });
+        return;
+    }
+    setShowTerminateConfirmDialog(true);
+  };
+
   const handleForceEndGame = async () => {
     if (!room || !user || room.hostId !== user.id) {
       toast({ title: "错误", description: "只有主持人可以强制结束游戏。", variant: "destructive" });
@@ -925,6 +964,7 @@ export default function GameRoomPage() {
     saveGameRecordForAllPlayers(finalRoomState);
     await updateFirestoreRoom(finalUpdates);
     toast({ title: "游戏已结束", description: "主持人已强制结束本场游戏。" });
+    setShowTerminateConfirmDialog(false);
   };
 
   const getRoleIcon = (role?: Role) => {
@@ -1021,7 +1061,7 @@ export default function GameRoomPage() {
         localPlayers={localPlayers}
         getPhaseDescription={getPhaseDescription}
         isHost={isHost}
-        onForceEndGame={handleForceEndGame}
+        onPromptTerminateGame={requestForceEndGame} 
       />
 
       <RoleAlerts
@@ -1069,7 +1109,11 @@ export default function GameRoomPage() {
             {room.status === GameRoomStatus.InProgress && (
               <Card>
                 <CardHeader>
-                   {/* Intentionally empty to remove "游戏控制 / 状态" and "第 X 场比赛，第 Y 次组队" */}
+                  {room.currentRound !== undefined && room.captainChangesThisRound !== undefined && (
+                     <div className="text-sm text-muted-foreground">
+                       {/* Intentionally empty for cleaner look per user request */}
+                     </div>
+                  )}
                 </CardHeader>
                 <CardContent className="space-y-4">
                 
@@ -1153,6 +1197,20 @@ export default function GameRoomPage() {
             )}
         </div>
       </div>
+      <AlertDialog open={showTerminateConfirmDialog} onOpenChange={setShowTerminateConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>终止游戏确认</AlertDialogTitle>
+            <AlertDialogDescription>
+              您确定要终止当前游戏吗？此操作无法撤销。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowTerminateConfirmDialog(false)}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleForceEndGame}>确认</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

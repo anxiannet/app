@@ -2,26 +2,26 @@
 "use client";
 
 import type { GameRoom, Player, GameRoomPhase } from "@/lib/types";
-import { GameRoomStatus } from "@/lib/types"; // Added import
+import { GameRoomStatus } from "@/lib/types"; 
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button"; // Added import
-import { ListChecks, ShieldCheck, ShieldX, XOctagon } from "lucide-react"; // Added XOctagon
+import { Button } from "@/components/ui/button"; 
+import { ListChecks, ShieldCheck, ShieldX, XOctagon } from "lucide-react"; 
 
 type RoomHeaderProps = {
   room: GameRoom;
   localPlayers: Player[];
   getPhaseDescription: (phase?: GameRoomPhase) => string;
   isHost: boolean; 
-  onForceEndGame: () => void; 
+  onPromptTerminateGame: () => void; 
 };
 
-export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, onForceEndGame }: RoomHeaderProps) {
+export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, onPromptTerminateGame }: RoomHeaderProps) {
   if (!room) return null;
 
   const hostName = localPlayers.find(p => p.id === room.hostId)?.name || '未知';
 
-  const displayStatus = room.status === GameRoomStatus.InProgress ? "游戏中" : room.status.toUpperCase();
+  const displayStatus = room.status === GameRoomStatus.InProgress ? "游戏中" : room.status === GameRoomStatus.Waiting ? "等待中" : room.status.toUpperCase();
 
   return (
     <Card className="shadow-xl">
@@ -31,7 +31,7 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
             <CardTitle className="text-3xl text-primary flex items-center">{room.name}</CardTitle>
             <CardDescription>主持人: {hostName}</CardDescription>
           </div>
-          <div className="flex items-center gap-2"> {/* Wrapper for badge and button */}
+          <div className="flex items-center gap-2">
             <Badge 
               variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"} 
               className={`ml-auto ${room.status === GameRoomStatus.Waiting ? "border-yellow-500 text-yellow-500" : room.status === GameRoomStatus.InProgress ? "bg-green-500 text-white" : "bg-gray-500 text-white"}`}
@@ -42,19 +42,18 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
               <Button
                 variant="destructive"
                 size="sm"
-                onClick={onForceEndGame}
+                onClick={onPromptTerminateGame} // Changed to trigger dialog
                 className="transition-transform hover:scale-105 active:scale-95"
-                title="强制结束游戏"
+                title="终止游戏"
               >
                 <XOctagon className="mr-1 h-4 w-4" />
-                <span className="hidden sm:inline">强制结束</span>
+                <span className="hidden sm:inline">终止游戏</span>
               </Button>
             )}
           </div>
         </div>
         {room.status === GameRoomStatus.InProgress && (
           <div className="mt-2 text-sm text-muted-foreground space-y-1">
-             <p>第 {room.currentRound} 场比赛，第 {(room.captainChangesThisRound || 0) + 1} 次组队</p>
             {room.currentPhase && <div className="flex items-center"><ListChecks className="mr-2 h-4 w-4 text-purple-500" /> 当前阶段: {getPhaseDescription(room.currentPhase)}</div>}
             {room.teamScores && (
               <div className="flex items-center gap-4">
