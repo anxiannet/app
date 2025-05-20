@@ -3,6 +3,7 @@
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
+// For Firestore, we use initializeFirestore to allow custom host.
 import { initializeFirestore, getFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -19,8 +20,12 @@ let app: FirebaseApp | undefined = undefined;
 let auth: Auth | undefined = undefined;
 let db: Firestore | undefined = undefined;
 
-// Firestore Proxy Configuration
+// Firestore Proxy Configuration (using the simplified worker script)
 const FIRESTORE_PROXY_HOST = "black-rain-7f1e.bostage.workers.dev"; // Your Cloudflare Worker for Firestore
+
+// Authentication Proxy (User-intended, but not directly configurable in SDK for all API calls)
+const AUTH_PROXY_HOST = "auth-jolly-bread-8cd4.bostage.workers.dev";
+
 
 if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
@@ -62,15 +67,19 @@ if (typeof window !== "undefined") {
         auth = getAuth(app);
         console.log("Firebase Auth initialized to use default Google endpoints.");
         console.warn(
-          "Firebase Auth Proxying: The Firebase JS SDK for Authentication is NOT configured to use a proxy with the current setup. " +
-          "Authentication requests will go directly to Google's identitytoolkit.googleapis.com."
+          `Firebase Auth Proxying: User intends to use proxy at ${AUTH_PROXY_HOST} for Authentication API calls. ` +
+          "However, the Firebase JS SDK for Authentication does NOT provide a simple configuration option " +
+          "to route all its core API calls (to identitytoolkit.googleapis.com and securetoken.googleapis.com) " +
+          "through a custom host proxy in this manner. Authentication requests will continue to go directly to Google's servers. " +
+          "Advanced proxying for Auth usually requires backend-mediated calls or network-level solutions."
         );
 
-        // Initialize Firestore with the new simpler proxy configuration
+        // Initialize Firestore with the simpler proxy configuration
+        // This assumes your worker at FIRESTORE_PROXY_HOST directly forwards paths.
         console.log(`Attempting to initialize Firestore with proxy host: ${FIRESTORE_PROXY_HOST}`);
         db = initializeFirestore(app, {
-          host: FIRESTORE_PROXY_HOST, // Just the domain of your worker
-          ssl: true,        // Assuming your worker is served over HTTPS
+          host: FIRESTORE_PROXY_HOST, 
+          ssl: true,
           ignoreUndefinedProperties: true,
         });
         console.log(`Firestore configured to use proxy host: ${FIRESTORE_PROXY_HOST}. The Firebase SDK will append paths like /v1/projects/... directly to this host.`);
@@ -90,8 +99,9 @@ if (typeof window !== "undefined") {
       }
     } else { 
       app = getApps()[0];
-      auth = getAuth(app); 
+      auth = getAuth(app); // Auth will still use default endpoints
       
+      // Firestore re-initialization logic if needed (e.g., if settings changed during hot reload)
       const currentDbHost = db && (db.settings as any)?.host;
       const targetFirestoreHost = FIRESTORE_PROXY_HOST;
 
@@ -113,5 +123,3 @@ if (typeof window !== "undefined") {
 }
 
 export { app, auth, db };
-
-    
