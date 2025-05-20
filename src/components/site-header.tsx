@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { Zap } from "lucide-react"; // Using Zap as a placeholder for app icon
+import { Zap, Users } from "lucide-react"; // Using Zap as a placeholder for app icon, Users for admin link
 import { AuthButton } from "./auth-button";
 import { Button } from "./ui/button";
 
@@ -16,11 +16,17 @@ export function SiteHeader() {
             暗线
           </span>
         </Link>
-        <nav className="flex items-center space-x-4">
+        <nav className="flex items-center space-x-2 sm:space-x-4">
           <Button variant="ghost" asChild>
             <Link href="/">大厅</Link>
           </Button>
-          {/* Add other navigation links here if needed */}
+          <Button variant="ghost" asChild>
+            <Link href="/admin/users" className="flex items-center">
+              <Users className="mr-1 h-4 w-4 sm:mr-2 sm:h-5 sm:w-5" />
+              <span className="hidden sm:inline">用户管理</span>
+              <span className="sm:hidden">用户</span>
+            </Link>
+          </Button>
           <AuthButton />
         </nav>
       </div>
