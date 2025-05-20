@@ -34,7 +34,7 @@ export function GameOverSummary({
       <p className="text-muted-foreground mt-2">感谢您的参与！</p>
       <div className="mt-4 space-y-2 sm:space-y-0 sm:flex sm:gap-2 sm:justify-center">
         <Button variant="outline" onClick={onReturnToLobby} className="w-full sm:w-auto">
-          <LogOut className="mr-2 h-4 w-4" /> 返回大厅
+          <LogOut className="mr-2 h-4 w-4" /> 关闭房间
         </Button>
         {isHost && (
           <Button onClick={onRestartGame} className="w-full sm:w-auto bg-accent hover:bg-accent/90 text-accent-foreground">

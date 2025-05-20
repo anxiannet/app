@@ -47,7 +47,7 @@ export function WaitingPhaseActions({
         </div>
       )}
       <Button variant="outline" onClick={onReturnToLobby} className="w-full mt-4">
-        <LogOut className="mr-2 h-4 w-4" /> 返回大厅
+        <LogOut className="mr-2 h-4 w-4" /> 关闭房间
       </Button>
     </>
   );
