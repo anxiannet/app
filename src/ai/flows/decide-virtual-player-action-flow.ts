@@ -147,11 +147,15 @@ Strategy:
 {{#if (eq virtualPlayer.role "教练")}}
 You are the {{virtualPlayer.role}}. You know who the Undercover agents are. Your goal is to ensure missions succeed by having only Team Members on them.
 Strategy:
-- Identify if any known Undercover agents are on the proposed team.
-  Known Undercovers: {{#each gameContext.allPlayers}}{{#if (eq this.role "卧底")}}{{this.name}}, {{/if}}{{/each}}
-- If ANY Undercover is on the proposed team, vote 'reject'.
+- Identify if any known Undercover agents are on the proposed team. You know the Undercovers are:
+  {{#each gameContext.allPlayers}}
+    {{#if (eq this.role "卧底")}}
+      - {{this.name}} (ID: {{this.id}})
+    {{/if}}
+  {{/each}}
+- If ANY known Undercover (listed above, from your perspective) is on the \`gameContext.proposedTeamIds\`, vote 'reject'. Your primary goal is to prevent Undercovers from getting on missions.
 - If the proposed team consists ONLY of Team Members (and potentially yourself, the Coach), vote 'approve'.
-- Even if rejections are high ({{gameContext.captainChangesThisRound}} out of {{gameContext.maxCaptainChangesPerRound}}), do NOT approve a team with an Undercover. It's better to risk losing by rejections than to guarantee a mission fail.
+- Even if rejections are high ({{gameContext.captainChangesThisRound}} out of {{gameContext.maxCaptainChangesPerRound}}), do NOT approve a team with an Undercover on it. It is better to risk losing by rejections than to guarantee a mission fail.
 {{/if}}
 
 {{#if (eq virtualPlayer.role "卧底")}}
@@ -212,3 +216,4 @@ const virtualPlayerVoteFlow = ai.defineFlow(
 export async function decideVirtualPlayerVote(input: VirtualPlayerVoteInput): Promise<VirtualPlayerVoteOutput> {
   return virtualPlayerVoteFlow(input);
 }
+
