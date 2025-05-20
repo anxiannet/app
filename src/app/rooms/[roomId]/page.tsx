@@ -4,7 +4,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote, type MissionCardPlay, type MissionOutcome, type VoteHistoryEntry, type PlayerGameRecord, type WinningFactionType } from "@/lib/types";
+import { type GameRoom, type Player, Role, GameRoomStatus, type GameRoomPhase, type Mission, type PlayerVote, type MissionCardPlay, type MissionOutcome, type VoteHistoryEntry, type PlayerGameRecord, type WinningFactionType, type GeneratedFailureReason } from "@/lib/types";
 import { Crown, Users, Play, Info, Swords, Shield, HelpCircle, UserPlus, Eye, UsersRound, ListChecks, Vote, ShieldCheck, ShieldX, ThumbsUp, ThumbsDown, CheckCircle2, XCircle, Zap, Target, History, RotateCcw, XOctagon, LogOut, Brain } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -24,8 +24,8 @@ import { GameOverSummary } from "@/components/game-room/GameOverSummary";
 import { VoteHistoryAccordion } from "@/components/game-room/VoteHistoryAccordion";
 
 import { db } from "@/lib/firebase"; // Firebase client SDK
-import { doc, getDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, serverTimestamp, Timestamp, deleteField, deleteDoc } from "firebase/firestore";
-import type { Unsubscribe } from "firebase/firestore";
+import { doc, getDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, serverTimestamp, Timestamp, deleteField, deleteDoc, Unsubscribe } from "firebase/firestore";
+import { generateFailureReason } from "@/ai/flows/generate-failure-reason-flow";
 
 
 const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: number, [Role.TeamMember]: number } } = {
@@ -83,16 +83,13 @@ export default function GameRoomPage() {
     for (const key in rawUpdatedFields) {
         if (Object.prototype.hasOwnProperty.call(rawUpdatedFields, key)) {
             const value = rawUpdatedFields[key as keyof GameRoom];
-             // Only include the field if its value is not undefined.
-            // If you explicitly want to remove a field, pass deleteField() as its value.
-            if (value !== undefined || value === deleteField()) {
+            if (value !== undefined) { // Only include defined values, allow deleteField()
                 updatesForFirestore[key] = value;
             }
         }
     }
     
     if (Object.keys(updatesForFirestore).length === 0) {
-        // console.log("updateFirestoreRoom: No changes to apply after filtering undefined values or if only deleteField() was passed for non-existent fields.");
         return;
     }
 
@@ -168,6 +165,7 @@ export default function GameRoomPage() {
               totalRounds: roomData.totalRounds || TOTAL_ROUNDS_PER_GAME,
               maxCaptainChangesPerRound: roomData.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND,
               selectedTeamForMission: roomData.selectedTeamForMission || [],
+              generatedFailureReason: roomData.generatedFailureReason || undefined,
             };
             setRoom(validatedRoom);
              if (validatedRoom.selectedTeamForMission) {
@@ -237,7 +235,7 @@ export default function GameRoomPage() {
                gameSummaryMessage = "游戏平局!";
            }
         } else { 
-             winningFaction = 'Draw'; // Should ideally not happen if game ends for other reasons
+             winningFaction = 'Draw'; 
              gameSummaryMessage = "游戏平局! (未知原因)";
         }
     }
@@ -265,12 +263,15 @@ export default function GameRoomPage() {
         winningFaction: winningFaction,
         gameSummaryMessage: gameSummaryMessage,
         finalScores: { ...(finalRoomState.teamScores || { teamMemberWins: 0, undercoverWins: 0 }) },
-        playersInGame: allPlayersInGame.map(p => ({ 
+        playersInGame: allPlayersInGame.map(p => {
+          const playerDetail: {id: string; name: string; role: Role; avatarUrl?: string} = { 
             id: p.id, 
             name: p.name, 
-            role: p.role || Role.TeamMember, // Fallback, should always have role at game end
-            avatarUrl: p.avatarUrl 
-        })),
+            role: p.role || Role.TeamMember,
+          };
+          if (p.avatarUrl) playerDetail.avatarUrl = p.avatarUrl;
+          return playerDetail;
+        }),
         coachAssassinationAttempt: finalRoomState.coachCandidateId && actualCoach ? {
           targetPlayerId: finalRoomState.coachCandidateId,
           targetPlayerName: allPlayersInGame.find(p => p.id === finalRoomState.coachCandidateId)?.name || '未知',
@@ -288,10 +289,9 @@ export default function GameRoomPage() {
         if (existingHistoryRaw) {
           playerHistory = JSON.parse(existingHistoryRaw);
         }
-        // Ensure no duplicate gameInstanceId record for the same player
         playerHistory = playerHistory.filter(r => r.gameInstanceId !== record.gameInstanceId);
-        playerHistory.unshift(record); // Add new record to the beginning
-        localStorage.setItem(historyKey, JSON.stringify(playerHistory.slice(0, 50))); // Keep last 50 records
+        playerHistory.unshift(record); 
+        localStorage.setItem(historyKey, JSON.stringify(playerHistory.slice(0, 50))); 
       } catch (e) {
         console.error(`Failed to save game record for player ${player.id}:`, e);
       }
@@ -303,11 +303,10 @@ export default function GameRoomPage() {
 
     let finalPlays: MissionCardPlay[] = [...(room.missionCardPlaysForCurrentMission || [])];
 
-    // Simulate virtual player card plays
     room.selectedTeamForMission.forEach(playerId => {
       const player = localPlayers.find(p => p.id === playerId);
       if (player && player.id.startsWith("virtual_") && !finalPlays.some(fp => fp.playerId === playerId)) {
-        const cardToPlay: 'success' | 'fail' = player.role === Role.Undercover ? 'fail' : 'success'; // Simple AI
+        const cardToPlay: 'success' | 'fail' = player.role === Role.Undercover ? 'fail' : 'success'; 
         finalPlays.push({ playerId: player.id, card: cardToPlay });
       }
     });
@@ -315,11 +314,10 @@ export default function GameRoomPage() {
     const failCardsPlayed = finalPlays.filter(p => p.card === 'fail').length;
     let missionSuccessful: boolean;
 
-    // Determine mission success based on fail cards
     if (localPlayers.length >= 7 && room.currentRound === 4) {
-      missionSuccessful = failCardsPlayed < 2; // Needs 2 fail cards to fail
+      missionSuccessful = failCardsPlayed < 2; 
     } else {
-      missionSuccessful = failCardsPlayed < 1; // Needs 1 fail card to fail
+      missionSuccessful = failCardsPlayed < 1; 
     }
 
     const outcome: MissionOutcome = missionSuccessful ? 'success' : 'fail';
@@ -327,27 +325,41 @@ export default function GameRoomPage() {
     if (missionSuccessful) newTeamScores.teamMemberWins++;
     else newTeamScores.undercoverWins++;
 
+    let aiGeneratedFailureReason: GeneratedFailureReason | undefined = undefined;
+    if (outcome === 'fail') {
+      try {
+        aiGeneratedFailureReason = await generateFailureReason({ failCardCount: failCardsPlayed });
+      } catch (e) {
+        console.error("Error generating AI failure reason:", e);
+        aiGeneratedFailureReason = {
+          selectedReasons: ["系统分析错误"],
+          narrativeSummary: "比赛失利，具体原因分析失败。"
+        };
+      }
+    }
+
     const missionRecord: Mission = {
       round: room.currentRound,
       captainId: room.currentCaptainId || "unknown_captain",
       teamPlayerIds: [...room.selectedTeamForMission],
       outcome: outcome,
       failCardsPlayed: failCardsPlayed,
-      cardPlays: [...finalPlays], // Store all card plays for history
+      cardPlays: [...finalPlays],
+      generatedFailureReason: aiGeneratedFailureReason,
     };
 
     await updateFirestoreRoom({
         teamScores: newTeamScores,
-        missionHistory: arrayUnion(missionRecord) as any, // Firestore arrayUnion
+        missionHistory: arrayUnion(missionRecord) as any, 
         currentPhase: 'mission_reveal',
         missionOutcomeForDisplay: outcome,
         failCardsPlayedForDisplay: failCardsPlayed,
-        missionCardPlaysForCurrentMission: finalPlays, // Keep for display, then clear
+        missionCardPlaysForCurrentMission: finalPlays, 
+        generatedFailureReason: aiGeneratedFailureReason || deleteField(),
       });
-    toast({ title: `第 ${room.currentRound} 轮比赛结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'} (${failCardsPlayed} 张破坏牌)`});
+    toast({ title: `第 ${room.currentRound} 场比赛结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'}${outcome === 'fail' && aiGeneratedFailureReason ? ` (${aiGeneratedFailureReason.narrativeSummary})` : ''}`});
   }, [room, localPlayers, toast, updateFirestoreRoom]);
 
-  // Effect to auto-finalize mission if only virtual players or all humans have acted
   useEffect(() => {
     if (!room || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'mission_execution' || !user) {
       return;
@@ -358,8 +370,8 @@ export default function GameRoomPage() {
       return player && !player.id.startsWith("virtual_");
     });
 
-    if (humanPlayersOnMission.length === 0 && missionTeamPlayerIds.length > 0) { // All virtual players
-      const timer = setTimeout(() => finalizeAndRevealMissionOutcome(), 1000); // Simulate delay
+    if (humanPlayersOnMission.length === 0 && missionTeamPlayerIds.length > 0) { 
+      const timer = setTimeout(() => finalizeAndRevealMissionOutcome(), 1000); 
       return () => clearTimeout(timer);
     }
 
@@ -371,21 +383,19 @@ export default function GameRoomPage() {
   }, [room, localPlayers, user, finalizeAndRevealMissionOutcome]);
 
 
-  // Effect for AI captain to propose a team
   useEffect(() => {
     if (!room || !user || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_selection' || !localPlayers.length) {
       return;
     }
     const currentCaptain = localPlayers.find(p => p.id === room.currentCaptainId);
     if (currentCaptain && currentCaptain.id.startsWith("virtual_")) {
-      // Simple AI: Captain picks themselves and random others
       const performVirtualCaptainTeamProposal = async () => {
         if (!room.currentRound || !room.missionPlayerCounts || !localPlayers.length || (room.captainChangesThisRound  || 0) >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) return;
         const requiredPlayers = room.missionPlayerCounts[room.currentRound -1];
         
         let proposedTeamIds: string[] = [];
         if (requiredPlayers > 0 && localPlayers.some(p => p.id === currentCaptain.id)) {
-             proposedTeamIds.push(currentCaptain.id); // Captain includes themselves
+             proposedTeamIds.push(currentCaptain.id); 
         }
 
         const otherPlayers = localPlayers.filter(p => p.id !== currentCaptain.id);
@@ -395,7 +405,6 @@ export default function GameRoomPage() {
             proposedTeamIds.push(shuffledOtherPlayers[i].id);
         }
         
-        // Fallback if not enough players (shouldn't happen with enough players)
         if (proposedTeamIds.length < requiredPlayers) {
             const allPlayerIds = localPlayers.map(p => p.id);
             const remainingNeeded = requiredPlayers - proposedTeamIds.length;
@@ -404,17 +413,17 @@ export default function GameRoomPage() {
             proposedTeamIds.push(...shuffledAvailable.slice(0, remainingNeeded));
         }
         
-        proposedTeamIds = proposedTeamIds.slice(0, requiredPlayers); // Ensure correct number
+        proposedTeamIds = proposedTeamIds.slice(0, requiredPlayers); 
 
         const proposedTeamNames = proposedTeamIds.map(id => localPlayers.find(p=>p.id === id)?.name || 'Unknown').join(', ');
         await updateFirestoreRoom({
             selectedTeamForMission: proposedTeamIds,
             currentPhase: 'team_voting',
-            teamVotes: [], // Reset votes for new proposal
+            teamVotes: [], 
         });
         toast({ title: "虚拟队伍已提议", description: `${currentCaptain.name} 提议: ${proposedTeamNames}` });
       };
-      const timer = setTimeout(performVirtualCaptainTeamProposal, 1500); // Delay for AI "thinking"
+      const timer = setTimeout(performVirtualCaptainTeamProposal, 1500); 
       return () => clearTimeout(timer);
     }
   }, [room, user, localPlayers, toast, updateFirestoreRoom]);
@@ -428,8 +437,8 @@ export default function GameRoomPage() {
     Object.entries(config).forEach(([role, count]) => {
       for (let i = 0; i < count; i++) rolesToAssign.push(role as Role);
     });
-    while(rolesToAssign.length < playerCount) rolesToAssign.push(Role.TeamMember); // Fill remaining with TeamMember
-    rolesToAssign = rolesToAssign.slice(0, playerCount).sort(() => Math.random() - 0.5); // Shuffle roles
+    while(rolesToAssign.length < playerCount) rolesToAssign.push(Role.TeamMember); 
+    rolesToAssign = rolesToAssign.slice(0, playerCount).sort(() => Math.random() - 0.5); 
 
     const updatedPlayers = localPlayers.map((playerData, index) => {
         const newPlayer: Player = {
@@ -466,6 +475,7 @@ export default function GameRoomPage() {
         missionOutcomeForDisplay: deleteField() as any,
         failCardsPlayedForDisplay: deleteField() as any,
         coachCandidateId: deleteField() as any,
+        generatedFailureReason: deleteField() as any,
       };
     await updateFirestoreRoom(updatedRoomData);
     setSelectedMissionTeam([]);
@@ -546,7 +556,7 @@ export default function GameRoomPage() {
     if (voteOutcome === 'approved') {
       toast({ title: "队伍已批准!", description: "进入比赛执行阶段。" });
       const currentSelectedTeam = room.selectedTeamForMission || [];
-      const autoPlays: MissionCardPlay[] = []; // Cards played automatically by non-Undercover humans
+      const autoPlays: MissionCardPlay[] = []; 
       currentSelectedTeam.forEach(playerId => {
         const player = localPlayers.find(p => p.id === playerId);
         if (player && !player.id.startsWith("virtual_") && (player.role === Role.TeamMember || player.role === Role.Coach)) {
@@ -556,24 +566,23 @@ export default function GameRoomPage() {
 
       await updateFirestoreRoom({
           currentPhase: 'mission_execution', teamVotes: currentVotes, 
-          captainChangesThisRound: 0, // Reset as team was approved
-          missionCardPlaysForCurrentMission: autoPlays, // Start with auto-plays
+          captainChangesThisRound: 0, 
+          missionCardPlaysForCurrentMission: autoPlays, 
           fullVoteHistory: updatedFullVoteHistoryFirestore as any,
       });
-      setHumanUndercoverCardChoice(null); // Reset any previous choice
+      setHumanUndercoverCardChoice(null); 
 
-    } else { // Team Rejected
+    } else { 
       let newCaptainChangesThisRound = (room.captainChangesThisRound || 0) + 1;
       if (newCaptainChangesThisRound >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) {
-        // Max rejections reached, Undercovers win
-        const finalTeamScores = { ...(room.teamScores || {teamMemberWins: 0, undercoverWins: 0}), undercoverWins: room.totalRounds || TOTAL_ROUNDS_PER_GAME }; // Undercover wins all rounds
+        const finalTeamScores = { ...(room.teamScores || {teamMemberWins: 0, undercoverWins: 0}), undercoverWins: room.totalRounds || TOTAL_ROUNDS_PER_GAME }; 
         const finalRoomStateForRecord: GameRoom = {
           ...room, 
           status: GameRoomStatus.Finished,
           currentPhase: 'game_over' as GameRoomPhase,
           teamScores: finalTeamScores,
           teamVotes: currentVotes,
-          fullVoteHistory: [...(room.fullVoteHistory || []), newVoteLogEntry], // Add final vote
+          fullVoteHistory: [...(room.fullVoteHistory || []), newVoteLogEntry], 
           captainChangesThisRound: newCaptainChangesThisRound,
         };
         saveGameRecordForAllPlayers(finalRoomStateForRecord);
@@ -582,12 +591,11 @@ export default function GameRoomPage() {
             status: GameRoomStatus.Finished,
             currentPhase: 'game_over',
             teamScores: finalTeamScores,
-            teamVotes: currentVotes, // Save last votes
+            teamVotes: currentVotes, 
             fullVoteHistory: updatedFullVoteHistoryFirestore as any,
             captainChangesThisRound: newCaptainChangesThisRound,
         });
       } else {
-        // Pass captaincy
         const currentCaptainIndex = localPlayers.findIndex(p => p.id === room.currentCaptainId);
         const nextCaptainIndex = (currentCaptainIndex + 1) % localPlayers.length;
         const newCaptainId = localPlayers[nextCaptainIndex].id;
@@ -597,11 +605,11 @@ export default function GameRoomPage() {
             currentCaptainId: newCaptainId,
             captainChangesThisRound: newCaptainChangesThisRound, 
             currentPhase: 'team_selection',
-            selectedTeamForMission: [], // Clear selection for new captain
-            teamVotes: [], // Clear votes for new proposal
+            selectedTeamForMission: [], 
+            teamVotes: [], 
             fullVoteHistory: updatedFullVoteHistoryFirestore as any,
           });
-        setSelectedMissionTeam([]); // Clear local selection state
+        setSelectedMissionTeam([]); 
       }
     }
   }, [room, user, localPlayers, toast, saveGameRecordForAllPlayers, updateFirestoreRoom]);
@@ -619,43 +627,34 @@ export default function GameRoomPage() {
 
     toast({title: "投票已提交", description: `您投了 ${vote === 'approve' ? '同意' : '拒绝'}。等待其他玩家...`});
 
-    // Check if all real players have voted
     const realPlayers = localPlayers.filter(p => !p.id.startsWith("virtual_"));
     const realPlayersWhoVotedIds = new Set(updatedVotes.filter(v => realPlayers.some(rp => rp.id === v.playerId)).map(v => v.playerId));
 
     if (realPlayersWhoVotedIds.size === realPlayers.length) {
-      // All real players voted, simulate virtual player votes
       const virtualPlayers = localPlayers.filter(p => p.id.startsWith("virtual_"));
       const virtualPlayerVotes: PlayerVote[] = virtualPlayers.map(vp => {
-        // Simple AI: Approve if captain, or if on team and good, or if not on team. Reject if bad guy on team and self is good.
-        let aiVote: 'approve' | 'reject' = 'approve'; // Default to approve
+        let aiVote: 'approve' | 'reject' = 'approve'; 
         if (vp.role === Role.Undercover) {
-            // Undercover AI: approve if team has any undercover, reject otherwise (to cause chaos or get allies on)
             const teamHasUndercover = room.selectedTeamForMission?.some(memberId => {
                 const member = localPlayers.find(p=>p.id === memberId);
                 return member?.role === Role.Undercover;
             });
             aiVote = teamHasUndercover ? 'approve' : 'reject';
         } else if (vp.role === Role.Coach) {
-            // Coach AI: approve if team has NO undercover, reject if team has any undercover.
             const teamHasUndercover = room.selectedTeamForMission?.some(memberId => {
                 const member = localPlayers.find(p=>p.id === memberId);
                 return member?.role === Role.Undercover;
             });
             aiVote = teamHasUndercover ? 'reject' : 'approve';
-        } else { // TeamMember AI
-            // Simple: approve unless too many rejections already or team looks very suspicious (e.g. known undercover)
-            // For now, just approve
+        } else { 
             aiVote = 'approve';
         }
         return { playerId: vp.id, vote: aiVote };
       });
       updatedVotes = [...updatedVotes, ...virtualPlayerVotes];
-      // Update Firestore with all votes before processing
       await updateFirestoreRoom({ teamVotes: updatedVotes });
-      await processTeamVotes(updatedVotes); // Process votes now that all are in
+      await processTeamVotes(updatedVotes); 
     } else {
-        // Not all real players voted yet, just update this player's vote
         await updateFirestoreRoom({ teamVotes: arrayUnion(newVote) as any});
     }
   };
@@ -672,7 +671,6 @@ export default function GameRoomPage() {
     }
     setHumanUndercoverCardChoice(card);
     const newPlay: MissionCardPlay = { playerId: user.id, card };
-    // Update Firestore with this play
     await updateFirestoreRoom({
         missionCardPlaysForCurrentMission: arrayUnion(newPlay) as any
     });
@@ -684,26 +682,23 @@ export default function GameRoomPage() {
 
     let updates: Partial<GameRoom> = {};
     let gameIsOver = false;
-    let nextPhase: GameRoomPhase = 'team_selection'; // Default next phase
+    let nextPhase: GameRoomPhase = 'team_selection'; 
 
-    // Check for mission win conditions
     if (room.teamScores.teamMemberWins >= 3 && room.teamScores.teamMemberWins > room.teamScores.undercoverWins) {
-      // Team Members are about to win via missions, give Undercovers a chance to assassinate coach
       const humanUndercovers = localPlayers.filter(p => p.role === Role.Undercover && !p.id.startsWith("virtual_"));
-      if (humanUndercovers.length > 0) { // Only if there are human undercovers to make the choice
+      if (humanUndercovers.length > 0) { 
         nextPhase = 'coach_assassination';
         toast({ title: "战队方胜利在望!", description: "卧底现在有一次指认教练的机会来反败为胜。" });
-      } else { // No human undercovers, Team Members win outright
+      } else { 
         gameIsOver = true;
         nextPhase = 'game_over';
         toast({ title: "战队方获胜!", description: "卧底方无力回天。" });
       }
     } else if (room.teamScores.undercoverWins >= 3 && room.teamScores.undercoverWins > room.teamScores.teamMemberWins) {
-        // Undercovers win via missions
         gameIsOver = true;
         nextPhase = 'game_over';
         toast({ title: "卧底方获胜!", description: "卧底方已完成3场比赛。" });
-    } else if (room.currentRound >= room.totalRounds) { // All rounds played
+    } else if (room.currentRound >= room.totalRounds) { 
         gameIsOver = true;
         nextPhase = 'game_over';
         toast({ title: "所有比赛结束!", description: "根据胜场决定最终胜负。" });
@@ -713,21 +708,21 @@ export default function GameRoomPage() {
     if (gameIsOver) {
       updates = { 
         status: GameRoomStatus.Finished, 
-        currentPhase: 'game_over', // Ensure phase is game_over
-        missionOutcomeForDisplay: deleteField() as any, // Clear display fields
+        currentPhase: 'game_over', 
+        missionOutcomeForDisplay: deleteField() as any, 
         failCardsPlayedForDisplay: deleteField() as any,
-        // teamScores are already set
+        generatedFailureReason: deleteField() as any,
       };
-      saveGameRecordForAllPlayers({...room, ...updates, currentPhase: nextPhase } as GameRoom); // Pass potentially updated phase
+      saveGameRecordForAllPlayers({...room, ...updates, currentPhase: nextPhase } as GameRoom); 
       await updateFirestoreRoom(updates);
     } else if (nextPhase === 'coach_assassination') {
-        // Transition to coach assassination phase
         await updateFirestoreRoom({ 
           currentPhase: 'coach_assassination',
           missionOutcomeForDisplay: deleteField() as any,
           failCardsPlayedForDisplay: deleteField() as any,
+          generatedFailureReason: deleteField() as any,
         });
-    } else { // Proceed to next round
+    } else { 
       const nextRoundNumber = room.currentRound + 1;
       const currentCaptainIndex = localPlayers.findIndex(p => p.id === room.currentCaptainId);
       const nextCaptainIndex = (currentCaptainIndex + 1) % localPlayers.length;
@@ -741,8 +736,9 @@ export default function GameRoomPage() {
           selectedTeamForMission: [],
           teamVotes: [],
           missionCardPlaysForCurrentMission: [],
-          missionOutcomeForDisplay: deleteField() as any, // Clear display fields
+          missionOutcomeForDisplay: deleteField() as any, 
           failCardsPlayedForDisplay: deleteField() as any,
+          generatedFailureReason: deleteField() as any,
         };
       await updateFirestoreRoom(updates);
       setSelectedMissionTeam([]);
@@ -759,7 +755,6 @@ export default function GameRoomPage() {
     }
     const actualCoach = localPlayers.find(p => p.role === Role.Coach);
     if (!actualCoach) {
-      // This should not happen in a valid game setup
       toast({ title: "游戏错误", description: "未找到教练角色。", variant: "destructive" });
       const finalRoomStateForError: Partial<GameRoom> = { status: GameRoomStatus.Finished, currentPhase: 'game_over', teamScores: room.teamScores };
       saveGameRecordForAllPlayers({...room, ...finalRoomStateForError} as GameRoom);
@@ -787,7 +782,7 @@ export default function GameRoomPage() {
     saveGameRecordForAllPlayers({...room, ...finalUpdates} as GameRoom);
     await updateFirestoreRoom(finalUpdates);
     toast({ title: toastTitle, description: toastDescription, duration: 5000 });
-    setSelectedCoachCandidate(null); // Reset selection
+    setSelectedCoachCandidate(null); 
   };
 
   const handleReturnToLobbyAndLeaveRoom = useCallback(async () => {
@@ -801,7 +796,6 @@ export default function GameRoomPage() {
     if (currentRoomId && room) {
         const roomRef = doc(db, "rooms", currentRoomId);
         if (user.id === room.hostId && room.status === GameRoomStatus.Waiting) {
-            // Host is leaving a waiting room, delete the room
             try {
                 await deleteDoc(roomRef);
                 toast({ title: "房间已关闭", description: `您作为主持人已离开并关闭了等待中的房间 ${currentRoomName}。` });
@@ -810,10 +804,9 @@ export default function GameRoomPage() {
                 toast({ title: "关闭房间失败", description: `无法关闭房间 ${currentRoomName}。`, variant: "destructive" });
             }
         } else if (room.players.some(p => p.id === user.id) && room.hostId !== user.id) {
-            // Non-host player is leaving
             const playerObjectInRoom = room.players.find(p => p.id === user.id);
             if (playerObjectInRoom) {
-              const cleanedPlayerObject: {id: string; name: string; avatarUrl?: string; role?: Role} = { // Ensure no undefined fields if Player type changes
+              const cleanedPlayerObject: {id: string; name: string; avatarUrl?: string; role?: Role} = {
                 id: playerObjectInRoom.id,
                 name: playerObjectInRoom.name,
               };
@@ -878,6 +871,7 @@ export default function GameRoomPage() {
         missionOutcomeForDisplay: deleteField() as any,
         failCardsPlayedForDisplay: deleteField() as any,
         coachCandidateId: deleteField() as any,
+        generatedFailureReason: deleteField() as any,
       };
     await updateFirestoreRoom(updates);
     setSelectedMissionTeam([]);
@@ -955,8 +949,8 @@ export default function GameRoomPage() {
 
   const assassinationTargetOptions = localPlayers.filter(p => {
     if (currentUserRole !== Role.Undercover) return false;
-    if (p.id === user.id) return false; // Cannot target self
-    if (fellowUndercovers.some(fu => fu.id === p.id)) return false; // Cannot target fellow undercover
+    if (p.id === user.id) return false; 
+    if (fellowUndercovers.some(fu => fu.id === p.id)) return false; 
     return true;
   });
 
@@ -979,7 +973,7 @@ export default function GameRoomPage() {
       gameOverMessageNode = <span className="text-green-600">战队阵营胜利! (通过完成比赛)</span>;
     } else if (room.captainChangesThisRound && room.maxCaptainChangesPerRound && room.captainChangesThisRound >= room.maxCaptainChangesPerRound) {
       gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (由于队伍连续5次组队失败)</span>;
-    } else if (room.currentRound && room.totalRounds && room.currentRound > room.totalRounds) { // All rounds completed
+    } else if (room.currentRound && room.totalRounds && room.currentRound > room.totalRounds) { 
         if (undercoverMissionWins > teamMemberMissionWins) {
             gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (比赛结束时胜场较多)</span>;
         } else if (teamMemberMissionWins > undercoverMissionWins) {
@@ -987,7 +981,7 @@ export default function GameRoomPage() {
         } else {
              gameOverMessageNode = <span className="text-foreground">游戏平局! (比分 {teamMemberMissionWins} : {undercoverMissionWins})</span>;
         }
-    } else { // Should be covered by specific end conditions, but as a fallback
+    } else { 
       gameOverMessageNode = <span className="text-foreground">游戏已结束. (最终比分 战队 {teamMemberMissionWins} : 卧底 {undercoverMissionWins})</span>;
     }
   }
@@ -1045,9 +1039,9 @@ export default function GameRoomPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-primary">游戏控制 / 状态</CardTitle>
-                   {/* Removed round and team attempt display from here */}
                 </CardHeader>
                 <CardContent className="space-y-4">
+                
                   {room.currentPhase === 'team_selection' && (
                       <TeamSelectionControls
                           isVirtualCaptain={isVirtualCaptain}
@@ -1094,6 +1088,7 @@ export default function GameRoomPage() {
                           currentRound={room.currentRound}
                           missionOutcomeForDisplay={room.missionOutcomeForDisplay}
                           failCardsPlayedForDisplay={room.failCardsPlayedForDisplay}
+                          generatedFailureReason={room.generatedFailureReason}
                           onProceedToNextRoundOrGameOver={handleProceedToNextRoundOrGameOver}
                        />
                   )}

@@ -4,11 +4,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { type PlayerGameRecord, Role, type VoteHistoryEntry, type Mission, type MissionCardPlay } from "@/lib/types";
+import { type PlayerGameRecord, Role, type VoteHistoryEntry, type Mission, type MissionCardPlay, type GeneratedFailureReason } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon, CheckCircle2, XCircle } from "lucide-react";
+import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -50,7 +50,6 @@ export default function GameHistoryPage() {
       const storedRecordsRaw = localStorage.getItem(historyKey);
       if (storedRecordsRaw) {
         const parsedRecords: PlayerGameRecord[] = JSON.parse(storedRecordsRaw);
-        // Ensure missionHistory and fullVoteHistory are arrays
         const validatedRecords = parsedRecords.map(record => ({
             ...record,
             missionHistory: Array.isArray(record.missionHistory) ? record.missionHistory : [],
@@ -162,9 +161,43 @@ export default function GameHistoryPage() {
                             <ListChecks className="mr-2 h-4 w-4 text-muted-foreground" /> 查看本局详细记录
                         </AccordionTrigger>
                         <AccordionContent>
+                          {(record.missionHistory && record.missionHistory.length > 0) && (
+                            <section className="mb-4">
+                              <h4 className="text-sm font-semibold mb-2 mt-2 text-primary">比赛过程回顾:</h4>
+                              <div className="space-y-2">
+                                {record.missionHistory.map((mission, mIdx) => (
+                                  <div key={`mission-hist-${mIdx}`} className="p-2 border rounded-md bg-muted/20 text-xs">
+                                    <p className="font-semibold">第 {mission.round} 场比赛: 
+                                      <span className={cn(mission.outcome === 'success' ? "text-green-600" : "text-red-500")}>
+                                        {mission.outcome === 'success' ? " 比赛成功" : " 比赛失败"}
+                                      </span>
+                                      {mission.outcome === 'fail' && mission.generatedFailureReason?.narrativeSummary && (
+                                        <span className="text-muted-foreground text-xs"> ({mission.generatedFailureReason.narrativeSummary})</span>
+                                      )}
+                                      {mission.outcome === 'fail' && !mission.generatedFailureReason?.narrativeSummary && mission.failCardsPlayed > 0 && (
+                                         <span className="text-muted-foreground text-xs"> (检测到 {mission.failCardsPlayed} 个破坏行动)</span>
+                                      )}
+                                    </p>
+                                    <p>出战队伍: {mission.teamPlayerIds.map(pid => {
+                                      const player = record.playersInGame.find(p => p.id === pid);
+                                      return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
+                                    }).join(', ')}
+                                    </p>
+                                    {mission.outcome === 'fail' && mission.cardPlays && mission.cardPlays.length > 0 && (
+                                      <p>破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
+                                        const player = record.playersInGame.find(p => p.id === cp.playerId);
+                                        return player ? player.name : '未知玩家'; // Role removed for consistency
+                                      }).join(', ')}</p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
+                          )}
+
                             {(record.fullVoteHistory && record.fullVoteHistory.length > 0) && (
                                 <section>
-                                    {/* Removed h4 title "详细投票记录:" */}
+                                    <h4 className="text-sm font-semibold mb-2 mt-3 text-primary">详细投票记录:</h4>
                                     <ScrollArea className="h-[300px] pr-4">
                                         <Accordion type="multiple" className="w-full">
                                             {Array.from(new Set(record.fullVoteHistory.map(vh => vh.round))).sort((a, b) => a - b)
@@ -187,6 +220,8 @@ export default function GameHistoryPage() {
                                                         if (saboteurs.length > 0) {
                                                             missionOutcomeText += ` (破坏者: ${saboteurs.join(', ')})`;
                                                         }
+                                                    } else if (missionForRound.outcome === 'fail' && missionForRound.generatedFailureReason?.narrativeSummary) {
+                                                        missionOutcomeText += ` (${missionForRound.generatedFailureReason.narrativeSummary})`;
                                                     }
                                                 }
                                                 

@@ -15,7 +15,6 @@ export enum Role {
 
 export type Player = User & {
   role?: Role;
-  // isCaptain removed, use GameRoom.currentCaptainId
 };
 
 export enum GameRoomStatus {
@@ -31,6 +30,11 @@ export type MissionCardPlay = {
   card: 'success' | 'fail';
 };
 
+export type GeneratedFailureReason = {
+  selectedReasons: string[];
+  narrativeSummary: string;
+};
+
 export type Mission = {
   round: number;
   captainId: string;
@@ -38,6 +42,7 @@ export type Mission = {
   outcome: MissionOutcome;
   failCardsPlayed: number;
   cardPlays: MissionCardPlay[];
+  generatedFailureReason?: GeneratedFailureReason;
 };
 
 export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_execution' | 'mission_reveal' | 'coach_assassination' | 'game_over';
@@ -63,7 +68,7 @@ export type GameRoom = {
   maxPlayers: number;
   status: GameRoomStatus;
   hostId: string;
-  createdAt: Timestamp; // Added for Firestore
+  createdAt: Timestamp;
 
   currentGameInstanceId?: string;
   currentCaptainId?: string;
@@ -79,6 +84,7 @@ export type GameRoom = {
   missionCardPlaysForCurrentMission?: MissionCardPlay[];
   missionOutcomeForDisplay?: MissionOutcome;
   failCardsPlayedForDisplay?: number;
+  generatedFailureReason?: GeneratedFailureReason; // For display during mission reveal
 
   teamScores?: {
     teamMemberWins: number;
@@ -103,7 +109,7 @@ export type PlayerGameRecord = {
   winningFaction: WinningFactionType;
   gameSummaryMessage: string;
   finalScores: { teamMemberWins: number; undercoverWins: number };
-  playersInGame: Array<{ id: string; name: string; role: Role }>;
+  playersInGame: Array<{ id: string; name: string; role: Role; avatarUrl?: string; }>;
   coachAssassinationAttempt?: {
     targetPlayerId: string;
     targetPlayerName: string;
@@ -112,4 +118,32 @@ export type PlayerGameRecord = {
   };
   fullVoteHistory?: VoteHistoryEntry[];
   missionHistory?: Mission[];
+};
+
+// For AI Flow input
+export type PlayerPerspective = Omit<Player, 'role'> & { role?: Role | 'Unknown' };
+
+export type VirtualPlayerVoteInputContext = {
+  allPlayers: PlayerPerspective[];
+  currentRound: number;
+  missionHistory: Array<Omit<Mission, 'teamPlayerIds' | 'captainId'> & { teamPlayerIds: string[], captainId: string, teamPlayerNames?: string[], captainName?: string }>;
+  teamScores: { teamMemberWins: number; undercoverWins: number };
+  proposedTeamIds: string[];
+  proposedTeamMemberNames?: string[];
+  captainId: string;
+  captainName?: string;
+  captainChangesThisRound: number;
+  maxCaptainChangesPerRound: number;
+  missionPlayerCounts: number[];
+};
+
+export type AiProposeTeamInputContext = {
+  currentRound: number;
+  requiredPlayersForMission: number;
+  allPlayers: PlayerPerspective[];
+  missionHistory: Array<Omit<Mission, 'teamPlayerIds' | 'captainId'> & { teamPlayerIds: string[], captainId: string, teamPlayerNames?: string[], captainName?: string }>;
+  teamScores: { teamMemberWins: number; undercoverWins: number };
+  missionPlayerCounts: number[];
+  captainChangesThisRound: number;
+  maxCaptainChangesPerRound: number;
 };
