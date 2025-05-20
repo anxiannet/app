@@ -60,9 +60,11 @@ export default function LobbyPage() {
         if (room.status === GameRoomStatus.Finished) {
           return false; 
         }
+        // Hide "In Progress" rooms from players not in them
         if (room.status === GameRoomStatus.InProgress) {
-          if (!user) return false; 
-          return room.players.some(p => p.id === user.id); 
+          if (!user || !room.players.some(p => p.id === user.id)) {
+            return false;
+          }
         }
         return true; 
       });
@@ -157,7 +159,7 @@ export default function LobbyPage() {
             {rooms.map((room) => {
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
               
-              let displayStatusText = room.status.toUpperCase();
+              let displayStatusText = "";
               let displayStatusVariant: "outline" | "default" = "default";
               let displayStatusClass = "";
 
@@ -168,57 +170,53 @@ export default function LobbyPage() {
                 displayStatusText = "等待中";
                 displayStatusVariant = "outline";
                 displayStatusClass = "border-yellow-500 text-yellow-600";
-              } else if (room.status === GameRoomStatus.Finished) { 
-                displayStatusText = "游戏结束";
-                displayStatusClass = "bg-gray-500 text-white";
               }
+              // Finished rooms are already filtered out
 
 
               return (
-                <Card
-                  key={room.id}
-                  className={cn(
-                    "hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1",
-                    isUserInRoom && "border-2 border-primary"
-                  )}
-                >
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <CardTitle className="text-primary truncate">{room.name}</CardTitle>
-                      <div className="flex items-center space-x-2">
-                        <Badge variant={displayStatusVariant} className={cn("text-xs", displayStatusClass)}>
-                          {displayStatusText}
-                        </Badge>
-                        {isUserInRoom && (
-                          <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/50">
-                            <CheckSquare className="mr-1 h-3 w-3" /> 已加入
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                     <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
-                        <Users className="mr-2 h-4 w-4" /> {room.players?.length || 0} / {room.maxPlayers} 玩家
-                      </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <Image
-                      src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}
-                      alt={room.name}
-                      width={600}
-                      height={400}
-                      className="rounded-md mt-2 aspect-video object-cover"
-                      data-ai-hint="game concept art"
-                    />
-                  </CardContent>
-                  <CardFooter>
-                    <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95">
-                      <Link href={`/rooms/${room.id}`}>
-                        <LogIn className="mr-2 h-4 w-4" />
-                        {isUserInRoom ? "返回房间" : "加入房间"}
-                      </Link>
-                    </Button>
-                  </CardFooter>
-                </Card>
+                <Link key={room.id} href={`/rooms/${room.id}`} passHref legacyBehavior>
+                  <a className="block group">
+                    <Card
+                      className={cn(
+                        "hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1 cursor-pointer",
+                        isUserInRoom && "border-2 border-primary"
+                      )}
+                    >
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <CardTitle className="text-primary truncate group-hover:text-primary/90 transition-colors">{room.name}</CardTitle>
+                          <div className="flex items-center space-x-2">
+                            {displayStatusText && (
+                              <Badge variant={displayStatusVariant} className={cn("text-xs", displayStatusClass)}>
+                                {displayStatusText}
+                              </Badge>
+                            )}
+                            {isUserInRoom && (
+                              <Badge variant="secondary" className="bg-primary/20 text-primary border-primary/50">
+                                <CheckSquare className="mr-1 h-3 w-3" /> 已加入
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                         <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
+                            <Users className="mr-2 h-4 w-4" /> {room.players?.length || 0} / {room.maxPlayers} 玩家
+                          </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2">
+                        <Image
+                          src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}
+                          alt={room.name}
+                          width={600}
+                          height={400}
+                          className="rounded-md mt-2 aspect-video object-cover"
+                          data-ai-hint="game concept art"
+                        />
+                      </CardContent>
+                      {/* CardFooter and explicit Join/Return button removed */}
+                    </Card>
+                  </a>
+                </Link>
               );
             })}
           </div>
