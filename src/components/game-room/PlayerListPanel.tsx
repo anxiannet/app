@@ -2,12 +2,12 @@
 "use client";
 
 import type { User } from "@/lib/types";
-import { type GameRoom, type Player, Role, type PlayerVote, type MissionCardPlay, GameRoomStatus } from "@/lib/types";
+import { type GameRoom, type Player, Role, type PlayerVote, GameRoomStatus } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users as PlayerIcon, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon } from "lucide-react";
+import { Crown, Users as PlayerIcon, Eye, CheckCircle2 as VotedIcon, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -18,7 +18,6 @@ type PlayerListPanelProps = {
   room: GameRoom;
   currentUserRole?: Role;
   votesToDisplay: PlayerVote[];
-  // missionPlaysToDisplay: MissionCardPlay[]; // Not directly used anymore for individual card display during game
   getRoleIcon: (role?: Role) => JSX.Element | null;
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
@@ -39,7 +38,6 @@ export function PlayerListPanel({
   room,
   currentUserRole,
   votesToDisplay,
-  // missionPlaysToDisplay, // Not directly used anymore for individual card display during game
   getRoleIcon,
   fellowUndercovers,
   knownUndercoversByCoach,
@@ -80,7 +78,9 @@ export function PlayerListPanel({
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
-              const hasVotedOnCurrentTeam = !!playerVoteInfo;
+              
+              const allVotesInForCurrentProposal = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
+
 
               const missionCardPlayInfo = (room.status === GameRoomStatus.Finished && room.currentRound !== undefined) ?
                 room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id) : undefined;
@@ -93,7 +93,7 @@ export function PlayerListPanel({
                                       (room.currentPhase === 'team_selection' ||
                                        room.currentPhase === 'team_voting' ||
                                        room.currentPhase === 'mission_execution' ||
-                                       room.currentPhase === 'mission_reveal'); // Added mission_reveal
+                                       room.currentPhase === 'mission_reveal'); 
 
               const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
 
@@ -124,14 +124,10 @@ export function PlayerListPanel({
                   if (isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "cursor-pointer hover:border-destructive");
                   if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
                   if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
-              } else if (isSelectionModeActive || isCoachAssassinationModeActive) { // For non-captains/non-undercover during these phases
-                // cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed"); // Keep clickable for display purposes, selection is handled by captain/undercover
               }
 
 
               const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
-
-              const allVotesIn = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
 
               return (
                 <div
@@ -161,9 +157,6 @@ export function PlayerListPanel({
                     {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
                       <Crown className="absolute -top-2 -right-2 h-6 w-6 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
                     )}
-                    {isOnMissionTeamForDisplay && (
-                       <Zap className="absolute -top-2 -left-2 h-5 w-5 text-orange-400 bg-background rounded-full p-0.5" title="On Mission Team" />
-                    )}
                     {isSelectedForMissionByCaptain && (
                       <SelectedIcon className="absolute -bottom-1 -left-1 h-5 w-5 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
                     )}
@@ -175,9 +168,9 @@ export function PlayerListPanel({
                   <span className="font-medium text-sm text-center mt-2 truncate w-full">{p.name}</span>
 
                   <div className="flex items-center space-x-1 mt-1.5 h-5">
-                    {room.currentPhase === 'team_voting' && hasVotedOnCurrentTeam && (
-                      allVotesIn ? (
-                        playerVoteInfo?.vote === 'approve' ? (
+                    {room.currentPhase === 'team_voting' && playerVoteInfo && (
+                       allVotesInForCurrentProposal ? (
+                        playerVoteInfo.vote === 'approve' ? (
                           <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white">
                             <ThumbsUp className="h-3 w-3" />
                           </Badge>
@@ -193,7 +186,7 @@ export function PlayerListPanel({
                       )
                     )}
 
-                    {missionCardPlayed && room.status === GameRoomStatus.Finished && ( // Only show mission card play if game is finished
+                    {missionCardPlayed && room.status === GameRoomStatus.Finished && ( 
                        <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
                          {missionCardPlayed === 'success' ? <VotedIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
                        </Badge>
