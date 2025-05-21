@@ -12,6 +12,7 @@ type TeamVotingControlsProps = {
   onPlayerVote: (vote: 'approve' | 'reject') => void;
   userVote?: 'approve' | 'reject';
   totalPlayerCountInRoom: number;
+  totalHumanPlayersInRoom: number; // Added prop
 };
 
 export function TeamVotingControls({
@@ -21,6 +22,7 @@ export function TeamVotingControls({
   onPlayerVote,
   userVote,
   totalPlayerCountInRoom,
+  totalHumanPlayersInRoom, // Use new prop
 }: TeamVotingControlsProps) {
 
   const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom && totalPlayerCountInRoom > 0;
@@ -44,17 +46,13 @@ export function TeamVotingControls({
   }
 
   const humanPlayersVotedCount = votesToDisplay.filter(v => !v.playerId.startsWith("virtual_")).length;
-  const virtualPlayerCountVoted = votesToDisplay.filter(v => v.playerId.startsWith("virtual_")).length;
-  const totalVirtualPlayers = Array.from(new Set(totalPlayerCountInRoom - humanPlayersVotedCount - (totalPlayerCountInRoom - votesToDisplay.length - virtualPlayerCountVoted ))).length; // This logic is a bit complex, needs simplification if used
-  const totalHumanPlayers = totalPlayerCountInRoom - totalVirtualPlayers;
-
 
   return (
     <div className="space-y-3 pt-4"> 
       
-      {votesToDisplay.length > 0 && humanPlayersVotedCount < totalHumanPlayers && totalHumanPlayers > 0 && (
+      {votesToDisplay.length > 0 && humanPlayersVotedCount < totalHumanPlayersInRoom && totalHumanPlayersInRoom > 0 && (
         <p className="text-xs text-center text-muted-foreground">
-          ({totalHumanPlayers - humanPlayersVotedCount} 名真实玩家未投票)
+          ({totalHumanPlayersInRoom - humanPlayersVotedCount} 名真实玩家未投票)
         </p>
       )}
       {!hasUserVotedOnCurrentTeam && !isCurrentUserVirtual ? (
@@ -65,8 +63,8 @@ export function TeamVotingControls({
       ) : (!isCurrentUserVirtual && userVote &&
         <p className="text-center text-green-600 font-semibold">你已投票: {userVote === 'approve' ? '同意' : '拒绝'}</p>
       )}
-      {totalHumanPlayers > 0 && humanPlayersVotedCount < totalHumanPlayers && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
-      {totalHumanPlayers === 0 && votesToDisplay.length < totalPlayerCountInRoom && <p className="text-sm text-center text-muted-foreground">等待虚拟玩家投票...</p>}
+      {totalHumanPlayersInRoom > 0 && humanPlayersVotedCount < totalHumanPlayersInRoom && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
+      {totalHumanPlayersInRoom === 0 && votesToDisplay.length < totalPlayerCountInRoom && <p className="text-sm text-center text-muted-foreground">等待虚拟玩家投票...</p>}
     </div>
   );
 }
