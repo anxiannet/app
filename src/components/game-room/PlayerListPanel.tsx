@@ -2,7 +2,7 @@
 "use client";
 
 import type { User } from "@/lib/types";
-import { type GameRoom, type Player, Role, type PlayerVote, GameRoomStatus } from "@/lib/types";
+import { type GameRoom, type Player, Role, type PlayerVote, GameRoomStatus, type MissionCardPlay } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +18,7 @@ type PlayerListPanelProps = {
   room: GameRoom;
   currentUserRole?: Role;
   votesToDisplay: PlayerVote[];
-  missionPlaysToDisplay: MissionCardPlay[]; // For displaying what card was played (Success/Fail)
+  missionPlaysToDisplay: MissionCardPlay[]; 
   getRoleIcon: (role?: Role) => JSX.Element | null;
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
@@ -160,7 +160,7 @@ export function PlayerListPanel({
                       <SelectedIcon className="absolute -bottom-1 -left-1 h-5 w-5 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
                     )}
                      {isOnMissionTeamForDisplay && (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_execution' || room.currentPhase === 'mission_reveal') && (
-                       <VotedIcon className="absolute -bottom-1 -left-1 h-5 w-5 text-accent bg-background rounded-full p-0.5 opacity-70" title="On Mission Team"/>
+                       <></> // Zap icon removed as per previous request
                     )}
                     {isSelectedAsCoachCandidate && (
                       <Target className="absolute -bottom-1 -left-1 h-5 w-5 text-red-500 bg-background rounded-full p-0.5" title="Targeted Candidate"/>
@@ -170,24 +170,36 @@ export function PlayerListPanel({
                   <span className="font-medium text-sm text-center mt-2 truncate w-full">{p.name}</span>
 
                   <div className="flex items-center space-x-1 mt-1.5 h-5">
-                    {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo && (
+                    {/* Vote status */}
+                    {room.currentPhase === 'team_voting' && playerVoteInfo && votesToDisplay.length < room.players.length && (
+                      // Voting in progress, player has voted: show neutral "voted" badge
+                      <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
+                        <VotedIcon className="h-3 w-3" />
+                      </Badge>
+                    )}
+                    {((room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length) || 
+                      room.currentPhase === 'mission_reveal' 
+                    ) && playerVoteInfo && ( 
+                      // All votes are in for current phase OR it's mission reveal phase, AND this player did vote
                       playerVoteInfo.vote === 'approve' ? (
-                        <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white">
+                        <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white" title="同意">
                           <ThumbsUp className="h-3 w-3" />
                         </Badge>
                       ) : (
-                        <Badge variant="destructive" className="px-1.5 py-0.5 text-xs">
+                        <Badge variant="destructive" className="px-1.5 py-0.5 text-xs" title="反对">
                           <ThumbsDown className="h-3 w-3" />
                         </Badge>
                       )
                     )}
 
+                    {/* Mission card play status - only if game is finished */}
                     {room.status === GameRoomStatus.Finished && missionPlaysToDisplay.find(mp => mp.playerId === p.id) && (
                        <Badge className={cn("px-1.5 py-0.5 text-xs", missionPlaysToDisplay.find(mp => mp.playerId === p.id)?.card === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
                          {missionPlaysToDisplay.find(mp => mp.playerId === p.id)?.card === 'success' ? <VotedIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
                        </Badge>
                     )}
 
+                    {/* Role Display */}
                     {room.status === GameRoomStatus.InProgress && p.role && (
                       <>
                         {isCurrentUser && (<Badge variant="secondary" className="flex items-center gap-1 text-xs px-1.5 py-0.5">{getRoleIcon(p.role)} {p.role}</Badge>)}
