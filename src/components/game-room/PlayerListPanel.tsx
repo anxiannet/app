@@ -18,7 +18,7 @@ type PlayerListPanelProps = {
   room: GameRoom;
   currentUserRole?: Role;
   votesToDisplay: PlayerVote[];
-  missionPlaysToDisplay: MissionCardPlay[];
+  // missionPlaysToDisplay: MissionCardPlay[]; // Not directly used anymore for individual card display during game
   getRoleIcon: (role?: Role) => JSX.Element | null;
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
@@ -92,7 +92,8 @@ export function PlayerListPanel({
               const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) &&
                                       (room.currentPhase === 'team_selection' ||
                                        room.currentPhase === 'team_voting' ||
-                                       room.currentPhase === 'mission_execution');
+                                       room.currentPhase === 'mission_execution' ||
+                                       room.currentPhase === 'mission_reveal'); // Added mission_reveal
 
               const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
 
@@ -124,7 +125,7 @@ export function PlayerListPanel({
                   if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
                   if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
               } else if (isSelectionModeActive || isCoachAssassinationModeActive) { // For non-captains/non-undercover during these phases
-                cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
+                // cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed"); // Keep clickable for display purposes, selection is handled by captain/undercover
               }
 
 
@@ -192,7 +193,7 @@ export function PlayerListPanel({
                       )
                     )}
 
-                    {missionCardPlayed && room.status === GameRoomStatus.Finished && (
+                    {missionCardPlayed && room.status === GameRoomStatus.Finished && ( // Only show mission card play if game is finished
                        <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
                          {missionCardPlayed === 'success' ? <VotedIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
                        </Badge>
