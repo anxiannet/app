@@ -6,7 +6,7 @@ import { GameRoomStatus, Role } from "@/lib/types";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button"; 
-import { ListChecks, ShieldCheck, ShieldX, XOctagon, Shield, HelpCircle, Swords } from "lucide-react"; 
+import { ListChecks, ShieldCheck, ShieldX, XOctagon } from "lucide-react"; 
 import { cn } from "@/lib/utils";
 
 type RoomHeaderProps = {
@@ -32,18 +32,6 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
     statusClass = "border-yellow-500 text-yellow-600";
   } else if (room.status === GameRoomStatus.Finished) {
     displayStatus = "游戏结束";
-  }
-
-  let teamMemberCount = 0;
-  let coachCount = 0;
-  let undercoverCount = 0;
-
-  if (room.status === GameRoomStatus.InProgress || room.status === GameRoomStatus.Finished) {
-    localPlayers.forEach(player => {
-      if (player.role === Role.TeamMember) teamMemberCount++;
-      else if (player.role === Role.Coach) coachCount++;
-      else if (player.role === Role.Undercover) undercoverCount++;
-    });
   }
 
   return (
@@ -86,24 +74,6 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
                 <span className="flex items-center text-sm"> 
                   <ShieldX className="mr-1 h-4 w-4 text-destructive" /> 卧底胜场: {room.teamScores.undercoverWins}
                 </span>
-              </div>
-            )}
-            {(teamMemberCount > 0 || coachCount > 0 || undercoverCount > 0) && (
-              <div className="pt-1 text-sm">
-                <span className="font-medium">角色分布:</span>
-                <div className="flex items-center gap-x-3 gap-y-1 flex-wrap pl-1"> {/* Added pl-1 for slight indent */}
-                  <span className="flex items-center" title="队员">
-                    <Shield className="mr-1 h-4 w-4 text-green-500" /> 队员: {teamMemberCount}
-                  </span>
-                  {coachCount > 0 && (
-                    <span className="flex items-center" title="教练">
-                      <HelpCircle className="mr-1 h-4 w-4 text-yellow-500" /> 教练: {coachCount}
-                    </span>
-                  )}
-                  <span className="flex items-center" title="卧底">
-                    <Swords className="mr-1 h-4 w-4 text-destructive" /> 卧底: {undercoverCount}
-                  </span>
-                </div>
               </div>
             )}
              {room.currentPhase && room.status === GameRoomStatus.InProgress && (
