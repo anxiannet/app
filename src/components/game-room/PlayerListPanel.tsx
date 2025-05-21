@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon } from "lucide-react";
+import { Crown, Users as PlayerIcon, Eye, CheckCircle2 as VotedIcon, Zap, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -39,7 +39,7 @@ export function PlayerListPanel({
   room,
   currentUserRole,
   votesToDisplay,
-  missionPlaysToDisplay,
+  // missionPlaysToDisplay, // Not directly used anymore for individual card display during game
   getRoleIcon,
   fellowUndercovers,
   knownUndercoversByCoach,
@@ -71,7 +71,7 @@ export function PlayerListPanel({
     <Card className="md:col-span-1 h-full flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center">
-          <Users className="mr-2 h-6 w-6 text-primary" /> 玩家 ({localPlayers.length}/{room.maxPlayers})
+          <PlayerIcon className="mr-2 h-6 w-6 text-primary" /> 玩家 ({localPlayers.length}/{room.maxPlayers})
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-grow overflow-y-auto p-2">
@@ -82,16 +82,17 @@ export function PlayerListPanel({
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
               const hasVotedOnCurrentTeam = !!playerVoteInfo;
 
-              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) ?
+              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished && room.currentRound !== undefined) ?
                 room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id) : undefined;
               const missionCardPlayed = missionCardPlayInfo?.card;
+
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
 
               const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) &&
                                       (room.currentPhase === 'team_selection' ||
                                        room.currentPhase === 'team_voting' ||
-                                       room.currentPhase === 'mission_execution'); // Relevant during execution too
+                                       room.currentPhase === 'mission_execution');
 
               const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
 
@@ -114,18 +115,16 @@ export function PlayerListPanel({
               }
 
 
-              if (isSelectionModeActive) {
+              if (isSelectionModeActive && user.id === room.currentCaptainId) {
                 if (canBeClickedForTeamSelection) cardClassName = cn(cardClassName, "cursor-pointer hover:border-accent");
                 if (isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "border-primary ring-2 ring-primary bg-primary/10");
-                if (user.id === room.currentCaptainId && !canBeClickedForTeamSelection && !isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
-              } else if (isCoachAssassinationModeActive) {
-                 if (currentUserRole === Role.Undercover) {
-                    if (isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "cursor-pointer hover:border-destructive");
-                    if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
-                    if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
-                 } else {
-                    cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed"); 
-                 }
+                if (!canBeClickedForTeamSelection && !isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
+              } else if (isCoachAssassinationModeActive && currentUserRole === Role.Undercover) {
+                  if (isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "cursor-pointer hover:border-destructive");
+                  if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
+                  if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
+              } else if (isSelectionModeActive || isCoachAssassinationModeActive) { // For non-captains/non-undercover during these phases
+                cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
               }
 
 
@@ -202,8 +201,16 @@ export function PlayerListPanel({
                     {room.status === GameRoomStatus.InProgress && p.role && (
                       <>
                         {isCurrentUser && (<Badge variant="secondary" className="flex items-center gap-1 text-xs px-1.5 py-0.5">{getRoleIcon(p.role)} {p.role}</Badge>)}
-                        {!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && (<Badge variant="destructive" className="flex items-center gap-1 text-xs px-1.5 py-0.5"><Eye className="h-3 w-3" /> 卧底</Badge>)}
-                        {!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && (<Badge variant="outline" className="flex items-center gap-1 border-destructive text-destructive text-xs px-1.5 py-0.5"><Users className="h-3 w-3" /> 卧底</Badge>)}
+                        {!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && (
+                           <Badge variant="destructive" className="flex items-center gap-1 text-xs px-1.5 py-0.5">
+                             <Swords className="h-3 w-3 mr-0.5" /> 卧底
+                           </Badge>
+                        )}
+                        {!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && (
+                           <Badge variant="outline" className="flex items-center gap-1 border-destructive text-destructive text-xs px-1.5 py-0.5">
+                             <Swords className="h-3 w-3 mr-0.5" /> 卧底
+                           </Badge>
+                        )}
                       </>
                     )}
                     {room.status === GameRoomStatus.Finished && p.role && (
