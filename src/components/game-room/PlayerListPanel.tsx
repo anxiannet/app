@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users as PlayerIcon, CheckCircle2 as VotedIcon, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon, Brain } from "lucide-react";
+import { Crown, Users as PlayerIcon, CheckCircle2 as VotedIcon, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -18,6 +18,7 @@ type PlayerListPanelProps = {
   room: GameRoom;
   currentUserRole?: Role;
   votesToDisplay: PlayerVote[];
+  missionPlaysToDisplay: MissionCardPlay[]; // For displaying what card was played (Success/Fail)
   getRoleIcon: (role?: Role) => JSX.Element | null;
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
@@ -38,6 +39,7 @@ export function PlayerListPanel({
   room,
   currentUserRole,
   votesToDisplay,
+  missionPlaysToDisplay,
   getRoleIcon,
   fellowUndercovers,
   knownUndercoversByCoach,
@@ -83,7 +85,7 @@ export function PlayerListPanel({
                 room.currentPhase === 'team_selection' ||
                 room.currentPhase === 'team_voting' ||
                 room.currentPhase === 'mission_execution' ||
-                room.currentPhase === 'mission_reveal'
+                room.currentPhase === 'mission_reveal' 
               ) && room.selectedTeamForMission?.includes(p.id);
 
 
@@ -168,7 +170,7 @@ export function PlayerListPanel({
                   <span className="font-medium text-sm text-center mt-2 truncate w-full">{p.name}</span>
 
                   <div className="flex items-center space-x-1 mt-1.5 h-5">
-                    {room.currentPhase === 'team_voting' && playerVoteInfo && (
+                    {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo && (
                       playerVoteInfo.vote === 'approve' ? (
                         <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white">
                           <ThumbsUp className="h-3 w-3" />
@@ -180,9 +182,9 @@ export function PlayerListPanel({
                       )
                     )}
 
-                    {missionCardPlayed && room.status === GameRoomStatus.Finished && ( 
-                       <Badge className={cn("px-1.5 py-0.5 text-xs", missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
-                         {missionCardPlayed === 'success' ? <VotedIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
+                    {room.status === GameRoomStatus.Finished && missionPlaysToDisplay.find(mp => mp.playerId === p.id) && (
+                       <Badge className={cn("px-1.5 py-0.5 text-xs", missionPlaysToDisplay.find(mp => mp.playerId === p.id)?.card === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white")}>
+                         {missionPlaysToDisplay.find(mp => mp.playerId === p.id)?.card === 'success' ? <VotedIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
                        </Badge>
                     )}
 
@@ -216,4 +218,3 @@ export function PlayerListPanel({
     </Card>
   );
 }
-
