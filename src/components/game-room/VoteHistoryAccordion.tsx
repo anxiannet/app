@@ -1,21 +1,55 @@
 
 "use client";
 
-import { type GameRoom, type Player, Role, type VoteHistoryEntry, GameRoomStatus } from "@/lib/types"; // Changed import
+import { type GameRoom, type Player, Role, type VoteHistoryEntry, GameRoomStatus } from "@/lib/types"; 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX } from "lucide-react";
+import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX, Swords, Shield, HelpCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
 type VoteHistoryAccordionProps = {
   room: GameRoom;
   localPlayers: Player[];
-  getRoleIcon: (role?: Role) => JSX.Element | null;
+  // getRoleIcon: (role?: Role) => JSX.Element | null; // Now defined locally
   totalRounds: number;
 };
 
-export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRounds }: VoteHistoryAccordionProps) {
+// Helper function to get Chinese role name
+function getRoleChineseName(role: Role): string {
+  switch (role) {
+    case Role.TeamMember: return "队员";
+    case Role.Undercover: return "卧底";
+    case Role.Coach: return "教练";
+    default: return "未知角色";
+  }
+}
+
+// Helper function to get role icon (consistent with PlayerListPanel)
+const getRoleIcon = (role?: Role, iconSizeClass = "h-2 w-2 mr-0.5") => {
+  switch (role) {
+    case Role.Undercover: return <Swords className={cn(iconSizeClass)} />;
+    case Role.TeamMember: return <Shield className={cn(iconSizeClass)} />;
+    case Role.Coach: return <HelpCircle className={cn(iconSizeClass)} />;
+    default: return null;
+  }
+};
+
+// Helper function to get badge class based on role (consistent with PlayerListPanel)
+const getRoleBadgeClassName = (role?: Role): string => {
+  let baseClass = "flex items-center gap-1 text-[8px] px-0.5 py-0 border"; // Smallest for dense history
+  if (role === Role.TeamMember) {
+    return cn(baseClass, "bg-green-100 text-green-700 border-green-300");
+  } else if (role === Role.Coach) {
+    return cn(baseClass, "bg-yellow-100 text-yellow-700 border-yellow-300");
+  } else if (role === Role.Undercover) {
+    return cn(baseClass, "bg-red-100 text-red-700 border-red-300");
+  }
+  return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300"); // Default/unknown
+};
+
+
+export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHistoryAccordionProps) {
   if (!room.fullVoteHistory || room.fullVoteHistory.length === 0 || room.status === GameRoomStatus.Waiting) {
     return null;
   }
@@ -52,7 +86,7 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                               .filter(play => play.card === 'fail')
                               .map(play => {
                                   const player = localPlayers.find(p => p.id === play.playerId);
-                                  return player ? player.name : '未知玩家'; // Role removed here as per previous request
+                                  return player ? player.name : '未知玩家'; 
                               });
                           if (saboteurs.length > 0) {
                               missionOutcomeText += ` (破坏者: ${saboteurs.join(', ')})`;
@@ -66,25 +100,31 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                       <AccordionContent>
                         {roundVotes.length > 0 ? roundVotes.map((voteEntry, attemptIdx) => {
                           const captain = localPlayers.find(p => p.id === voteEntry.captainId);
-                          const captainDisplay = captain ? `${captain.name}${room.status === GameRoomStatus.Finished && captain.role ? ` (${getRoleName(captain.role)})` : ''}` : '未知';
-
-                          const proposedTeamDisplay = voteEntry.proposedTeamIds.map(id => {
-                              const player = localPlayers.find(p => p.id === id);
-                              return player ? `${player.name}${room.status === GameRoomStatus.Finished && player.role ? ` (${getRoleName(player.role)})` : ''}` : '未知';
-                          }).join(', ');
-
+                          
                           return (
                               <div key={`round-${roundNum}-attempt-${attemptIdx}`} className="mb-4 p-3 border rounded-md bg-muted/20">
-                              <p className="font-semibold text-sm">第 {voteEntry.attemptNumberInRound} 次组队尝试 (队长: {captainDisplay})</p>
-                              <p className="text-xs mt-1">提议队伍: {proposedTeamDisplay}</p>
+                              <p className="font-semibold text-sm">第 {voteEntry.attemptNumberInRound} 次组队尝试 (队长: {captain ? captain.name : '未知'}
+                                {captain && captain.role && room.status === GameRoomStatus.Finished && <Badge className={cn(getRoleBadgeClassName(captain.role), "ml-1")}>{getRoleIcon(captain.role)}{getRoleChineseName(captain.role)}</Badge>}
+                              )</p>
+                              <p className="text-xs mt-1">提议队伍: {voteEntry.proposedTeamIds.map(id => {
+                                  const player = localPlayers.find(p => p.id === id);
+                                  return player ? (
+                                    <span key={id} className="mr-1 inline-flex items-center">
+                                      {player.name}
+                                      {player.role && room.status === GameRoomStatus.Finished && <Badge className={cn(getRoleBadgeClassName(player.role), "ml-0.5")}>{getRoleIcon(player.role)}{getRoleChineseName(player.role)}</Badge>}
+                                    </span>
+                                  ) : <span key={id} className="mr-1">未知</span>;
+                              }).reduce((acc, curr, idx, arr) => idx < arr.length -1 ? <>{acc}{curr}, </> : <>{acc}{curr}</>, <></>)}
+                              </p>
                               <p className="text-xs mt-1">队伍投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
                               <ul className="mt-2 space-y-1 text-xs list-disc list-inside pl-2">
                                   {voteEntry.votes.map(vote => {
                                   const voter = localPlayers.find(p => p.id === vote.playerId);
-                                  const voterDisplay = voter ? `${voter.name}${room.status === GameRoomStatus.Finished && voter.role ? ` (${getRoleName(voter.role)})` : ''}` : '未知玩家';
                                   return (
                                       <li key={`vote-${voteEntry.round}-${voteEntry.attemptNumberInRound}-${vote.playerId}`}>
-                                      {voterDisplay}: {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
+                                        {voter ? voter.name : '未知玩家'}
+                                        {voter && voter.role && room.status === GameRoomStatus.Finished && <Badge className={cn(getRoleBadgeClassName(voter.role), "ml-1")}>{getRoleIcon(voter.role)}{getRoleChineseName(voter.role)}</Badge>}
+                                        : {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
                                       </li>
                                   );
                                   })}
@@ -101,10 +141,11 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
                             <ul className="space-y-1 text-xs">
                               {missionForRound.cardPlays.map((play, playIdx) => {
                                 const player = localPlayers.find(p => p.id === play.playerId);
-                                const playerDisplay = player ? `${player.name} (${player.role ? getRoleName(player.role) : '未知角色'})` : '未知玩家';
                                 return (
                                   <li key={`mission-play-${roundNum}-${playIdx}`} className="flex items-center">
-                                    {playerDisplay}:
+                                    {player ? player.name : '未知玩家'}
+                                    {player && player.role && <Badge className={cn(getRoleBadgeClassName(player.role), "ml-1")}>{getRoleIcon(player.role)}{getRoleChineseName(player.role)}</Badge>}
+                                    :
                                     {play.card === 'success' ?
                                       <Badge variant="outline" className="ml-2 border-green-500 text-green-600"><ShieldCheck className="mr-1 h-3 w-3"/> 成功</Badge> :
                                       <Badge variant="destructive" className="ml-2"><ShieldX className="mr-1 h-3 w-3"/> 破坏</Badge>
@@ -135,14 +176,4 @@ export function VoteHistoryAccordion({ room, localPlayers, getRoleIcon, totalRou
   );
 }
 
-// Helper function to get Chinese role name
-// This can be moved to a utils file or kept here if only used locally
-function getRoleName(role: Role): string {
-  switch (role) {
-    case Role.TeamMember: return "队员";
-    case Role.Undercover: return "卧底";
-    case Role.Coach: return "教练";
-    default: return "未知角色";
-  }
-}
-
+    
