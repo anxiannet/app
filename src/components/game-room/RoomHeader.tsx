@@ -88,7 +88,7 @@ export function RoomHeader({ room, localPlayers, getPhaseDescription, isHost, on
               </div>
             )}
             {(room.status === GameRoomStatus.InProgress || room.status === GameRoomStatus.Finished) && (teamMemberCount > 0 || coachCount > 0 || undercoverCount > 0) && (
-              <div className="flex items-center gap-4 pt-1 text-xs">
+              <div className="flex items-center gap-4 pt-1 text-sm"> {/* Changed text-xs to text-sm */}
                 <span className="font-medium">角色分布:</span>
                 <span className="flex items-center" title="队员">
                   <Shield className="mr-1 h-3 w-3 text-green-500" /> {teamMemberCount}
