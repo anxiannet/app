@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users as PlayerIcon, CheckCircle2 as VotedIcon, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Eye, Users as UsersIcon, Swords, Shield, HelpCircle, XCircle as MissionCardFailIcon, Zap } from "lucide-react";
+import { Crown, CheckCircle2 as VotedIcon, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Eye, Users as UsersIcon, Swords, Shield, HelpCircle, XCircle as MissionCardFailIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -68,33 +68,18 @@ export function PlayerListPanel({
 
   let panelTitleNode: React.ReactNode;
   if (room.status === GameRoomStatus.Waiting) {
-    panelTitleNode = <>玩家 ({localPlayers.length}/{room.maxPlayers})</>;
-  } else {
-    let teamMemberCount = 0;
-    let coachCount = 0;
-    let undercoverCount = 0;
-
-    localPlayers.forEach(player => {
-      if (player.role === Role.TeamMember) teamMemberCount++;
-      else if (player.role === Role.Coach) coachCount++;
-      else if (player.role === Role.Undercover) undercoverCount++;
-    });
-
     panelTitleNode = (
-      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-sm">
-        <span>角色分布:</span>
-        <span className="flex items-center" title="队员">
-          <Shield className="mr-1 h-3 w-3 text-green-500" />{teamMemberCount}
-        </span>
-        {coachCount > 0 && (
-          <span className="flex items-center" title="教练">
-            <HelpCircle className="mr-1 h-3 w-3 text-yellow-500" />{coachCount}
-          </span>
-        )}
-        <span className="flex items-center" title="卧底">
-          <Swords className="mr-1 h-3 w-3 text-destructive" />{undercoverCount}
-        </span>
-      </div>
+      <>
+        <UsersIcon className="mr-2 h-5 w-5 text-primary" />
+        玩家 ({localPlayers.length}/{room.maxPlayers})
+      </>
+    );
+  } else {
+    panelTitleNode = (
+      <>
+        <UsersIcon className="mr-2 h-5 w-5 text-primary" />
+        角色分布
+      </>
     );
   }
 
@@ -102,8 +87,7 @@ export function PlayerListPanel({
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
       <CardHeader>
-        <CardTitle className="flex items-center text-base"> {/* Adjusted text size for title */}
-          {room.status === GameRoomStatus.Waiting ? <PlayerIcon className="mr-2 h-5 w-5 text-primary" /> : null}
+        <CardTitle className="flex items-center text-base">
           {panelTitleNode}
         </CardTitle>
       </CardHeader>
@@ -113,6 +97,7 @@ export function PlayerListPanel({
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
+              const allVotesInForCurrentTeam = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
 
               const isOnMissionTeamForDisplay = (
                 room.currentPhase === 'team_selection' ||
@@ -142,7 +127,7 @@ export function PlayerListPanel({
 
               const canBeClicked = (isSelectionModeActive && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
 
-              let cardClassName = "relative flex flex-col items-center justify-start p-1 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-[10px]"; // Base compact styling
+              let cardClassName = "relative flex flex-col items-center justify-start p-1 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-[10px]";
 
               if (isOnMissionTeamForDisplay) {
                  cardClassName = cn(cardClassName, "bg-accent/20 border-accent");
@@ -164,7 +149,6 @@ export function PlayerListPanel({
 
               const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
               
-              const allVotesInForCurrentTeam = (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && room.teamVotes && room.teamVotes.length === room.players.length && room.players.length > 0;
 
               return (
                 <div
@@ -206,7 +190,7 @@ export function PlayerListPanel({
 
                   <div className="flex items-center space-x-1 mt-0.5 h-3">
                   {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
-                      allVotesInForCurrentTeam ? (
+                      allVotesInForCurrentTeam || room.currentPhase === 'mission_reveal' ? ( // If all votes in OR in reveal phase, show specific vote
                         playerVoteInfo.vote === 'approve' ? (
                           <Badge variant="default" className="px-1 py-0 text-[9px] bg-green-500 hover:bg-green-600 text-white" title="同意">
                             <ThumbsUp className="h-2 w-2" />
@@ -216,8 +200,8 @@ export function PlayerListPanel({
                             <ThumbsDown className="h-2 w-2" />
                           </Badge>
                         )
-                      ) : (
-                         room.teamVotes?.some(v => v.playerId === p.id) && ( // Only show if player has voted
+                      ) : ( // Voting still in progress, show neutral "voted" badge
+                         votesToDisplay.some(v => v.playerId === p.id) && ( 
                             <Badge variant="default" className="px-1 py-0 text-[9px] bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
                               <VotedIcon className="h-2 w-2" />
                             </Badge>
