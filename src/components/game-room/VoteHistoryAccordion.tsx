@@ -4,14 +4,13 @@
 import { type GameRoom, type Player, Role, type VoteHistoryEntry, GameRoomStatus } from "@/lib/types"; 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX, Swords, Shield, HelpCircle } from "lucide-react";
+import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX, Swords, Shield, HelpCircle, CheckCircle2, XCircle as XCircleIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
 type VoteHistoryAccordionProps = {
   room: GameRoom;
   localPlayers: Player[];
-  // getRoleIcon: (role?: Role) => JSX.Element | null; // Now defined locally
   totalRounds: number;
 };
 
@@ -29,7 +28,7 @@ function getRoleChineseName(role: Role): string {
 const getRoleIcon = (role?: Role, iconSizeClass = "h-2 w-2 mr-0.5") => {
   switch (role) {
     case Role.Undercover: return <Swords className={cn(iconSizeClass)} />;
-    case Role.TeamMember: return <Shield className={cn(iconSizeClass)} />;
+    case Role.TeamMember: return <Shield className={cn(iconSizeClass, "text-blue-500")} />;
     case Role.Coach: return <HelpCircle className={cn(iconSizeClass)} />;
     default: return null;
   }
@@ -81,7 +80,7 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
                   let missionOutcomeText = '';
                   if (missionForRound) {
                       missionOutcomeText = missionForRound.outcome === 'success' ? ' - 比赛成功' : (missionForRound.outcome === 'fail' ? ' - 比赛失败' : '');
-                      if (missionForRound.outcome === 'fail' && missionForRound.cardPlays) { // Display saboteurs only if game is finished, for consistency with history page
+                      if (missionForRound.outcome === 'fail' && missionForRound.cardPlays && room.status === GameRoomStatus.Finished) { 
                           const saboteurs = missionForRound.cardPlays
                               .filter(play => play.card === 'fail')
                               .map(play => {
@@ -103,10 +102,10 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
                           
                           return (
                               <div key={`round-${roundNum}-attempt-${attemptIdx}`} className="mb-4 p-3 border rounded-md bg-muted/20">
-                              <p className="font-semibold text-sm">第 {voteEntry.attemptNumberInRound} 次组队尝试 (队长: {captain ? captain.name : '未知'}
+                              <div className="font-semibold text-sm">第 {voteEntry.attemptNumberInRound} 次组队尝试 (队长: {captain ? captain.name : '未知'}
                                 {captain && captain.role && room.status === GameRoomStatus.Finished && <Badge className={cn(getRoleBadgeClassName(captain.role), "ml-1")}>{getRoleIcon(captain.role)}{getRoleChineseName(captain.role)}</Badge>}
-                              )</p>
-                              <p className="text-xs mt-1">提议队伍: {voteEntry.proposedTeamIds.map(id => {
+                              )</div>
+                              <div className="text-xs mt-1">提议队伍: {voteEntry.proposedTeamIds.map(id => {
                                   const player = localPlayers.find(p => p.id === id);
                                   return player ? (
                                     <span key={id} className="mr-1 inline-flex items-center">
@@ -114,8 +113,13 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
                                       {player.role && room.status === GameRoomStatus.Finished && <Badge className={cn(getRoleBadgeClassName(player.role), "ml-0.5")}>{getRoleIcon(player.role)}{getRoleChineseName(player.role)}</Badge>}
                                     </span>
                                   ) : <span key={id} className="mr-1">未知</span>;
-                              }).reduce((acc, curr, idx, arr) => idx < arr.length -1 ? <>{acc}{curr}, </> : <>{acc}{curr}</>, <></>)}
-                              </p>
+                              }).reduce((acc, curr, idx, arr) => {
+                                const elements = acc ? [acc] : [];
+                                if (acc && idx > 0) elements.push(<span key={`comma-${idx}`}>, </span>);
+                                elements.push(curr);
+                                return <>{elements}</>;
+                              }, null as React.ReactNode)}
+                              </div>
                               <p className="text-xs mt-1">队伍投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
                               <ul className="mt-2 space-y-1 text-xs list-disc list-inside pl-2">
                                   {voteEntry.votes.map(vote => {
@@ -147,8 +151,8 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
                                     {player && player.role && <Badge className={cn(getRoleBadgeClassName(player.role), "ml-1")}>{getRoleIcon(player.role)}{getRoleChineseName(player.role)}</Badge>}
                                     :
                                     {play.card === 'success' ?
-                                      <Badge variant="outline" className="ml-2 border-green-500 text-green-600"><ShieldCheck className="mr-1 h-3 w-3"/> 成功</Badge> :
-                                      <Badge variant="destructive" className="ml-2"><ShieldX className="mr-1 h-3 w-3"/> 破坏</Badge>
+                                      <Badge variant="outline" className="ml-2 border-green-500 text-green-600"><CheckCircle2 className="mr-1 h-3 w-3"/> 成功</Badge> :
+                                      <Badge variant="destructive" className="ml-2"><XCircleIcon className="mr-1 h-3 w-3"/> 破坏</Badge>
                                     }
                                   </li>
                                 );
@@ -175,7 +179,3 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
     </Accordion>
   );
 }
-
-    
-
-    
