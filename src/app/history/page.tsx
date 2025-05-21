@@ -12,6 +12,8 @@ import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, Tre
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import * as React from "react";
+
 
 function getRoleChineseName(role: Role): string {
   switch (role) {
@@ -22,17 +24,15 @@ function getRoleChineseName(role: Role): string {
   }
 }
 
-// Helper function to get role icon (consistent with PlayerListPanel)
 const getRoleIcon = (role?: Role, iconSizeClass = "h-3 w-3 mr-1") => { 
   switch (role) {
-    case Role.Undercover: return <Swords className={cn(iconSizeClass)} />;
-    case Role.TeamMember: return <Shield className={cn(iconSizeClass)} />;
-    case Role.Coach: return <HelpCircle className={cn(iconSizeClass)} />;
+    case Role.Undercover: return <Swords className={cn(iconSizeClass, "text-destructive")} />;
+    case Role.TeamMember: return <Shield className={cn(iconSizeClass, "text-blue-500")} />;
+    case Role.Coach: return <HelpCircle className={cn(iconSizeClass, "text-yellow-500")} />;
     default: return null;
   }
 };
 
-// Helper function to get badge class based on role (consistent with PlayerListPanel)
 const getRoleBadgeClassName = (role?: Role): string => {
   let baseClass = "flex items-center gap-1 text-xs px-2 py-0.5 border"; 
   if (role === Role.TeamMember) {
@@ -42,7 +42,7 @@ const getRoleBadgeClassName = (role?: Role): string => {
   } else if (role === Role.Undercover) {
     return cn(baseClass, "bg-red-100 text-red-700 border-red-300");
   }
-  return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300"); // Default/unknown
+  return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300"); 
 };
 
 
@@ -181,7 +181,7 @@ export default function GameHistoryPage() {
                         </AccordionTrigger>
                         <AccordionContent>
                           {/* Combined Mission and Vote History */}
-                          {(record.missionHistory && record.missionHistory.length > 0) && (
+                          {record.missionHistory && record.missionHistory.length > 0 && (
                             <section className="mb-4">
                               <h4 className="text-sm font-semibold mb-2 mt-2 text-primary">比赛过程回顾:</h4>
                               <div className="space-y-2">
@@ -217,7 +217,7 @@ export default function GameHistoryPage() {
 
                             {(record.fullVoteHistory && record.fullVoteHistory.length > 0) && (
                                 <section>
-                                    <h4 className="text-sm font-semibold mb-2 mt-3 text-primary">详细投票记录:</h4>
+                                    
                                     <ScrollArea className="h-[300px] pr-4">
                                         <Accordion type="multiple" className="w-full">
                                             {Array.from(new Set(record.fullVoteHistory.map(vh => vh.round))).sort((a, b) => a - b)
@@ -257,20 +257,25 @@ export default function GameHistoryPage() {
                                                             const captain = record.playersInGame.find(p => p.id === voteEntry.captainId);
                                                             const captainDisplay = captain ? `${captain.name} ` : '未知';
 
-                                                            const proposedTeamDisplay = voteEntry.proposedTeamIds.map(id => {
-                                                                const player = record.playersInGame.find(p => p.id === id);
-                                                                return player ? `${player.name} ` : '未知';
-                                                            }).join(', ');
-
                                                             return (
                                                             <div key={`vote-entry-${record.gameInstanceId}-${roundNum}-${attemptIdx}`} className="mb-3 p-2 border rounded-md bg-background text-xs">
-                                                                <p className="font-semibold">第 {voteEntry.attemptNumberInRound} 次组队 (队长: {captainDisplay}
+                                                                <div className="font-semibold">
+                                                                  第 {voteEntry.attemptNumberInRound} 次组队 (队长: {captainDisplay}
                                                                     {captain && <Badge className={cn(getRoleBadgeClassName(captain.role), "ml-1 text-[8px] px-0.5 py-0")}>{getRoleIcon(captain.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(captain.role)}</Badge>}
-                                                                )</p>
-                                                                <p className="mt-1">提议队伍: {voteEntry.proposedTeamIds.map(id => {
+                                                                )</div>
+                                                                <div className="mt-1">
+                                                                  提议队伍: {voteEntry.proposedTeamIds.map((id, idx) => {
                                                                     const player = record.playersInGame.find(p => p.id === id);
-                                                                    return player ? <span key={id} className="mr-1">{player.name} <Badge className={cn(getRoleBadgeClassName(player.role), "ml-0.5 text-[8px] px-0.5 py-0")}>{getRoleIcon(player.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(player.role)}</Badge></span> : '未知';
-                                                                })}</p>
+                                                                    return (
+                                                                      <React.Fragment key={id}>
+                                                                        {idx > 0 && ", "}
+                                                                        <span className="mr-1">{player ? player.name : '未知'}
+                                                                          {player && <Badge className={cn(getRoleBadgeClassName(player.role), "ml-0.5 text-[8px] px-0.5 py-0")}>{getRoleIcon(player.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(player.role)}</Badge>}
+                                                                        </span>
+                                                                      </React.Fragment>
+                                                                    );
+                                                                  })}
+                                                                </div>
                                                                 <p className="mt-1">投票结果: <span className={cn("font-semibold", voteEntry.outcome === 'approved' ? 'text-green-600' : 'text-red-500')}>{voteEntry.outcome === 'approved' ? '通过' : '否决'}</span></p>
                                                                 <ul className="mt-1.5 space-y-0.5 list-disc list-inside pl-1">
                                                                 {voteEntry.votes.map(vote => {
@@ -289,7 +294,7 @@ export default function GameHistoryPage() {
                                                         })}
                                                         {missionForRound && missionForRound.cardPlays && missionForRound.cardPlays.length > 0 && (
                                                             <div className="mt-3 pt-3 border-t border-dashed">
-                                                                <p className="font-semibold text-sm mb-1">本场比赛队员行动:</p>
+                                                                <h4 className="text-sm font-semibold mb-1">本场比赛队员行动:</h4>
                                                                 <ul className="space-y-0.5 text-xs list-disc list-inside pl-1">
                                                                 {missionForRound.cardPlays.map((play, playIdx) => {
                                                                     const player = record.playersInGame.find(p => p.id === play.playerId);
@@ -331,7 +336,3 @@ export default function GameHistoryPage() {
     </div>
   );
 }
-
-    
-
-    
