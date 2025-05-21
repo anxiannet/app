@@ -1,13 +1,12 @@
 
 "use client";
 
+import * as React from "react"; // Added React import
 import { type GameRoom, type Player, Role, GameRoomStatus } from "@/lib/types";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { History, ThumbsUp, ThumbsDown, ShieldCheck, ShieldX, Swords, Shield, HelpCircle, CheckCircle2, XCircle as XCircleIcon } from "lucide-react";
+import { History, ThumbsUp, ThumbsDown, CheckCircle2, XCircle as XCircleIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-// Badge component import is no longer needed if roles are plain text
-// import { Badge } from "@/components/ui/badge";
 
 type VoteHistoryAccordionProps = {
   room: GameRoom;
@@ -15,7 +14,6 @@ type VoteHistoryAccordionProps = {
   totalRounds: number;
 };
 
-// Helper function to get Chinese role name - still useful for text display
 function getRoleChineseName(role: Role): string {
   switch (role) {
     case Role.TeamMember: return "队员";
@@ -24,18 +22,6 @@ function getRoleChineseName(role: Role): string {
     default: return "未知角色";
   }
 }
-
-// Icon helper might still be used if we want icons next to plain text roles, or can be removed if not.
-// For now, I'll keep it but it won't be used in this specific plain text implementation for roles.
-const getRoleIcon = (role?: Role, iconSizeClass = "h-2 w-2 mr-0.5 inline-block") => { // Added inline-block
-  switch (role) {
-    case Role.Undercover: return <Swords className={cn(iconSizeClass)} />;
-    case Role.TeamMember: return <Shield className={cn(iconSizeClass, "text-blue-500")} />;
-    case Role.Coach: return <HelpCircle className={cn(iconSizeClass)} />;
-    default: return null;
-  }
-};
-
 
 export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHistoryAccordionProps) {
   if (!room.fullVoteHistory || room.fullVoteHistory.length === 0 || room.status === GameRoomStatus.Waiting) {
@@ -75,10 +61,14 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
                               .map(play => {
                                   const player = localPlayers.find(p => p.id === play.playerId);
                                   return player ? player.name : '未知玩家';
-                              });
+                              }).join(', ');
                           if (saboteurs.length > 0) {
-                              missionOutcomeText += ` (破坏者: ${saboteurs.join(', ')})`;
+                              missionOutcomeText += ` (破坏者: ${saboteurs})`;
                           }
+                      } else if (missionForRound.outcome === 'fail' && missionForRound.generatedFailureReason?.narrativeSummary) {
+                         missionOutcomeText += ` (${missionForRound.generatedFailureReason.narrativeSummary})`;
+                      } else if (missionForRound.outcome === 'fail' && !missionForRound.generatedFailureReason?.narrativeSummary && missionForRound.failCardsPlayed && missionForRound.failCardsPlayed > 0) {
+                         missionOutcomeText += ` (因 ${missionForRound.failCardsPlayed} 个破坏行动而失败)`;
                       }
                   }
 
@@ -162,3 +152,4 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
     </Accordion>
   );
 }
+
