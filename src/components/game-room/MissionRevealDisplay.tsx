@@ -3,7 +3,7 @@
 
 import type { MissionOutcome, GeneratedFailureReason } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, XCircle, AlertTriangle, Users } from "lucide-react"; // Keep Users import for now, might be used elsewhere or remove if not
+import { CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type MissionRevealDisplayProps = {
@@ -38,40 +38,43 @@ export function MissionRevealDisplay({
       )}
 
       {missionTeamPlayerNames && missionTeamPlayerNames.length > 0 && (
-        <p className="text-sm text-muted-foreground text-center flex items-center justify-center">
+        <p className="text-sm text-muted-foreground text-center">
            出战队伍: {missionTeamPlayerNames.join(', ')}
         </p>
       )}
 
       {missionOutcomeForDisplay === 'fail' && (
         <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-md shadow text-center">
-          <p className="font-semibold text-lg mb-2 text-destructive text-center">
-            原因分析 ({failCardsPlayedForDisplay || 0}):
-          </p>
           {generatedFailureReason ? (
             (() => {
-              let reasonText = "未能确定具体原因。"; 
+              let reasonText = "未能确定具体原因。";
               if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length === 1) {
                 reasonText = generatedFailureReason.selectedReasons[0];
               } else if (generatedFailureReason.narrativeSummary) {
                 let summary = generatedFailureReason.narrativeSummary;
                 const prefixesToRemove = [
-                  "比赛失利，主要原因是：", 
-                  "比赛失利，可能原因是：", 
+                  "比赛失利，主要原因是：",
+                  "比赛失利，可能原因是：",
                   "本次比赛失利，主要归咎于以下几点：",
                   "比赛失利；" 
                 ];
                 for (const prefix of prefixesToRemove) {
                   if (summary.startsWith(prefix)) {
                     summary = summary.substring(prefix.length).trimStart();
-                    break; 
+                    break;
                   }
                 }
                 reasonText = summary;
               } else if (generatedFailureReason.selectedReasons && generatedFailureReason.selectedReasons.length > 1) {
                 reasonText = generatedFailureReason.selectedReasons.join("，");
               }
-              return <p>{reasonText}</p>;
+              return (
+                <p className="text-lg text-destructive">
+                  <span className="font-semibold">原因分析 ({failCardsPlayedForDisplay || 0}):</span>
+                  {' '}
+                  {reasonText}
+                </p>
+              );
             })()
           ) : failCardsPlayedForDisplay !== undefined && failCardsPlayedForDisplay > 0 ? (
             <p className="flex items-center justify-center">
