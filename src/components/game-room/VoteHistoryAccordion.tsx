@@ -39,7 +39,7 @@ const getRoleIcon = (role?: Role, iconSizeClass = "h-2 w-2 mr-0.5") => {
 const getRoleBadgeClassName = (role?: Role): string => {
   let baseClass = "flex items-center gap-1 text-[8px] px-0.5 py-0 border"; // Smallest for dense history
   if (role === Role.TeamMember) {
-    return cn(baseClass, "bg-green-100 text-green-700 border-green-300");
+    return cn(baseClass, "bg-blue-100 text-blue-700 border-blue-300");
   } else if (role === Role.Coach) {
     return cn(baseClass, "bg-yellow-100 text-yellow-700 border-yellow-300");
   } else if (role === Role.Undercover) {
@@ -81,7 +81,7 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
                   let missionOutcomeText = '';
                   if (missionForRound) {
                       missionOutcomeText = missionForRound.outcome === 'success' ? ' - 比赛成功' : (missionForRound.outcome === 'fail' ? ' - 比赛失败' : '');
-                      if (missionForRound.outcome === 'fail' && room.status === GameRoomStatus.Finished && missionForRound.cardPlays) {
+                      if (missionForRound.outcome === 'fail' && missionForRound.cardPlays) { // Display saboteurs only if game is finished, for consistency with history page
                           const saboteurs = missionForRound.cardPlays
                               .filter(play => play.card === 'fail')
                               .map(play => {
@@ -175,5 +175,7 @@ export function VoteHistoryAccordion({ room, localPlayers, totalRounds }: VoteHi
     </Accordion>
   );
 }
+
+    
 
     

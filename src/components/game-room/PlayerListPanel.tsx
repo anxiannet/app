@@ -17,7 +17,7 @@ type PlayerListPanelProps = {
   room: GameRoom;
   currentUserRole?: Role;
   votesToDisplay: PlayerVote[];
-  missionPlaysToDisplay: MissionCardPlay[];
+  // missionPlaysToDisplay: MissionCardPlay[]; // Not used after recent changes, can be removed if not needed for future badge
   // getRoleIcon: (role?: Role) => JSX.Element | null; // Now defined locally
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
@@ -38,8 +38,7 @@ export function PlayerListPanel({
   room,
   currentUserRole,
   votesToDisplay,
-  // missionPlaysToDisplay, // Not used after recent changes, can be removed if not needed for future badge
-  // getRoleIcon, // Defined locally now
+  // missionPlaysToDisplay, 
   fellowUndercovers,
   knownUndercoversByCoach,
   isSelectionModeActive = false,
@@ -65,7 +64,7 @@ export function PlayerListPanel({
   const getRoleBadgeClassName = (role?: Role): string => {
     let baseClass = "flex items-center gap-1 text-[9px] px-1 py-0.5 border";
     if (role === Role.TeamMember) {
-      return cn(baseClass, "bg-green-100 text-green-700 border-green-300");
+      return cn(baseClass, "bg-blue-100 text-blue-700 border-blue-300");
     } else if (role === Role.Coach) {
       return cn(baseClass, "bg-yellow-100 text-yellow-700 border-yellow-300");
     } else if (role === Role.Undercover) {
@@ -97,12 +96,7 @@ export function PlayerListPanel({
       </>
     );
   } else {
-     panelTitleNode = (
-      <>
-        <UsersIcon className="mr-2 h-5 w-5 text-primary" />
-        角色分布
-      </>
-    );
+     panelTitleNode = "角色分布";
   }
 
 
@@ -119,7 +113,7 @@ export function PlayerListPanel({
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
-              const allVotesInForCurrentTeam = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
+              const allVotesInForCurrentTeam = (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && votesToDisplay.length === room.players.length && room.players.length > 0;
 
               const isOnMissionTeamForDisplay = (
                 room.currentPhase === 'team_selection' ||
@@ -207,7 +201,7 @@ export function PlayerListPanel({
 
                   <div className="flex items-center space-x-1 mt-0.5 h-4"> {/* Increased height for badge */}
                   {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
-                      (allVotesInForCurrentTeam || room.currentPhase === 'mission_reveal') ? (
+                      allVotesInForCurrentTeam ? (
                         playerVoteInfo.vote === 'approve' ? (
                           <Badge variant="default" className="px-1 py-0 text-[9px] bg-green-500 hover:bg-green-600 text-white" title="同意">
                             <ThumbsUp className="h-2 w-2" />
@@ -228,10 +222,10 @@ export function PlayerListPanel({
 
                     {/* Role Badge Display Logic */}
                     {p.role && (
-                      (isCurrentUser && room.status === GameRoomStatus.InProgress) || // Current user's own role during game
-                      (room.status === GameRoomStatus.Finished) || // All roles at game end
-                      (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) || // Coach sees Undercover
-                      (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover) // Undercover sees fellow Undercover
+                      (isCurrentUser && room.status === GameRoomStatus.InProgress) || 
+                      (room.status === GameRoomStatus.Finished) || 
+                      (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) || 
+                      (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover) 
                     ) && (
                       <Badge className={getRoleBadgeClassName(p.role)}>
                         {getRoleIcon(p.role)}
@@ -263,5 +257,6 @@ export function PlayerListPanel({
     </Card>
   );
 }
+    
 
     
