@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Crown, Users as PlayerIcon, Eye, CheckCircle2 as VotedIcon, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon, Brain } from "lucide-react";
+import { Crown, Users as PlayerIcon, CheckCircle2 as VotedIcon, CheckCircle2 as SelectedIcon, Target, Trash2, ThumbsUp, ThumbsDown, Shield, HelpCircle, Swords, XCircle as MissionCardFailIcon, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -79,24 +79,21 @@ export function PlayerListPanel({
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
               
-              const allVotesInForCurrentProposal = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
+              const isOnMissionTeamForDisplay = (
+                room.currentPhase === 'team_selection' ||
+                room.currentPhase === 'team_voting' ||
+                room.currentPhase === 'mission_execution' ||
+                room.currentPhase === 'mission_reveal'
+              ) && room.selectedTeamForMission?.includes(p.id);
 
 
-              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished && room.currentRound !== undefined) ?
-                room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id) : undefined;
+              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) && room.missionHistory && room.currentRound !== undefined ?
+                room.missionHistory.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id) : undefined;
               const missionCardPlayed = missionCardPlayInfo?.card;
 
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
-
-              const isOnMissionTeamForDisplay = room.selectedTeamForMission?.includes(p.id) &&
-                                      (room.currentPhase === 'team_selection' ||
-                                       room.currentPhase === 'team_voting' ||
-                                       room.currentPhase === 'mission_execution' ||
-                                       room.currentPhase === 'mission_reveal'); 
-
               const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
-
               const isSelectableForCoachAssassination = isCoachAssassinationModeActive && assassinationTargetOptionsPlayerIds.includes(p.id);
               const isSelectedAsCoachCandidate = isCoachAssassinationModeActive && selectedCoachCandidateId === p.id;
 
@@ -160,6 +157,9 @@ export function PlayerListPanel({
                     {isSelectedForMissionByCaptain && (
                       <SelectedIcon className="absolute -bottom-1 -left-1 h-5 w-5 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
                     )}
+                     {isOnMissionTeamForDisplay && (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_execution' || room.currentPhase === 'mission_reveal') && (
+                       <VotedIcon className="absolute -bottom-1 -left-1 h-5 w-5 text-accent bg-background rounded-full p-0.5 opacity-70" title="On Mission Team"/>
+                    )}
                     {isSelectedAsCoachCandidate && (
                       <Target className="absolute -bottom-1 -left-1 h-5 w-5 text-red-500 bg-background rounded-full p-0.5" title="Targeted Candidate"/>
                     )}
@@ -169,19 +169,13 @@ export function PlayerListPanel({
 
                   <div className="flex items-center space-x-1 mt-1.5 h-5">
                     {room.currentPhase === 'team_voting' && playerVoteInfo && (
-                       allVotesInForCurrentProposal ? (
-                        playerVoteInfo.vote === 'approve' ? (
-                          <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white">
-                            <ThumbsUp className="h-3 w-3" />
-                          </Badge>
-                        ) : (
-                          <Badge variant="destructive" className="px-1.5 py-0.5 text-xs">
-                            <ThumbsDown className="h-3 w-3" />
-                          </Badge>
-                        )
+                      playerVoteInfo.vote === 'approve' ? (
+                        <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white">
+                          <ThumbsUp className="h-3 w-3" />
+                        </Badge>
                       ) : (
-                        <Badge variant="outline" className="px-1.5 py-0.5 text-xs border-blue-500 text-blue-600">
-                          <VotedIcon className="h-3 w-3" />
+                        <Badge variant="destructive" className="px-1.5 py-0.5 text-xs">
+                          <ThumbsDown className="h-3 w-3" />
                         </Badge>
                       )
                     )}
@@ -201,7 +195,7 @@ export function PlayerListPanel({
                            </Badge>
                         )}
                         {!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && (
-                           <Badge variant="outline" className="flex items-center gap-1 border-destructive text-destructive text-xs px-1.5 py-0.5">
+                           <Badge variant="destructive" className="flex items-center gap-1 text-xs px-1.5 py-0.5">
                              <Swords className="h-3 w-3 mr-0.5" /> 卧底
                            </Badge>
                         )}
@@ -222,3 +216,4 @@ export function PlayerListPanel({
     </Card>
   );
 }
+
