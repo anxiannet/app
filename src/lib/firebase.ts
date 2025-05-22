@@ -2,8 +2,7 @@
 "use client";
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-// Auth is no longer imported or used here for mock login
-import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -16,10 +15,10 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp | undefined = undefined;
-// let auth: Auth | undefined = undefined; // Firebase Auth removed for mock
 let db: Firestore | undefined = undefined;
 
-const FIRESTORE_PROXY_HOST = "black-rain-7f1e.bostage.workers.dev"; // Your Firestore proxy
+const FIRESTORE_EMULATOR_HOST = "localhost";
+const FIRESTORE_EMULATOR_PORT = 8080;
 
 if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
@@ -58,23 +57,20 @@ if (typeof window !== "undefined") {
         console.log(`Attempting to initialize Firebase for project ID: ${firebaseConfig.projectId}`);
         app = initializeApp(firebaseConfig);
         
-        // auth = getAuth(app); // Firebase Auth removed for mock
-        // console.log("Firebase Auth (mocked) initialized locally."); // Adjusted log
+        console.log("Attempting to initialize Firestore.");
+        db = getFirestore(app);
+        console.log(`Firestore configured to use default Google endpoints initially.`);
 
-        // Initialize Firestore using default Google endpoints or proxy
-        // const USE_FIRESTORE_PROXY = false; // Set to true to use proxy, false for direct connection
-        // if (USE_FIRESTORE_PROXY && FIRESTORE_PROXY_HOST) {
-        //   console.log(`Attempting to initialize Firestore with proxy: https://${FIRESTORE_PROXY_HOST}`);
-        //   db = initializeFirestore(app, {
-        //     host: FIRESTORE_PROXY_HOST, // Your worker domain without /firestore
-        //     ssl: true,
-        //   });
-        //   console.log(`Firestore configured to use proxy: https://${FIRESTORE_PROXY_HOST}`);
-        // } else {
-          console.log("Attempting to initialize Firestore with default Google endpoints.");
-          db = getFirestore(app); // Standard initialization
-          console.log(`Firestore configured to use default Google endpoints.`);
-        // }
+        if (process.env.NODE_ENV === 'development') {
+          try {
+            console.log(`Connecting to Firestore emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}`);
+            connectFirestoreEmulator(db, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
+            console.log(`Firestore successfully connected to emulator.`);
+          } catch (emulatorError) {
+            console.error(`Failed to connect Firestore to emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}. Ensure the emulator is running. Error:`, emulatorError);
+            // Fallback to cloud Firestore if emulator connection fails but app is initialized
+          }
+        }
         
         console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}.`);
 
@@ -90,14 +86,36 @@ if (typeof window !== "undefined") {
       }
     } else { 
       app = getApps()[0];
-      // auth = getAuth(app); // Firebase Auth removed for mock
       
-      if (!db) {
-        console.log("Re-initializing Firestore on existing app instance with default Google endpoints.");
+      if (!db) { // Check if db specifically is not initialized
+        console.log("Re-initializing Firestore on existing app instance.");
         db = getFirestore(app);
         console.log(`Firestore re-configured to use default Google endpoints.`);
+         if (process.env.NODE_ENV === 'development') {
+          try {
+            console.log(`Connecting to Firestore emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT} (on existing app)`);
+            connectFirestoreEmulator(db, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
+            console.log(`Firestore successfully connected to emulator (on existing app).`);
+          } catch (emulatorError) {
+            console.error(`Failed to connect Firestore to emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT} (on existing app). Ensure the emulator is running. Error:`, emulatorError);
+          }
+        }
       } else {
-        console.log("Firestore already initialized.");
+        // Check if db exists but not connected to emulator, for hot-reloads
+        // @ts-ignore // Accessing private _settings for check, not ideal but for dev convenience
+        if (process.env.NODE_ENV === 'development' && db && (!db._settings || (db._settings.host !== `${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}` && db._settings.host !== FIRESTORE_EMULATOR_HOST) ) ) {
+             try {
+                console.log(`Re-connecting to Firestore emulator due to changed settings or hot-reload at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}`);
+                connectFirestoreEmulator(db, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
+                console.log(`Firestore successfully re-connected to emulator.`);
+            } catch (emulatorError) {
+                console.error(`Failed to re-connect Firestore to emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}. Ensure the emulator is running. Error:`, emulatorError);
+            }
+        } else if (process.env.NODE_ENV === 'development'){
+          console.log("Firestore already initialized and likely connected to emulator.");
+        } else {
+          console.log("Firestore already initialized.");
+        }
       }
     }
   } else {
@@ -105,4 +123,4 @@ if (typeof window !== "undefined") {
   }
 }
 
-export { app, db }; // Auth export removed
+export { app, db };
