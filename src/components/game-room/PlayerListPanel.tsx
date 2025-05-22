@@ -2,7 +2,7 @@
 "use client";
 
 import type { User } from "@/lib/types";
-import { type GameRoom, type Player, Role, type PlayerVote, GameRoomStatus, type MissionCardPlay } from "@/lib/types";
+import { type GameRoom, type Player, Role, type PlayerVote, GameRoomStatus, RoomMode, type MissionCardPlay } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,7 +67,7 @@ export function PlayerListPanel({
     } else if (role === Role.Undercover) {
       return cn(baseClass, "bg-red-100 text-red-700 border-red-300");
     }
-    return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300"); // Default/unknown
+    return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300");
   };
 
   const handlePlayerCardClick = (playerId: string) => {
@@ -92,39 +92,13 @@ export function PlayerListPanel({
       </>
     );
   } else {
-    let teamMemberCount = 0;
-    let coachCount = 0;
-    let undercoverCount = 0;
-
-    if (room.status === GameRoomStatus.InProgress || room.status === GameRoomStatus.Finished) {
-        localPlayers.forEach(player => {
-        if (player.role === Role.TeamMember) teamMemberCount++;
-        else if (player.role === Role.Coach) coachCount++;
-        else if (player.role === Role.Undercover) undercoverCount++;
-        });
-    }
-    panelTitleNode = (
-        <div className="flex items-center gap-x-2 text-xs">
-            <span>角色分布:</span>
-            <span className="flex items-center" title="队员">
-                <Shield className="mr-0.5 h-3 w-3 text-blue-500" /> {teamMemberCount}
-            </span>
-            {coachCount > 0 && (
-            <span className="flex items-center" title="教练">
-                <HelpCircle className="mr-0.5 h-3 w-3 text-yellow-500" /> {coachCount}
-            </span>
-            )}
-            <span className="flex items-center" title="卧底">
-                <Swords className="mr-0.5 h-3 w-3 text-destructive" /> {undercoverCount}
-            </span>
-        </div>
-    );
+    panelTitleNode = <>角色分布</>;
   }
 
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
       <CardHeader>
-        <CardTitle className="flex items-center text-xs">
+        <CardTitle className="flex items-center text-sm">
           {panelTitleNode}
         </CardTitle>
       </CardHeader>
@@ -134,7 +108,6 @@ export function PlayerListPanel({
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
-              
               const allVotesInForCurrentTeam = (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && votesToDisplay.length === room.players.length && room.players.length > 0;
 
               const isOnMissionTeamForDisplay = (
@@ -144,11 +117,9 @@ export function PlayerListPanel({
                 room.currentPhase === 'mission_reveal'
               ) && room.selectedTeamForMission?.includes(p.id);
 
-
-              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) &&
+              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished && room.mode !== RoomMode.ManualInput) &&
                 room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id);
               const missionCardPlayed = missionCardPlayInfo?.card;
-
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
               const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
@@ -181,7 +152,6 @@ export function PlayerListPanel({
               }
 
               const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
-              
 
               return (
                 <div
@@ -211,7 +181,7 @@ export function PlayerListPanel({
                     {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
                       <Crown className="absolute -top-1 -right-1 h-3 w-3 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
                     )}
-                    {isSelectedForMissionByCaptain && !isOnMissionTeamForDisplay && ( // Show selection check only during captain's active selection phase
+                    {isSelectedForMissionByCaptain && (
                       <SelectedIcon className="absolute -bottom-1 -left-1 h-3 w-3 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
                     )}
                     {isSelectedAsCoachCandidate && (
@@ -219,10 +189,12 @@ export function PlayerListPanel({
                     )}
                   </div>
 
-                  <span className="font-medium text-center mt-0.5 truncate w-full text-xs">{p.name}</span>
+                  <div className="flex items-center space-x-1 mt-0.5">
+                    <span className="font-medium text-center truncate w-full text-xs">{p.name}</span>
+                  </div>
 
                   <div className="flex items-center space-x-1 mt-0.5 h-4">
-                  { (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
+                    {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
                         allVotesInForCurrentTeam ? (
                             playerVoteInfo.vote === 'approve' ? (
                             <Badge variant="default" className="px-1 py-0 text-[9px] bg-green-500 hover:bg-green-600 text-white" title="同意">
@@ -233,20 +205,20 @@ export function PlayerListPanel({
                                 <ThumbsDown className="h-2 w-2" />
                             </Badge>
                             )
-                        ) : ( 
-                            votesToDisplay.some(v => v.playerId === p.id) && ( 
+                        ) : (
+                            votesToDisplay.some(v => v.playerId === p.id) && (
                                 <Badge variant="default" className="px-1 py-0 text-[9px] bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
                                 <VotedIcon className="h-2 w-2" />
                                 </Badge>
                             )
                         )
-                        ) : null}
+                    ) : null}
 
-                    {p.role && (
-                      (isCurrentUser && room.status === GameRoomStatus.InProgress) || 
-                      (room.status === GameRoomStatus.Finished) || 
-                      (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) || 
-                      (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover) 
+                    {room.mode !== RoomMode.ManualInput && p.role && (
+                      (isCurrentUser && room.status === GameRoomStatus.InProgress) ||
+                      (room.status === GameRoomStatus.Finished) ||
+                      (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) ||
+                      (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover)
                     ) && (
                       <Badge className={cn(getRoleBadgeClassName(p.role), "text-[9px]")}>
                         {getRoleIcon(p.role, "h-2 w-2 mr-0.5")}
@@ -254,7 +226,7 @@ export function PlayerListPanel({
                       </Badge>
                     )}
 
-                    {room.status === GameRoomStatus.Finished && missionCardPlayed && (
+                    {room.status === GameRoomStatus.Finished && room.mode !== RoomMode.ManualInput && missionCardPlayed && (
                       <Badge
                         className={cn(
                           "px-1 py-0 text-[9px]",
@@ -277,3 +249,5 @@ export function PlayerListPanel({
     </Card>
   );
 }
+
+    
