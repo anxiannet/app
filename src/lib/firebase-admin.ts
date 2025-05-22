@@ -19,33 +19,25 @@ if (!admin.apps.length) {
       // the SDK automatically discovers credentials if the service account has appropriate permissions.
       // For local development, you MUST set the GOOGLE_APPLICATION_CREDENTIALS
       // environment variable to the path of your service account key JSON file.
-      // credential: admin.credential.applicationDefault(), // This line is often not needed if GOOGLE_APPLICATION_CREDENTIALS is set.
     });
     console.log("Firebase Admin SDK initialized successfully.");
   } catch (error) {
     console.error('CRITICAL Firebase Admin SDK initialization error:', error);
-    // Throwing the error here might stop the server, which could be desired
-    // to make the configuration issue immediately obvious.
-    // Or, handle it in a way that dependent services know initialization failed.
-    // For now, we'll log and let other parts of the app potentially fail if they depend on 'db'.
   }
 }
 
-let db: admin.firestore.Firestore;
+// Firestore Admin db removed
+// let db: admin.firestore.Firestore;
 let authAdmin: admin.auth.Auth;
 
 try {
-  db = admin.firestore();
+  // db = admin.firestore(); // Firestore removed
   authAdmin = admin.auth();
 } catch (error) {
-  console.error("Failed to get Firestore or Auth instance from Firebase Admin. Was initializeApp successful?", error);
-  // Provide dummy instances or throw to prevent further errors
-  // This is a fallback, ideally initializeApp should succeed.
-  // @ts-ignore
-  db = null; 
+  console.error("Failed to get Auth instance from Firebase Admin. Was initializeApp successful?", error);
   // @ts-ignore
   authAdmin = null;
 }
 
 
-export { db, authAdmin, admin };
+export { authAdmin, admin }; // db is not exported

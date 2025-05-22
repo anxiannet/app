@@ -1,9 +1,9 @@
 
-import type { Timestamp } from "firebase/firestore";
+// import type { Timestamp } from "firebase/firestore"; // Firestore Timestamp removed
 
 export type User = {
-  id: string; // For mock login, this will be the nickname
-  name: string; // Nickname
+  id: string; 
+  name: string; 
   avatarUrl?: string;
   isAdmin?: boolean;
 };
@@ -64,13 +64,13 @@ export type VoteHistoryEntry = {
 };
 
 export type GameRoom = {
-  id: string; // Firestore document ID
+  id: string; 
   name: string;
   players: Player[];
   maxPlayers: number;
   status: GameRoomStatus;
   hostId: string;
-  createdAt: Timestamp;
+  createdAt: string; // Changed from Timestamp to string for localStorage
 
   currentGameInstanceId?: string;
   currentCaptainId?: string;
@@ -105,7 +105,7 @@ export type PlayerGameRecord = {
   gameInstanceId: string;
   roomId: string;
   roomName: string;
-  playedAt: string; // ISO date string
+  playedAt: string; 
   myRole: Role;
   gameOutcome: 'win' | 'loss' | 'draw';
   winningFaction: WinningFactionType;

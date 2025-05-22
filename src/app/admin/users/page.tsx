@@ -4,9 +4,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-// Firestore imports might be removed if not fetching users for mock
-// import { collection, getDocs, orderBy, query, Timestamp } from "firebase/firestore";
-// import { db } from "@/lib/firebase"; // Client SDK for Firestore
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Table,
@@ -22,14 +19,12 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Users, ShieldCheck, Search as SearchIcon, UserCog, Info } from "lucide-react"; // Added Info
+import { AlertTriangle, Users, ShieldCheck, Search as SearchIcon, UserCog, Info } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
-import type { User as AppUser } from "@/lib/types"; // Renamed to avoid conflict
+import type { User as AppUser } from "@/lib/types"; 
 
-// Interface for user data to display, can be adapted for mock
 interface DisplayUser extends AppUser {
-  // Add any additional fields if necessary, e.g., createdAt for mock users could be login time
-  createdAt?: string; // Example
+  createdAt?: string; 
 }
 
 export default function PlayerManagementPage() {
@@ -37,10 +32,9 @@ export default function PlayerManagementPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [displayUsers, setDisplayUsers] = useState<DisplayUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // Kept for potential async ops or future enhancements
+  const [isLoading, setIsLoading] = useState(true); 
   const [accessDenied, setAccessDenied] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  // Admin status toggling is problematic with mock auth, keep for UI but functionality will be limited
   const [updatingAdminStatus, setUpdatingAdminStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -57,24 +51,19 @@ export default function PlayerManagementPage() {
       return;
     }
     setAccessDenied(false);
-    setIsLoading(false); // For mock, no async user fetching here
+    setIsLoading(false); 
 
-    // With mock auth, there's no central user list to fetch from Firestore.
-    // We could display the current mock admin user, or a placeholder.
-    // For now, we'll just indicate that full user management isn't available.
-    // If you wanted to list all 'created' mock users, you'd need a different mechanism.
+    // With mock auth and Firestore removed, we only display the current mock admin.
     if (currentUser) {
       setDisplayUsers([{
         ...currentUser,
-        createdAt: new Date().toLocaleDateString(), // Example createdAt
+        createdAt: new Date().toLocaleDateString(), 
       }]);
     }
-
 
   }, [currentUser, authLoading, router]);
 
   const filteredUsers = useMemo(() => {
-    // For mock, this will filter the very limited list of users (likely just the current admin)
     if (!searchTerm) {
       return displayUsers;
     }
@@ -85,8 +74,6 @@ export default function PlayerManagementPage() {
 
 
   const handleToggleAdminStatus = async (targetUserId: string, currentIsAdmin: boolean) => {
-    // This function will likely not work as intended with pure mock auth
-    // as the API endpoint also needs to understand mock auth or be disabled.
     if (!currentUser?.isAdmin) {
       toast({ title: "权限不足", description: "只有管理员可以修改权限。", variant: "destructive" });
       return;
@@ -98,25 +85,10 @@ export default function PlayerManagementPage() {
 
     toast({
       title: "操作受限",
-      description: "在模拟登录模式下，通过此API管理管理员状态的功能受限。管理员状态通常在客户端模拟（例如，通过昵称 'admin'）。",
+      description: "在模拟登录模式下，管理管理员状态的功能受限。管理员状态通过昵称 'admin' 模拟。",
       variant: "default"
     });
-    return; // Prevent API call for mock
-
-    // --- Original API call logic (kept for reference, but bypassed above) ---
-    // setUpdatingAdminStatus(targetUserId);
-    // try {
-    //   const response = await fetch('/api/admin/set-admin-status', {
-    //     method: 'POST',
-    //     headers: { 'Content-Type': 'application/json' },
-    //     body: JSON.stringify({ targetUserId, makeAdmin: !currentIsAdmin }),
-    //   });
-    //   // ... rest of the original error handling and success logic ...
-    // } catch (err) {
-    //    // ...
-    // } finally {
-    //   setUpdatingAdminStatus(null);
-    // }
+    // API call removed as Firestore is no longer used for this.
   };
 
 
@@ -145,7 +117,7 @@ export default function PlayerManagementPage() {
 
       <div className="p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-700 flex items-center gap-2">
         <Info className="h-5 w-5" />
-        <span>当前为模拟登录模式。此页面仅显示当前登录的管理员信息。完整的用户列表和管理功能需要 Firebase Authentication。</span>
+        <span>当前为模拟登录模式。此页面仅显示当前登录的管理员信息。完整的用户列表和管理功能已移除（因Firestore移除）。</span>
       </div>
 
       <div className="mb-4">
@@ -157,7 +129,7 @@ export default function PlayerManagementPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 w-full md:w-1/3"
-            disabled // Search is not very useful for a single user list
+            disabled 
           />
         </div>
       </div>
@@ -218,12 +190,12 @@ export default function PlayerManagementPage() {
                       </TableCell>
                       <TableCell>{u.createdAt || new Date().toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
-                        {currentUser && currentUser.id !== u.id && ( // Admin cannot change their own status here
+                        {currentUser && currentUser.id !== u.id && ( 
                           <Button
                             variant={u.isAdmin ? "destructive" : "outline"}
                             size="sm"
                             onClick={() => handleToggleAdminStatus(u.id, u.isAdmin || false)}
-                            disabled={updatingAdminStatus === u.id || true} // Disabled for mock
+                            disabled={updatingAdminStatus === u.id || true} 
                             className="transition-transform hover:scale-105 active:scale-95"
                             title="在模拟登录模式下此功能受限"
                           >

@@ -59,10 +59,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const createMockUser = (nickname: string): User => {
     const randomAvatar = PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)];
-    // Simulate admin status for a specific nickname
     const isAdmin = nickname.toLowerCase() === "admin";
     return {
-      id: nickname, // Use nickname as ID for mock
+      id: nickname, 
       name: nickname,
       avatarUrl: randomAvatar,
       isAdmin: isAdmin,
@@ -88,7 +87,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signup = async (nickname: string) => {
-    // For mock login, signup is the same as login
     await login(nickname);
   };
 
@@ -102,7 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     toast({ title: "已登出" });
     setLoading(false);
-    router.push("/"); // Navigate to home after logout
+    router.push("/"); 
   };
 
   return (

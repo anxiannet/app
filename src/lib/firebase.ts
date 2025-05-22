@@ -4,7 +4,8 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 // Firebase Auth is not currently proxied or used by mock login in this version
 // import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, initializeFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
+// Firestore is being removed
+// import { getFirestore, initializeFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
 
 
 const firebaseConfig = {
@@ -19,9 +20,9 @@ const firebaseConfig = {
 
 let app: FirebaseApp | undefined = undefined;
 // let auth: Auth | undefined = undefined; // Auth not used with mock login
-let db: Firestore | undefined = undefined;
+// let db: Firestore | undefined = undefined; // Firestore removed
 
-const NGROK_HOSTNAME = "ef12-121-7-209-188.ngrok-free.app"; // Hostname only for initializeFirestore
+const NGROK_HOSTNAME = "ef12-121-7-209-188.ngrok-free.app"; // Hostname only
 
 if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
@@ -59,34 +60,25 @@ if (typeof window !== "undefined") {
       try {
         console.log(`Attempting to initialize Firebase for project ID: ${firebaseConfig.projectId}`);
         app = initializeApp(firebaseConfig);
-        
-        if (process.env.NODE_ENV === 'development') {
-           console.warn(
-            "DEVELOPMENT MODE: Attempting to connect Firestore to ngrok-exposed emulator. \n" +
-            `Firestore host will be set to: ${NGROK_HOSTNAME} (SSL: true). \n` +
-            "==> IF FIRESTORE OPERATIONS FAIL (e.g., 'unavailable' errors), PLEASE VERIFY: \n" +
-            "    1. Your local Firebase Firestore emulator is running (e.g., `firebase emulators:start`).\n" +
-            `    2. Your ngrok tunnel for '${NGROK_HOSTNAME}' is active and correctly points to your local Firestore emulator port (usually 8080).\n` +
-            "    3. There are no firewall issues blocking the connection.\n" +
-            "    4. The ngrok URL has not expired (free tier ngrok URLs are temporary).\n" +
-            "    5. Check the console where your ngrok client is running for any errors or status messages."
-          );
-          db = initializeFirestore(app, {
-            host: NGROK_HOSTNAME,
-            ssl: true,
-            // port is usually not needed when host includes https and ssl is true for standard 443
-          });
-          console.log(`Firestore configured to use ngrok host: ${NGROK_HOSTNAME}. If subsequent operations fail, check the points above.`);
-        } else {
-          // Production mode or non-dev environment
-          db = getFirestore(app);
-          console.log(`Firestore configured to use default Google endpoints (production/non-dev mode).`);
-        }
-        
-        console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}.`);
-
+        console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}. Firestore NOT initialized as per user request.`);
+        // Firestore initialization removed
+        // if (process.env.NODE_ENV === 'development') {
+        //    console.warn(
+        //     "DEVELOPMENT MODE: Firestore would be configured to use ngrok host IF IT WAS ENABLED. \n" +
+        //     `Intended Firestore host: ${NGROK_HOSTNAME} (SSL: true). \n`
+        //   );
+        //   // db = initializeFirestore(app, {
+        //   //   host: NGROK_HOSTNAME, // Only domain, no "https://"" or path
+        //   //   ssl: true,
+        //   // });
+        //   // console.log(`Firestore configured to use ngrok host: ${NGROK_HOSTNAME}.`);
+        // } else {
+        //   // Production mode or non-dev environment
+        //   // db = getFirestore(app);
+        //   // console.log(`Firestore configured to use default Google endpoints (production/non-dev mode).`);
+        // }
       } catch (error) {
-        console.error("Firebase client initialization error during initializeApp/getFirestore:", error);
+        console.error("Firebase client app initialization error:", error);
         console.error("Firebase config that may have caused the error (check environment variables):", {
           apiKey_isDefined: !!firebaseConfig.apiKey,
           apiKey_value_snippet: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 5) + "..." : "UNDEFINED",
@@ -95,39 +87,15 @@ if (typeof window !== "undefined") {
           projectId_value: firebaseConfig.projectId || "PROJECT_ID_MISSING_IN_CONFIG_OBJECT",
         });
       }
-    } else { 
+    } else {
       app = getApps()[0];
-      if (!db) { 
-        console.log("Re-initializing Firestore on existing app instance.");
-        if (process.env.NODE_ENV === 'development') {
-          console.warn(
-            "DEVELOPMENT MODE (existing app instance): Attempting to connect Firestore to ngrok-exposed emulator. \n" +
-            `Firestore host will be set to: ${NGROK_HOSTNAME} (SSL: true). \n` +
-            "==> VERIFY EMULATOR AND NGROK TUNNEL ARE ACTIVE AND CORRECTLY POINTED."
-          );
-          db = initializeFirestore(app, {
-            host: NGROK_HOSTNAME,
-            ssl: true,
-          });
-          console.log(`Firestore re-configured to use ngrok host (on existing app): ${NGROK_HOSTNAME}.`);
-        } else {
-          db = getFirestore(app);
-          console.log(`Firestore re-configured to use default Google endpoints (production/non-dev mode, existing app).`);
-        }
-      } else {
-        // Check if db instance is already configured for ngrok (e.g., during hot-reload)
-        // This check is a bit tricky as Firestore instance doesn't directly expose its host easily after initialization.
-        // The console logs upon initialization should serve as the primary indicator.
-        console.log("Firestore instance already exists. Current configuration (ngrok or cloud) should persist from initial load.");
-      }
+      console.log("Firebase app instance already exists. Firestore NOT initialized as per user request.");
+      // Firestore re-initialization logic removed
     }
   } else {
     console.error("Firebase initialization SKIPPED due to missing critical configuration (API Key or Project ID). The app will not function correctly.");
-    if (!db) {
-        console.warn("Firestore 'db' instance is not initialized due to critical configuration errors. Firestore operations will fail.")
-    }
   }
 }
 
 
-export { app, db }; // auth is not exported as it's not used with mock login
+export { app }; // db is not exported

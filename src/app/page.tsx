@@ -13,10 +13,12 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { db } from "@/lib/firebase"; // Firebase client SDK
-import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, Timestamp, doc, deleteDoc } from "firebase/firestore";
+// Firestore imports removed
+// import { db } from "@/lib/firebase"; 
+// import { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp, Timestamp, doc, deleteDoc } from "firebase/firestore";
 import { MIN_PLAYERS_TO_START, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, MISSIONS_CONFIG } from "@/lib/game-config";
 
+const ROOMS_LOCAL_STORAGE_KEY = "anxian-rooms";
 
 export default function LobbyPage() {
   const [rooms, setRooms] = useState<GameRoom[]>([]);
@@ -25,53 +27,21 @@ export default function LobbyPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  useEffect(() => {
-    if (authLoading) return;
-
+  const loadRoomsFromLocalStorage = useCallback(() => {
     setIsLoadingRooms(true);
-    const roomsCollection = collection(db, "rooms");
-    const q = query(roomsCollection, orderBy("createdAt", "desc"));
+    try {
+      const storedRoomsRaw = localStorage.getItem(ROOMS_LOCAL_STORAGE_KEY);
+      let fetchedRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      let fetchedRooms: GameRoom[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        players: doc.data().players || [],
-      } as GameRoom));
-
-      const roomsToDelete: string[] = [];
+      // Filter out finished rooms and rooms not joined by user if in progress
       fetchedRooms = fetchedRooms.filter(room => {
-        if ((!room.players || room.players.length === 0) && room.status === GameRoomStatus.Waiting) {
-          roomsToDelete.push(room.id);
-          console.log(`Room ${room.id} marked for deletion as it is empty and waiting.`);
-          return false;
+        if (room.status === GameRoomStatus.Finished) return false;
+        if (room.status === GameRoomStatus.InProgress) {
+          return user ? room.players.some(p => p.id === user.id) : false;
         }
         return true;
       });
-
-      for (const roomIdToDelete of roomsToDelete) {
-        try {
-          await deleteDoc(doc(db, "rooms", roomIdToDelete));
-          console.log(`Room ${roomIdToDelete} deleted because it was empty.`);
-        } catch (error) {
-          console.error(`Error deleting empty room ${roomIdToDelete}:`, error);
-        }
-      }
       
-      fetchedRooms = fetchedRooms.filter(room => {
-        if (room.status === GameRoomStatus.Finished) {
-          return false; 
-        }
-        // Hide "In Progress" rooms from players not in them
-        if (room.status === GameRoomStatus.InProgress) {
-          if (!user || !room.players.some(p => p.id === user.id)) {
-            return false;
-          }
-        }
-        return true; 
-      });
-
-
       const statusPriority: { [key in GameRoomStatus]: number } = {
         [GameRoomStatus.InProgress]: 1,
         [GameRoomStatus.Waiting]: 2,
@@ -82,27 +52,27 @@ export default function LobbyPage() {
         const isUserInA = user && a.players.some(p => p.id === user.id);
         const isUserInB = user && b.players.some(p => p.id === user.id);
 
-        if (isUserInA && !isUserInB) return -1; // A comes first
-        if (!isUserInA && isUserInB) return 1;  // B comes first
+        if (isUserInA && !isUserInB) return -1;
+        if (!isUserInA && isUserInB) return 1;
 
-        // If both are joined or both are not joined, sort by status
         const statusDiff = statusPriority[a.status] - statusPriority[b.status];
         if (statusDiff !== 0) return statusDiff;
         
-        // If status is the same, sort by player count (descending)
         return (b.players?.length || 0) - (a.players?.length || 0);
       });
 
       setRooms(fetchedRooms);
-      setIsLoadingRooms(false);
-    }, (error) => {
-      console.error("Error fetching rooms from Firestore:", error);
-      toast({ title: "获取房间失败", description: "无法从服务器加载房间列表。", variant: "destructive" });
-      setIsLoadingRooms(false);
-    });
+    } catch (e) {
+      console.error("Error loading rooms from localStorage:", e);
+      setRooms([]); // Fallback to empty list on error
+    }
+    setIsLoadingRooms(false);
+  }, [user]);
 
-    return () => unsubscribe(); 
-  }, [authLoading, user, toast]); 
+  useEffect(() => {
+    if (authLoading) return;
+    loadRoomsFromLocalStorage();
+  }, [authLoading, user, loadRoomsFromLocalStorage]); 
 
   const handleCreateRoom = async () => {
     if (!user) {
@@ -111,19 +81,18 @@ export default function LobbyPage() {
       return;
     }
 
-    // Any logged-in user can create a room now
     const newRoomName = `${user.name}的房间`; 
     const defaultPlayerCountForMissions = MIN_PLAYERS_TO_START;
     const missionPlayerCountsForNewRoom = MISSIONS_CONFIG[defaultPlayerCountForMissions] || MISSIONS_CONFIG[5];
 
-
-    const newRoomData: Omit<GameRoom, "id"> = { 
+    const newRoomData: GameRoom = { 
+      id: `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Client-generated ID
       name: newRoomName,
       players: [{ id: user.id, name: user.name, avatarUrl: user.avatarUrl || undefined }], 
       maxPlayers: 10,
       status: GameRoomStatus.Waiting,
       hostId: user.id,
-      createdAt: serverTimestamp() as Timestamp, 
+      createdAt: new Date().toISOString() as any, // Using ISO string for simplicity w/o Firestore Timestamp
       teamScores: { teamMemberWins: 0, undercoverWins: 0 },
       missionHistory: [],
       fullVoteHistory: [],
@@ -133,12 +102,16 @@ export default function LobbyPage() {
     };
 
     try {
-      const docRef = await addDoc(collection(db, "rooms"), newRoomData);
+      const currentRooms = rooms ? [...rooms] : [];
+      currentRooms.push(newRoomData);
+      localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(currentRooms));
+      setRooms(currentRooms); // Or call loadRooms to re-sort
+      loadRoomsFromLocalStorage(); // Re-load and sort
       toast({ title: "房间已创建", description: `房间 "${newRoomName}" 创建成功！` });
-      router.push(`/rooms/${docRef.id}`);
+      router.push(`/rooms/${newRoomData.id}`);
     } catch (error) {
-      console.error("Error creating room in Firestore:", error);
-      toast({ title: "创建房间失败", description: "无法在服务器上创建房间。", variant: "destructive" });
+      console.error("Error creating room in localStorage:", error);
+      toast({ title: "创建房间失败", description: "无法创建房间。", variant: "destructive" });
     }
   };
 
@@ -155,7 +128,7 @@ export default function LobbyPage() {
         <p className="mt-4 text-xl text-muted-foreground">
           解开谜团，揭露隐藏，赢取胜利。
         </p>
-        {user && ( // Show button if user is logged in
+        {user && (
           <div className="mt-8">
             <Button
               size="lg"
@@ -188,10 +161,8 @@ export default function LobbyPage() {
                 displayStatusText = "等待中";
                 displayStatusVariant = "outline";
                 displayStatusClass = "border-yellow-500 text-yellow-600";
-              } else if (room.status === GameRoomStatus.Finished) {
-                displayStatusText = "游戏结束";
               }
-
+              // Finished rooms are filtered out
 
               return (
                 <Link key={room.id} href={`/rooms/${room.id}`} passHref legacyBehavior>
