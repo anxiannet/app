@@ -17,8 +17,8 @@ const firebaseConfig = {
 let app: FirebaseApp | undefined = undefined;
 let db: Firestore | undefined = undefined;
 
-const FIRESTORE_EMULATOR_HOST = "localhost";
-const FIRESTORE_EMULATOR_PORT = 8080;
+const NGROK_EMULATOR_URL = "ef12-121-7-209-188.ngrok-free.app"; // Hostname only
+const NGROK_EMULATOR_PORT = 443; // Default HTTPS port
 
 if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
@@ -58,16 +58,19 @@ if (typeof window !== "undefined") {
         app = initializeApp(firebaseConfig);
         
         console.log("Attempting to initialize Firestore.");
-        db = getFirestore(app);
+        // Firestore initialization using initializeFirestore for custom settings
+        db = initializeFirestore(app, {
+          // No host override here initially, will connect to emulator below if in dev mode
+        });
         console.log(`Firestore configured to use default Google endpoints initially.`);
 
         if (process.env.NODE_ENV === 'development') {
           try {
-            console.log(`Connecting to Firestore emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}`);
-            connectFirestoreEmulator(db, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
-            console.log(`Firestore successfully connected to emulator.`);
+            console.log(`Connecting to Firestore emulator via ngrok at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}`);
+            connectFirestoreEmulator(db, NGROK_EMULATOR_URL, NGROK_EMULATOR_PORT, { ssl: true });
+            console.log(`Firestore successfully configured to connect to ngrok emulator.`);
           } catch (emulatorError) {
-            console.error(`Failed to connect Firestore to emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}. Ensure the emulator is running. Error:`, emulatorError);
+            console.error(`Failed to connect Firestore to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. Ensure the ngrok tunnel and emulator are running. Error:`, emulatorError);
             // Fallback to cloud Firestore if emulator connection fails but app is initialized
           }
         }
@@ -89,30 +92,30 @@ if (typeof window !== "undefined") {
       
       if (!db) { // Check if db specifically is not initialized
         console.log("Re-initializing Firestore on existing app instance.");
-        db = getFirestore(app);
+        db = getFirestore(app); // Standard initialization
         console.log(`Firestore re-configured to use default Google endpoints.`);
          if (process.env.NODE_ENV === 'development') {
           try {
-            console.log(`Connecting to Firestore emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT} (on existing app)`);
-            connectFirestoreEmulator(db, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
-            console.log(`Firestore successfully connected to emulator (on existing app).`);
+            console.log(`Connecting to Firestore emulator via ngrok at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT} (on existing app)`);
+            connectFirestoreEmulator(db, NGROK_EMULATOR_URL, NGROK_EMULATOR_PORT, { ssl: true });
+            console.log(`Firestore successfully configured to connect to ngrok emulator (on existing app).`);
           } catch (emulatorError) {
-            console.error(`Failed to connect Firestore to emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT} (on existing app). Ensure the emulator is running. Error:`, emulatorError);
+            console.error(`Failed to connect Firestore to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT} (on existing app). Ensure the ngrok tunnel and emulator are running. Error:`, emulatorError);
           }
         }
       } else {
         // Check if db exists but not connected to emulator, for hot-reloads
         // @ts-ignore // Accessing private _settings for check, not ideal but for dev convenience
-        if (process.env.NODE_ENV === 'development' && db && (!db._settings || (db._settings.host !== `${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}` && db._settings.host !== FIRESTORE_EMULATOR_HOST) ) ) {
+        if (process.env.NODE_ENV === 'development' && db && (!db.toJSON || (db.toJSON().settings && db.toJSON().settings.host !== NGROK_EMULATOR_URL))) { // Adjusted check
              try {
-                console.log(`Re-connecting to Firestore emulator due to changed settings or hot-reload at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}`);
-                connectFirestoreEmulator(db, FIRESTORE_EMULATOR_HOST, FIRESTORE_EMULATOR_PORT);
-                console.log(`Firestore successfully re-connected to emulator.`);
+                console.log(`Re-connecting to Firestore emulator via ngrok due to changed settings or hot-reload at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}`);
+                connectFirestoreEmulator(db, NGROK_EMULATOR_URL, NGROK_EMULATOR_PORT, { ssl: true });
+                console.log(`Firestore successfully re-connected to ngrok emulator.`);
             } catch (emulatorError) {
-                console.error(`Failed to re-connect Firestore to emulator at ${FIRESTORE_EMULATOR_HOST}:${FIRESTORE_EMULATOR_PORT}. Ensure the emulator is running. Error:`, emulatorError);
+                console.error(`Failed to re-connect Firestore to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. Ensure the ngrok tunnel and emulator are running. Error:`, emulatorError);
             }
         } else if (process.env.NODE_ENV === 'development'){
-          console.log("Firestore already initialized and likely connected to emulator.");
+          console.log("Firestore already initialized and likely connected to ngrok emulator.");
         } else {
           console.log("Firestore already initialized.");
         }
