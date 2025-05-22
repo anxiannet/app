@@ -99,9 +99,8 @@ export default function GameRoomPage() {
       let currentRoomData = allRooms.find(r => r.id === roomId);
 
       if (currentRoomData) {
-        // Ensure mode is set, default to Online if not present (for older rooms)
         if (!currentRoomData.mode) {
-            currentRoomData.mode = RoomMode.Online;
+            currentRoomData.mode = RoomMode.Online; // Default to Online for older rooms
         }
 
         const playerExists = currentRoomData.players.some(p => p.id === user.id);
@@ -109,7 +108,7 @@ export default function GameRoomPage() {
           const newPlayer: Player = { id: user.id, name: user.name };
           if (user.avatarUrl) newPlayer.avatarUrl = user.avatarUrl;
           currentRoomData.players.push(newPlayer);
-          localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms)); // Save updated room list
+          localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms));
         } else if (!playerExists && currentRoomData.status !== GameRoomStatus.Waiting) {
           toast({ title: "游戏已开始或结束", description: "无法加入已开始或结束的游戏。", variant: "destructive" });
           router.push("/");
@@ -340,6 +339,10 @@ export default function GameRoomPage() {
   useEffect(() => {
     if (!room || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'mission_execution' || !user) {
       return;
+    }
+    if (room.mode === RoomMode.ManualInput) {
+        // In manual mode, progression is handled by GM actions
+        return;
     }
     const missionTeamPlayerIds = room.selectedTeamForMission || [];
     const playersInRoom = room.players || [];
@@ -579,6 +582,7 @@ export default function GameRoomPage() {
     }
   }, [room, user, toast, saveGameRecordForAllPlayers]);
 
+  // Effect for virtual captain proposing team
   useEffect(() => {
     if (!room || !user || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_selection' || !room.players || room.players.length === 0) {
       return;
@@ -627,15 +631,69 @@ export default function GameRoomPage() {
     }
   }, [room?.currentPhase, room?.currentCaptainId, room?.status, room?.currentRound, room?.players, room?.missionPlayerCounts, room?.captainChangesThisRound, room?.maxCaptainChangesPerRound, user, toast, setRoom, setSelectedMissionTeam]);
 
+  // Handler for individual player votes (Online Mode)
+  const handlePlayerVote = (vote: 'approve' | 'reject') => {
+    if (!room || !user || room.mode !== RoomMode.Online || room.currentPhase !== 'team_voting' || !(room.players?.length)) {
+      toast({ title: "错误", description: "当前无法投票。", variant: "destructive" }); return;
+    }
+    const existingVote = room.teamVotes?.find(v => v.playerId === user.id);
+    if (existingVote) {
+      toast({ title: "已投票", description: "您已对当前队伍投过票。", variant: "default" });
+      return;
+    }
 
+    const newVote: PlayerVote = { playerId: user.id, vote };
+    setRoom(prevRoom => {
+      if (!prevRoom) return null;
+      const updatedVotes = [...(prevRoom.teamVotes || []), newVote];
+      return { ...prevRoom, teamVotes: updatedVotes };
+    });
+  };
+
+  // Effect for virtual player voting (Online Mode)
+  useEffect(() => {
+    if (!room || !user || room.mode !== RoomMode.Online || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_voting' || !room.players || room.players.length === 0) {
+      return;
+    }
+
+    const playersInRoom = room.players;
+    const currentVotes = room.teamVotes || [];
+    const humanPlayers = playersInRoom.filter(p => !p.id.startsWith("virtual_"));
+    const humanPlayersWhoVotedIds = new Set(currentVotes.filter(v => humanPlayers.some(hp => hp.id === v.playerId)).map(v => v.playerId));
+
+    if (humanPlayersWhoVotedIds.size === humanPlayers.length) { // All human players have voted
+      const virtualPlayers = playersInRoom.filter(p => p.id.startsWith("virtual_"));
+      const virtualPlayersWhoHaventVoted = virtualPlayers.filter(vp => !currentVotes.some(v => v.playerId === vp.id));
+
+      if (virtualPlayersWhoHaventVoted.length > 0) {
+        toast({ description: "虚拟玩家正在投票..." });
+        let aiVotesBatch: PlayerVote[] = [];
+        for (const vp of virtualPlayersWhoHaventVoted) {
+          // Simple logic: virtual players always approve
+          aiVotesBatch.push({ playerId: vp.id, vote: 'approve' });
+        }
+        
+        const finalVotesWithAI = [...currentVotes, ...aiVotesBatch];
+        // Update room state. This will trigger the next useEffect.
+        setRoom(prevRoom => prevRoom ? { ...prevRoom, teamVotes: finalVotesWithAI } : null);
+      }
+      // If no virtual players or all virtual players have already "voted" (e.g., if this effect runs multiple times),
+      // the subsequent useEffect for allVotesIn will handle it.
+    }
+  }, [room?.teamVotes, room?.players, room?.currentPhase, room?.status, room?.mode, user, toast, setRoom]);
+
+
+  // Handler for bulk vote submission (Manual Input Mode)
   const handleBulkSubmitVotes = (submittedVotes: PlayerVote[]) => {
-    if (!room || room.currentPhase !== 'team_voting') {
+    if (!room || room.mode !== RoomMode.ManualInput || room.currentPhase !== 'team_voting') {
         toast({ title: "错误", description: "当前无法提交投票。", variant: "destructive" });
         return;
     }
     setRoom(prevRoom => prevRoom ? { ...prevRoom, teamVotes: submittedVotes } : null);
+    // The useEffect for allVotesIn will pick this up.
   };
 
+  // Effect for processing votes after all players (human + virtual or manual bulk) have voted
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (
@@ -645,11 +703,12 @@ export default function GameRoomPage() {
       room.teamVotes.length === room.players.length &&
       room.players.length > 0
     ) {
+      // Display results for a moment before processing
       timer = setTimeout(() => {
         if (room?.currentPhase === 'team_voting' && room.teamVotes && room.players && room.teamVotes.length === room.players.length) {
           processTeamVotes(room.teamVotes);
         }
-      }, 3000);
+      }, 3000); // 3 second delay
     }
     return () => clearTimeout(timer);
   }, [room?.teamVotes, room?.currentPhase, room?.players, processTeamVotes, room]);
@@ -806,6 +865,9 @@ export default function GameRoomPage() {
         const roomIndex = updatedRooms.findIndex(r => r.id === currentRoomId);
         if (roomIndex !== -1) {
           updatedRooms[roomIndex].players = updatedRooms[roomIndex].players.filter(p => p.id !== user.id);
+           if (updatedRooms[roomIndex].players.length === 0) { // Auto-close if last player leaves
+             updatedRooms = updatedRooms.filter(r => r.id !== currentRoomId);
+           }
         }
         toast({ title: "已离开房间", description: `您已离开房间 ${currentRoomName}。` });
       }
@@ -942,6 +1004,7 @@ export default function GameRoomPage() {
   const currentUserInRoom = room.players.find(p => p.id === user.id);
   const currentUserRole = currentUserInRoom?.role;
   const isHumanCaptain = user.id === room.currentCaptainId && !user.id.startsWith("virtual_");
+  const hasUserVotedOnCurrentTeam = room.teamVotes?.some(v => v.playerId === user.id);
 
   const missionTeamPlayerObjects = room.selectedTeamForMission?.map(id => room.players.find(p => p.id === id)).filter(Boolean) as Player[] || [];
   const currentUserIsOnMission = !!room.selectedTeamForMission?.includes(user.id);
@@ -1061,12 +1124,15 @@ export default function GameRoomPage() {
 
                 {room.currentPhase === 'team_voting' && (
                   <TeamVotingControls
+                    roomMode={room.mode}
                     allPlayersInRoom={room.players}
+                    currentUser={user}
+                    votesToDisplay={votesToDisplay}
+                    onPlayerVote={handlePlayerVote}
                     onBulkSubmitVotes={handleBulkSubmitVotes}
                     currentPhase={room.currentPhase}
                     totalPlayerCountInRoom={room.players.length}
                     totalHumanPlayersInRoom={totalHumanPlayersInRoom}
-                    votesToDisplay={votesToDisplay}
                   />
                 )}
 
@@ -1158,3 +1224,4 @@ export default function GameRoomPage() {
     </div>
   );
 }
+
