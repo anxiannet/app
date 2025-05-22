@@ -2,10 +2,10 @@
 import type { Timestamp } from "firebase/firestore";
 
 export type User = {
-  id: string; // Firebase Auth UID
+  id: string; // For mock login, this will be the nickname
   name: string; // Nickname
   avatarUrl?: string;
-  isAdmin?: boolean; // Added for admin privileges
+  isAdmin?: boolean;
 };
 
 export enum Role {
@@ -86,7 +86,7 @@ export type GameRoom = {
   missionCardPlaysForCurrentMission?: MissionCardPlay[];
   missionOutcomeForDisplay?: MissionOutcome;
   failCardsPlayedForDisplay?: number;
-  generatedFailureReason?: GeneratedFailureReason; 
+  generatedFailureReason?: GeneratedFailureReason;
 
   teamScores?: {
     teamMemberWins: number;
@@ -121,11 +121,3 @@ export type PlayerGameRecord = {
   fullVoteHistory?: VoteHistoryEntry[];
   missionHistory?: Mission[];
 };
-
-// PlayerPerspective is no longer needed as AI decision logic is removed
-// export type PlayerPerspective = {
-//   id: string;
-//   name: string;
-//   role?: Role; // Role is only present if known to the viewing AI player
-//   avatarUrl?: string;
-// };

@@ -4,8 +4,9 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
-import { collection, getDocs, orderBy, query, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+// Firestore imports might be removed if not fetching users for mock
+// import { collection, getDocs, orderBy, query, Timestamp } from "firebase/firestore";
+// import { db } from "@/lib/firebase"; // Client SDK for Firestore
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Table,
@@ -21,162 +22,101 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Users, ShieldCheck, Search as SearchIcon, UserCog } from "lucide-react";
+import { AlertTriangle, Users, ShieldCheck, Search as SearchIcon, UserCog, Info } from "lucide-react"; // Added Info
 import { useToast } from "@/hooks/use-toast";
+import type { User as AppUser } from "@/lib/types"; // Renamed to avoid conflict
 
-interface FirestoreUser {
-  id: string;
-  uid: string;
-  nickname: string;
-  avatarUrl?: string;
-  createdAt: string | Timestamp;
-  isAdmin?: boolean;
+// Interface for user data to display, can be adapted for mock
+interface DisplayUser extends AppUser {
+  // Add any additional fields if necessary, e.g., createdAt for mock users could be login time
+  createdAt?: string; // Example
 }
 
 export default function PlayerManagementPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user: currentUser, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [users, setUsers] = useState<FirestoreUser[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [displayUsers, setDisplayUsers] = useState<DisplayUser[]>([]);
+  const [isLoading, setIsLoading] = useState(true); // Kept for potential async ops or future enhancements
   const [accessDenied, setAccessDenied] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [updatingAdminStatus, setUpdatingAdminStatus] = useState<string | null>(null); // userId of user being updated
+  // Admin status toggling is problematic with mock auth, keep for UI but functionality will be limited
+  const [updatingAdminStatus, setUpdatingAdminStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) {
       return;
     }
-    if (!user) {
+    if (!currentUser) {
       router.push("/login?redirect=/admin/users");
       return;
     }
-    if (!user.isAdmin) {
+    if (!currentUser.isAdmin) {
       setAccessDenied(true);
       setIsLoading(false);
       return;
     }
     setAccessDenied(false);
+    setIsLoading(false); // For mock, no async user fetching here
 
-    const fetchUsers = async () => {
-      setIsLoading(true);
-      setError(null);
-      if (!db) {
-        setError("Firestore is not initialized. Cannot fetch players.");
-        setIsLoading(false);
-        return;
-      }
-      try {
-        const usersCollectionRef = collection(db, "users");
-        const q = query(usersCollectionRef, orderBy("createdAt", "desc"));
-        const querySnapshot = await getDocs(q);
-        const fetchedUsers: FirestoreUser[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          fetchedUsers.push({
-            id: doc.id,
-            uid: data.uid,
-            nickname: data.nickname,
-            avatarUrl: data.avatarUrl,
-            createdAt: data.createdAt,
-            isAdmin: data.isAdmin || false,
-          });
-        });
-        setUsers(fetchedUsers);
-      } catch (err) {
-        console.error("Error fetching players:", err);
-        setError("Failed to fetch players. See console for details.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    // With mock auth, there's no central user list to fetch from Firestore.
+    // We could display the current mock admin user, or a placeholder.
+    // For now, we'll just indicate that full user management isn't available.
+    // If you wanted to list all 'created' mock users, you'd need a different mechanism.
+    if (currentUser) {
+      setDisplayUsers([{
+        ...currentUser,
+        createdAt: new Date().toLocaleDateString(), // Example createdAt
+      }]);
+    }
 
-    fetchUsers();
-  }, [user, authLoading, router]);
+
+  }, [currentUser, authLoading, router]);
 
   const filteredUsers = useMemo(() => {
+    // For mock, this will filter the very limited list of users (likely just the current admin)
     if (!searchTerm) {
-      return users;
+      return displayUsers;
     }
-    return users.filter((u) =>
-      u.nickname.toLowerCase().includes(searchTerm.toLowerCase())
+    return displayUsers.filter((u) =>
+      u.name.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [users, searchTerm]);
+  }, [displayUsers, searchTerm]);
 
-  const formatDate = (dateValue: string | Timestamp): string => {
-    if (!dateValue) return "N/A";
-    try {
-      if (typeof dateValue === "string") {
-        return new Date(dateValue).toLocaleDateString();
-      } else if (dateValue && typeof dateValue.toDate === 'function') {
-        return dateValue.toDate().toLocaleDateString();
-      }
-      return "Invalid Date";
-    } catch (e) {
-      return "Invalid Date";
-    }
-  };
 
   const handleToggleAdminStatus = async (targetUserId: string, currentIsAdmin: boolean) => {
-    if (!user?.isAdmin) {
+    // This function will likely not work as intended with pure mock auth
+    // as the API endpoint also needs to understand mock auth or be disabled.
+    if (!currentUser?.isAdmin) {
       toast({ title: "权限不足", description: "只有管理员可以修改权限。", variant: "destructive" });
       return;
     }
-    if (user.id === targetUserId) {
+    if (currentUser.id === targetUserId) {
       toast({ title: "操作无效", description: "不能修改自己的管理员权限。", variant: "destructive" });
       return;
     }
 
-    setUpdatingAdminStatus(targetUserId);
-    try {
-      const response = await fetch('/api/admin/set-admin-status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUserId, makeAdmin: !currentIsAdmin }),
-      });
+    toast({
+      title: "操作受限",
+      description: "在模拟登录模式下，通过此API管理管理员状态的功能受限。管理员状态通常在客户端模拟（例如，通过昵称 'admin'）。",
+      variant: "default"
+    });
+    return; // Prevent API call for mock
 
-      if (!response.ok) {
-        let errorMessage = `API request to set admin status failed. Server responded with status ${response.status || 'unknown'}.`;
-        try {
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-          } else {
-            const errorText = await response.text();
-            console.error("Server returned non-JSON error response:", errorText);
-            if (errorText.includes("The default Firebase app does not exist")) {
-                errorMessage = "API Error: The server failed to initialize Firebase Admin SDK. Please check your server logs and ensure GOOGLE_APPLICATION_CREDENTIALS is correctly set for the server environment.";
-            } else if (response.status === 500) {
-                errorMessage = "Internal Server Error (500). Please check server logs for more details.";
-            } else {
-                errorMessage = `API request failed with status ${response.status}. Details: ${errorText.substring(0,200)}...`;
-            }
-          }
-        } catch (parseError) {
-          console.error("Error parsing the error response:", parseError);
-          errorMessage = `API request failed (status ${response.status}), and the error response itself could not be parsed. Check browser console for details.`;
-        }
-        throw new Error(errorMessage);
-      }
-
-      setUsers(prevUsers =>
-        prevUsers.map(u =>
-          u.id === targetUserId ? { ...u, isAdmin: !currentIsAdmin } : u
-        )
-      );
-      toast({
-        title: "权限已更新",
-        description: `玩家 ${users.find(u=>u.id === targetUserId)?.nickname || targetUserId} 的管理员权限已${!currentIsAdmin ? '授予' : '撤销'}。`,
-      });
-    } catch (err) {
-      console.error("Error updating admin status:", err);
-      const finalErrorMessage = err instanceof Error ? err.message : "操作失败";
-      toast({ title: "更新失败", description: finalErrorMessage, variant: "destructive" });
-    } finally {
-      setUpdatingAdminStatus(null);
-    }
+    // --- Original API call logic (kept for reference, but bypassed above) ---
+    // setUpdatingAdminStatus(targetUserId);
+    // try {
+    //   const response = await fetch('/api/admin/set-admin-status', {
+    //     method: 'POST',
+    //     headers: { 'Content-Type': 'application/json' },
+    //     body: JSON.stringify({ targetUserId, makeAdmin: !currentIsAdmin }),
+    //   });
+    //   // ... rest of the original error handling and success logic ...
+    // } catch (err) {
+    //    // ...
+    // } finally {
+    //   setUpdatingAdminStatus(null);
+    // }
   };
 
 
@@ -199,9 +139,14 @@ export default function PlayerManagementPage() {
       <header className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-primary flex items-center">
           <Users className="mr-3 h-8 w-8" />
-          玩家管理
+          玩家管理 (模拟模式)
         </h1>
       </header>
+
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-700 flex items-center gap-2">
+        <Info className="h-5 w-5" />
+        <span>当前为模拟登录模式。此页面仅显示当前登录的管理员信息。完整的用户列表和管理功能需要 Firebase Authentication。</span>
+      </div>
 
       <div className="mb-4">
         <div className="relative">
@@ -212,40 +157,34 @@ export default function PlayerManagementPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 w-full md:w-1/3"
+            disabled // Search is not very useful for a single user list
           />
         </div>
       </div>
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle>玩家列表 ({filteredUsers.length})</CardTitle>
+          <CardTitle>当前管理员信息</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading && (
             <div className="space-y-2">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-4 p-2">
-                  <Skeleton className="h-10 w-10 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-[200px]" />
-                    <Skeleton className="h-3 w-[150px]" />
-                  </div>
+              <div className="flex items-center space-x-4 p-2">
+                <Skeleton className="h-10 w-10 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-[200px]" />
+                  <Skeleton className="h-3 w-[150px]" />
                 </div>
-              ))}
+              </div>
             </div>
           )}
-          {error && (
-            <div className="text-red-500 flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
-              <AlertTriangle className="h-5 w-5" />
-              <p>{error}</p>
-            </div>
-          )}
-          {!isLoading && !error && filteredUsers.length === 0 && (
+          
+          {!isLoading && filteredUsers.length === 0 && (
             <p className="text-muted-foreground text-center py-4">
-              {searchTerm ? `没有找到昵称包含 "${searchTerm}" 的玩家。` : "没有找到玩家。"}
+              当前无模拟用户信息可显示。
             </p>
           )}
-          {!isLoading && !error && filteredUsers.length > 0 && (
+          {!isLoading && filteredUsers.length > 0 && (
             <ScrollArea className="max-h-[60vh] w-full">
               <Table>
                 <TableHeader>
@@ -253,7 +192,7 @@ export default function PlayerManagementPage() {
                     <TableHead className="w-[80px]">头像</TableHead>
                     <TableHead>昵称</TableHead>
                     <TableHead>权限</TableHead>
-                    <TableHead>注册日期</TableHead>
+                    <TableHead>登录时间 (模拟)</TableHead>
                     <TableHead className="text-right">操作</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -262,13 +201,13 @@ export default function PlayerManagementPage() {
                     <TableRow key={u.id}>
                       <TableCell>
                         <Avatar className="h-10 w-10">
-                          <AvatarImage src={u.avatarUrl} alt={u.nickname} data-ai-hint="avatar person" />
+                          <AvatarImage src={u.avatarUrl} alt={u.name} data-ai-hint="avatar person" />
                           <AvatarFallback>
-                            {u.nickname?.charAt(0).toUpperCase()}
+                            {u.name?.charAt(0).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                       </TableCell>
-                      <TableCell className="font-medium">{u.nickname}</TableCell>
+                      <TableCell className="font-medium">{u.name}</TableCell>
                       <TableCell>
                         {u.isAdmin && (
                           <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-300">
@@ -277,22 +216,23 @@ export default function PlayerManagementPage() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>{formatDate(u.createdAt)}</TableCell>
+                      <TableCell>{u.createdAt || new Date().toLocaleDateString()}</TableCell>
                       <TableCell className="text-right">
-                        {user && user.id !== u.id && ( // Admin cannot change their own status here
+                        {currentUser && currentUser.id !== u.id && ( // Admin cannot change their own status here
                           <Button
                             variant={u.isAdmin ? "destructive" : "outline"}
                             size="sm"
                             onClick={() => handleToggleAdminStatus(u.id, u.isAdmin || false)}
-                            disabled={updatingAdminStatus === u.id}
+                            disabled={updatingAdminStatus === u.id || true} // Disabled for mock
                             className="transition-transform hover:scale-105 active:scale-95"
+                            title="在模拟登录模式下此功能受限"
                           >
                             <UserCog className="mr-1 h-4 w-4" />
                             {updatingAdminStatus === u.id
                               ? "更新中..."
                               : u.isAdmin
-                              ? "撤销管理员"
-                              : "设为管理员"}
+                              ? "撤销管理员 (模拟)"
+                              : "设为管理员 (模拟)"}
                           </Button>
                         )}
                       </TableCell>

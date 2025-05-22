@@ -4,21 +4,12 @@
 import type { User } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  type User as FirebaseUser // Alias Firebase's User to avoid naming conflict
-} from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase"; // Ensure auth and db are exported from firebase.ts
 import { useToast } from "@/hooks/use-toast";
 
 interface AuthContextType {
   user: User | null;
-  login: (nicknameAsEmail: string, password: string) => Promise<void>;
-  signup: (nicknameAsEmail: string, password: string) => Promise<void>;
+  login: (nickname: string) => Promise<void>;
+  signup: (nickname: string) => Promise<void>; // For mock, signup can be same as login
   logout: () => Promise<void>;
   loading: boolean;
 }
@@ -43,6 +34,8 @@ const PRE_GENERATED_AVATARS: string[] = [
   "https://placehold.co/100x100/91C8E4/black?text=P",
 ];
 
+const MOCK_USER_STORAGE_KEY = "anxian-mock-user";
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,122 +43,66 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!auth) {
-      console.error("Firebase auth is not initialized. User auth state cannot be tracked.");
+    setLoading(true);
+    try {
+      const storedUserRaw = localStorage.getItem(MOCK_USER_STORAGE_KEY);
+      if (storedUserRaw) {
+        const storedUser = JSON.parse(storedUserRaw) as User;
+        setUser(storedUser);
+      }
+    } catch (e) {
+      console.error("Failed to load mock user from localStorage:", e);
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY); // Clear corrupted data
+    }
+    setLoading(false);
+  }, []);
+
+  const createMockUser = (nickname: string): User => {
+    const randomAvatar = PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)];
+    // Simulate admin status for a specific nickname
+    const isAdmin = nickname.toLowerCase() === "admin";
+    return {
+      id: nickname, // Use nickname as ID for mock
+      name: nickname,
+      avatarUrl: randomAvatar,
+      isAdmin: isAdmin,
+    };
+  };
+
+  const login = async (nickname: string) => {
+    setLoading(true);
+    if (!nickname || nickname.trim().length === 0) {
+      toast({ title: "登录失败", description: "昵称不能为空。", variant: "destructive" });
       setLoading(false);
       return;
     }
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        if (!db) {
-          console.error("Firestore db is not initialized. Cannot fetch user profile.");
-          setUser(null);
-          setLoading(false);
-          return;
-        }
-        const userDocRef = doc(db, "users", firebaseUser.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          setUser({
-            id: firebaseUser.uid,
-            name: userData.nickname, 
-            avatarUrl: userData.avatarUrl,
-            isAdmin: userData.isAdmin || false, // Fetch isAdmin field
-          });
-        } else {
-          console.warn(`User profile not found in Firestore for UID: ${firebaseUser.uid}. Logging out.`);
-          await signOut(auth);
-          setUser(null);
-        }
-      } else {
-        setUser(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [toast]);
-
-  const login = async (nicknameAsEmail: string, password: string) => {
-    if (!auth) {
-       toast({ title: "登录错误", description: "Firebase服务未初始化。", variant: "destructive" });
-       throw new Error("Firebase auth not initialized");
-    }
-    setLoading(true);
+    const mockUser = createMockUser(nickname.trim());
+    setUser(mockUser);
     try {
-      const emailToUse = `${nicknameAsEmail}@anxian.game`;
-      console.log(`Attempting to sign in with email: ${emailToUse}`);
-      await signInWithEmailAndPassword(auth, emailToUse, password);
-    } catch (error: any) {
-      console.error("Login error:", error);
-      let errorMessage = "登录失败，请稍后再试。";
-      if (error.code === "auth/invalid-credential" ||
-          error.code === "auth/user-not-found" || // Older code, still sometimes used
-          error.code === "auth/wrong-password") { // Older code
-        errorMessage = "您输入的昵称或密码不正确，请检查后重试。";
-      } else if (error.code === "auth/invalid-email") {
-        errorMessage = "昵称格式无效 (不能用作邮箱)。"
-      } else if (error.code === "auth/configuration-not-found") {
-        errorMessage = "Firebase认证配置错误。请检查应用的API密钥和项目设置，并确保在Firebase控制台中启用了Email/Password登录方式。";
-      }
-      toast({ title: "登录失败", description: errorMessage, variant: "destructive" });
-      setLoading(false); 
-      throw error; 
+      localStorage.setItem(MOCK_USER_STORAGE_KEY, JSON.stringify(mockUser));
+    } catch (e) {
+      console.error("Failed to save mock user to localStorage:", e);
     }
+    toast({ title: "登录成功", description: `欢迎回来, ${mockUser.name}!` });
+    setLoading(false);
   };
 
-  const signup = async (nicknameAsEmail: string, password: string) => {
-    if (!auth || !db) {
-       toast({ title: "注册错误", description: "Firebase服务未初始化。", variant: "destructive" });
-       throw new Error("Firebase auth or db not initialized");
-    }
-    setLoading(true);
-    try {
-      const emailToUse = `${nicknameAsEmail}@anxian.game`;
-      const userCredential = await createUserWithEmailAndPassword(auth, emailToUse, password);
-      const firebaseUser = userCredential.user;
-      const randomAvatar = PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)];
-
-      const userDocRef = doc(db, "users", firebaseUser.uid);
-      await setDoc(userDocRef, {
-        uid: firebaseUser.uid,
-        nickname: nicknameAsEmail, 
-        avatarUrl: randomAvatar,
-        createdAt: new Date().toISOString(),
-        isAdmin: false, // Default to not admin
-      });
-    } catch (error: any) {
-      console.error("Signup error:", error);
-      let errorMessage = "注册失败，请稍后再试。";
-      if (error.code === "auth/email-already-in-use") {
-        errorMessage = "此昵称已被注册。";
-      } else if (error.code === "auth/weak-password") {
-        errorMessage = "密码太弱，请使用更强的密码。";
-      } else if (error.code === "auth/invalid-email") {
-        errorMessage = "昵称格式无效 (不能用作邮箱)。"
-      } else if (error.code === "auth/configuration-not-found") {
-         errorMessage = "Firebase认证配置错误。请检查应用的API密钥和项目设置。";
-      }
-      toast({ title: "注册失败", description: errorMessage, variant: "destructive" });
-      setLoading(false); 
-      throw error; 
-    }
+  const signup = async (nickname: string) => {
+    // For mock login, signup is the same as login
+    await login(nickname);
   };
 
   const logout = async () => {
-    if (!auth) {
-       toast({ title: "登出错误", description: "Firebase服务未初始化。", variant: "destructive" });
-       return;
-    }
     setLoading(true);
+    setUser(null);
     try {
-      await signOut(auth);
-      router.push("/");
-    } catch (error) {
-      console.error("Logout error:", error);
-      toast({ title: "登出失败", description: "无法登出，请稍后再试。", variant: "destructive" });
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
+    } catch (e) {
+      console.error("Failed to remove mock user from localStorage:", e);
     }
+    toast({ title: "已登出" });
+    setLoading(false);
+    router.push("/"); // Navigate to home after logout
   };
 
   return (

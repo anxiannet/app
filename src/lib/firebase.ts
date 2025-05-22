@@ -2,9 +2,8 @@
 "use client";
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
-// For Firestore, we use initializeFirestore to allow custom host, or getFirestore for default.
-import { getFirestore, type Firestore } from "firebase/firestore"; // Standard import
+// Auth is no longer imported or used here for mock login
+import { getFirestore, initializeFirestore, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -17,12 +16,10 @@ const firebaseConfig = {
 };
 
 let app: FirebaseApp | undefined = undefined;
-let auth: Auth | undefined = undefined;
+// let auth: Auth | undefined = undefined; // Firebase Auth removed for mock
 let db: Firestore | undefined = undefined;
 
-// Authentication Proxy (User-intended, but not directly configurable in SDK for all API calls)
-const AUTH_PROXY_HOST = "auth-jolly-bread-8cd4.bostage.workers.dev";
-
+const FIRESTORE_PROXY_HOST = "black-rain-7f1e.bostage.workers.dev"; // Your Firestore proxy
 
 if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
@@ -37,7 +34,7 @@ if (typeof window !== "undefined") {
   let criticalConfigMissing = false;
   if (!firebaseConfig.apiKey) {
     console.error(
-      "CRITICAL Firebase Initialization Error: NEXT_PUBLIC_FIREBASE_API_KEY is MISSING or UNDEFINED in the configuration object. \n" +
+      "CRITICAL Firebase Client SDK Initialization Error: NEXT_PUBLIC_FIREBASE_API_KEY is MISSING or UNDEFINED in the configuration object. \n" +
       "ACTION REQUIRED: \n" +
       "1. For LOCAL DEVELOPMENT: Ensure it is correctly set in your .env.local file (in the project root) AND that your Next.js development server has been RESTARTED after any changes to .env.local. \n" +
       "2. For DEPLOYMENT: Ensure this NEXT_PUBLIC_FIREBASE_API_KEY environment variable is correctly set in your Firebase Hosting build environment / CI/CD settings."
@@ -47,7 +44,7 @@ if (typeof window !== "undefined") {
 
   if (!firebaseConfig.projectId) {
     console.error(
-      "CRITICAL Firebase Initialization Error: NEXT_PUBLIC_FIREBASE_PROJECT_ID is MISSING or UNDEFINED in the configuration object. \n" +
+      "CRITICAL Firebase Client SDK Initialization Error: NEXT_PUBLIC_FIREBASE_PROJECT_ID is MISSING or UNDEFINED in the configuration object. \n" +
       "ACTION REQUIRED: \n" +
       "1. For LOCAL DEVELOPMENT: Ensure it is correctly set in your .env.local file (in the project root) AND that your Next.js development server has been RESTARTED after any changes to .env.local. \n" +
       "2. For DEPLOYMENT: Ensure this NEXT_PUBLIC_FIREBASE_PROJECT_ID environment variable is correctly set in your Firebase Hosting build environment / CI/CD settings."
@@ -61,26 +58,28 @@ if (typeof window !== "undefined") {
         console.log(`Attempting to initialize Firebase for project ID: ${firebaseConfig.projectId}`);
         app = initializeApp(firebaseConfig);
         
-        auth = getAuth(app);
-        console.log("Firebase Auth initialized to use default Google endpoints.");
-        console.warn(
-          `Firebase Auth Proxying: User intends to use proxy at ${AUTH_PROXY_HOST} for Authentication API calls. ` +
-          "However, the Firebase JS SDK for Authentication does NOT provide a simple configuration option " +
-          "to route all its core API calls (to identitytoolkit.googleapis.com and securetoken.googleapis.com) " +
-          "through a custom host proxy in this manner. Authentication requests will continue to go directly to Google's servers. " +
-          "Advanced proxying for Auth usually requires backend-mediated calls or network-level solutions."
-        );
+        // auth = getAuth(app); // Firebase Auth removed for mock
+        // console.log("Firebase Auth (mocked) initialized locally."); // Adjusted log
 
-        // Initialize Firestore using default Google endpoints
-        console.log("Attempting to initialize Firestore with default Google endpoints.");
-        db = getFirestore(app); // Reverted to standard initialization
-        console.log(`Firestore configured to use default Google endpoints.`);
+        // Initialize Firestore using default Google endpoints or proxy
+        // const USE_FIRESTORE_PROXY = false; // Set to true to use proxy, false for direct connection
+        // if (USE_FIRESTORE_PROXY && FIRESTORE_PROXY_HOST) {
+        //   console.log(`Attempting to initialize Firestore with proxy: https://${FIRESTORE_PROXY_HOST}`);
+        //   db = initializeFirestore(app, {
+        //     host: FIRESTORE_PROXY_HOST, // Your worker domain without /firestore
+        //     ssl: true,
+        //   });
+        //   console.log(`Firestore configured to use proxy: https://${FIRESTORE_PROXY_HOST}`);
+        // } else {
+          console.log("Attempting to initialize Firestore with default Google endpoints.");
+          db = getFirestore(app); // Standard initialization
+          console.log(`Firestore configured to use default Google endpoints.`);
+        // }
         
-        console.warn("Firebase Storage is NOT configured to use any proxy with the current client SDK setup. It will use default Google endpoints.");
         console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}.`);
 
       } catch (error) {
-        console.error("Firebase client initialization error during initializeApp/getAuth/getFirestore:", error);
+        console.error("Firebase client initialization error during initializeApp/getFirestore:", error);
         console.error("Firebase config that may have caused the error (check environment variables):", {
           apiKey_isDefined: !!firebaseConfig.apiKey,
           apiKey_value_snippet: firebaseConfig.apiKey ? firebaseConfig.apiKey.substring(0, 5) + "..." : "UNDEFINED",
@@ -91,15 +90,14 @@ if (typeof window !== "undefined") {
       }
     } else { 
       app = getApps()[0];
-      auth = getAuth(app); // Auth will still use default endpoints
+      // auth = getAuth(app); // Firebase Auth removed for mock
       
-      // Standard Firestore initialization if app already exists
-      if (!db) { // Check if db is already initialized
+      if (!db) {
         console.log("Re-initializing Firestore on existing app instance with default Google endpoints.");
         db = getFirestore(app);
         console.log(`Firestore re-configured to use default Google endpoints.`);
       } else {
-        console.log("Firestore already initialized with default Google endpoints.");
+        console.log("Firestore already initialized.");
       }
     }
   } else {
@@ -107,4 +105,4 @@ if (typeof window !== "undefined") {
   }
 }
 
-export { app, auth, db };
+export { app, db }; // Auth export removed
