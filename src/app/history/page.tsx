@@ -7,7 +7,6 @@ import { useAuth } from "@/contexts/auth-context";
 import { type PlayerGameRecord, Role, type VoteHistoryEntry, type Mission, type MissionCardPlay, type GeneratedFailureReason } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -24,6 +23,10 @@ function getRoleChineseName(role: Role): string {
   }
 }
 
+// getRoleIcon and getRoleBadgeClassName are no longer needed for direct display of roles in history,
+// but might be kept if other parts still use them or for future reference.
+// For this change, I will comment them out to ensure they are not accidentally used for role display.
+/*
 const getRoleIcon = (role?: Role, iconSizeClass = "h-3 w-3 mr-1") => { 
   switch (role) {
     case Role.Undercover: return <Swords className={cn(iconSizeClass, "text-destructive")} />;
@@ -44,7 +47,7 @@ const getRoleBadgeClassName = (role?: Role): string => {
   }
   return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300"); 
 };
-
+*/
 
 export default function GameHistoryPage() {
   const { user, loading: authLoading } = useAuth();
@@ -116,17 +119,19 @@ export default function GameHistoryPage() {
               <CardHeader>
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-2xl text-primary">{record.roomName}</CardTitle>
-                  <Badge
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className={cn(
-                      "text-sm px-3 py-1",
-                      record.gameOutcome === 'win' && "bg-green-500 text-white",
-                      record.gameOutcome === 'loss' && "bg-red-500 text-white",
-                      record.gameOutcome === 'draw' && "bg-gray-500 text-white"
+                      "text-xs px-3 py-1",
+                      record.gameOutcome === 'win' && "bg-green-100 text-green-700 border-green-300 hover:bg-green-200",
+                      record.gameOutcome === 'loss' && "bg-red-100 text-red-700 border-red-300 hover:bg-red-200",
+                      record.gameOutcome === 'draw' && "bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200"
                     )}
                   >
                     {record.gameOutcome === 'win' ? <Award className="mr-1 h-4 w-4" /> : record.gameOutcome === 'loss' ? <TrendingDown className="mr-1 h-4 w-4" /> : <MinusCircle className="mr-1 h-4 w-4" />}
                     {record.gameOutcome === 'win' ? '胜利' : record.gameOutcome === 'loss' ? '失败' : '平局'}
-                  </Badge>
+                  </Button>
                 </div>
                 <CardDescription className="flex items-center text-xs text-muted-foreground">
                   <CalendarDays className="mr-1 h-3 w-3" /> {new Date(record.playedAt).toLocaleString()}
@@ -135,10 +140,7 @@ export default function GameHistoryPage() {
               <CardContent className="space-y-3">
                 <div className="text-sm flex items-center">
                   <strong>你的角色:</strong> 
-                  <Badge className={cn(getRoleBadgeClassName(record.myRole), "ml-2")}>
-                    {getRoleIcon(record.myRole)}
-                    {getRoleChineseName(record.myRole)}
-                  </Badge>
+                  <span className="ml-2 font-medium">{getRoleChineseName(record.myRole)}</span>
                 </div>
                 <div className="text-sm">
                   <strong>最终比分 (战队:卧底):</strong> {record.finalScores.teamMemberWins} : {record.finalScores.undercoverWins}
@@ -148,8 +150,8 @@ export default function GameHistoryPage() {
                 </div>
                 {record.coachAssassinationAttempt && (
                   <div className="text-xs p-2 border border-dashed rounded-md bg-muted/30">
-                    <p className="font-semibold flex items-center"><Info className="mr-1 h-3 w-3"/>教练指认环节:</p>
-                    <div className="flex items-center">目标: {record.coachAssassinationAttempt.targetPlayerName} <Badge className={cn(getRoleBadgeClassName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role), "ml-1 text-[9px] px-1 py-0")}>{getRoleIcon(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role || Role.TeamMember )}</Badge></div>
+                    <div className="font-semibold flex items-center"><Info className="mr-1 h-3 w-3"/>教练指认环节:</div>
+                    <div>目标: {record.coachAssassinationAttempt.targetPlayerName} <span className="text-muted-foreground text-xs">({getRoleChineseName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role || Role.TeamMember )})</span></div>
                     <p>结果: {record.coachAssassinationAttempt.assassinationSucceeded ? "指认成功 (卧底胜利)" : "指认失败 (战队胜利)"}</p>
                   </div>
                 )}
@@ -164,9 +166,7 @@ export default function GameHistoryPage() {
                           {record.playersInGame.map(p => (
                             <li key={p.id} className="flex items-center justify-between p-1 rounded hover:bg-muted/50">
                               <span>{p.name}</span>
-                              <Badge className={getRoleBadgeClassName(p.role)}>
-                                  {getRoleIcon(p.role, "h-2 w-2 mr-0.5")} {getRoleChineseName(p.role)}
-                              </Badge>
+                              <span className="text-muted-foreground">({getRoleChineseName(p.role)})</span>
                             </li>
                           ))}
                         </ul>
@@ -198,8 +198,8 @@ export default function GameHistoryPage() {
                                         )}
                                         </p>
                                         <p>出战队伍: {mission.teamPlayerIds.map(pid => {
-                                        const player = record.playersInGame.find(p => p.id === pid);
-                                        return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
+                                            const player = record.playersInGame.find(p => p.id === pid);
+                                            return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
                                         }).join(', ')}
                                         </p>
                                         {mission.outcome === 'fail' && mission.cardPlays && mission.cardPlays.length > 0 && (
@@ -216,7 +216,6 @@ export default function GameHistoryPage() {
                            
                             {(record.fullVoteHistory && record.fullVoteHistory.length > 0) && (
                                 <section>
-                                    
                                     <ScrollArea className="h-[300px] pr-4">
                                         <Accordion type="multiple" className="w-full">
                                             {Array.from(new Set(record.fullVoteHistory.map(vh => vh.round))).sort((a, b) => a - b)
@@ -254,23 +253,20 @@ export default function GameHistoryPage() {
                                                         <AccordionContent className="p-2 border border-t-0 rounded-b-md">
                                                         {roundVotes.map((voteEntry, attemptIdx) => {
                                                             const captain = record.playersInGame.find(p => p.id === voteEntry.captainId);
-                                                            const captainDisplay = captain ? `${captain.name} ` : '未知';
+                                                            const captainDisplay = captain ? `${captain.name} (${getRoleChineseName(captain.role)})` : '未知';
 
                                                             return (
                                                             <div key={`vote-entry-${record.gameInstanceId}-${roundNum}-${attemptIdx}`} className="mb-3 p-2 border rounded-md bg-background text-xs">
                                                                 <div className="font-semibold">
-                                                                  第 {voteEntry.attemptNumberInRound} 次组队 (队长: {captainDisplay}
-                                                                    {captain && <Badge className={cn(getRoleBadgeClassName(captain.role), "ml-1 text-[8px] px-0.5 py-0")}>{getRoleIcon(captain.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(captain.role)}</Badge>}
-                                                                )</div>
+                                                                  第 {voteEntry.attemptNumberInRound} 次组队 (队长: {captainDisplay})
+                                                                </div>
                                                                 <div className="mt-1">
                                                                   提议队伍: {voteEntry.proposedTeamIds.map((id, idx) => {
                                                                     const player = record.playersInGame.find(p => p.id === id);
                                                                     return (
                                                                       <React.Fragment key={id}>
                                                                         {idx > 0 && ", "}
-                                                                        <span className="mr-1">{player ? player.name : '未知'}
-                                                                          {player && <Badge className={cn(getRoleBadgeClassName(player.role), "ml-0.5 text-[8px] px-0.5 py-0")}>{getRoleIcon(player.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(player.role)}</Badge>}
-                                                                        </span>
+                                                                        <span className="mr-1">{player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知'}</span>
                                                                       </React.Fragment>
                                                                     );
                                                                   })}
@@ -281,8 +277,7 @@ export default function GameHistoryPage() {
                                                                     const voter = record.playersInGame.find(p => p.id === vote.playerId);
                                                                     return (
                                                                     <li key={`vote-${record.gameInstanceId}-${voteEntry.round}-${voteEntry.attemptNumberInRound}-${vote.playerId}`}>
-                                                                        {voter ? voter.name : '未知玩家'}
-                                                                        {voter && <Badge className={cn(getRoleBadgeClassName(voter.role), "ml-1 text-[8px] px-0.5 py-0")}>{getRoleIcon(voter.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(voter.role)}</Badge>}
+                                                                        {voter ? `${voter.name} (${getRoleChineseName(voter.role)})` : '未知玩家'}
                                                                         : {vote.vote === 'approve' ? <span className="text-green-500 flex items-center inline-flex">同意 <ThumbsUp className="h-3 w-3 ml-1" /></span> : <span className="text-red-500 flex items-center inline-flex">拒绝 <ThumbsDown className="h-3 w-3 ml-1" /></span>}
                                                                     </li>
                                                                     );
@@ -299,18 +294,23 @@ export default function GameHistoryPage() {
                                                                     const player = record.playersInGame.find(p => p.id === play.playerId);
                                                                     return (
                                                                     <li key={`mission-play-${record.gameInstanceId}-${roundNum}-${playIdx}`}>
-                                                                        {player ? player.name : '未知玩家'}
-                                                                        {player && <Badge className={cn(getRoleBadgeClassName(player.role), "ml-1 text-[8px] px-0.5 py-0")}>{getRoleIcon(player.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(player.role)}</Badge>}
+                                                                        {player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家'}
                                                                         : 
                                                                         {play.card === 'success' ? 
-                                                                            <Badge variant="outline" className="ml-1 px-1 py-0 border-green-500 text-green-600"><CheckCircle2 className="inline-block mr-0.5 h-3 w-3"/> 成功</Badge> : 
-                                                                            <Badge variant="destructive" className="ml-1 px-1 py-0"><XCircle className="inline-block mr-0.5 h-3 w-3"/> 破坏</Badge>
+                                                                            <span className="ml-1 text-green-600 inline-flex items-center"><CheckCircle2 className="inline-block mr-0.5 h-3 w-3"/> 成功</span> : 
+                                                                            <span className="ml-1 text-red-600 inline-flex items-center"><XCircle className="inline-block mr-0.5 h-3 w-3"/> 破坏</span>
                                                                         }
                                                                     </li>
                                                                     );
                                                                 })}
                                                                 </ul>
                                                             </div>
+                                                        )}
+                                                        {missionForRound && missionForRound.outcome === 'fail' && (!missionForRound.cardPlays || missionForRound.cardPlays.length === 0) && (
+                                                            <p className="text-sm text-muted-foreground mt-2">比赛失败，但未记录具体行动信息。</p>
+                                                        )}
+                                                        {missionForRound && missionForRound.outcome === 'success' && (!missionForRound.cardPlays || missionForRound.cardPlays.length === 0) && (
+                                                            <p className="text-sm text-muted-foreground mt-2">比赛成功，但未记录具体行动信息。</p>
                                                         )}
                                                         </AccordionContent>
                                                     </AccordionItem>
@@ -336,3 +336,4 @@ export default function GameHistoryPage() {
   );
 }
 
+    
