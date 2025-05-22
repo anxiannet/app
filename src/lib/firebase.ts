@@ -3,6 +3,8 @@
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getFirestore, initializeFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
+// Firebase Auth is not currently proxied or used by mock login in this version
+// import { getAuth, type Auth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -11,10 +13,11 @@ const firebaseConfig = {
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
 };
 
 let app: FirebaseApp | undefined = undefined;
+// let auth: Auth | undefined = undefined; // Auth not used with mock login
 let db: Firestore | undefined = undefined;
 
 const NGROK_EMULATOR_URL = "ef12-121-7-209-188.ngrok-free.app"; // Hostname only
@@ -69,16 +72,17 @@ if (typeof window !== "undefined") {
             `https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. \n` +
             "==> IF FIRESTORE OPERATIONS FAIL WITH '[code=unavailable]' OR CONNECTION ERRORS, PLEASE VERIFY: \n" +
             "    1. Your local Firebase Firestore emulator is running (e.g., `firebase emulators:start`).\n" +
-            `    2. Your ngrok tunnel for '${NGROK_EMULATOR_URL}' is active and correctly points to your local Firestore emulator port.\n` +
+            `    2. Your ngrok tunnel for '${NGROK_EMULATOR_URL}' is active and correctly points to your local Firestore emulator port (usually 8080).\n` +
             "    3. There are no firewall issues blocking the connection.\n" +
-            "    4. The ngrok URL has not expired (free tier ngrok URLs are temporary)."
+            "    4. The ngrok URL has not expired (free tier ngrok URLs are temporary).\n" +
+            "    5. Check the console where your ngrok client is running for any errors or status messages."
           );
           try {
             connectFirestoreEmulator(db, NGROK_EMULATOR_URL, NGROK_EMULATOR_PORT, { ssl: true });
-            console.log(`Firestore successfully configured to connect to ngrok emulator: https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}`);
+            console.log(`Firestore SDK has been configured to attempt connection to ngrok emulator: https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. If subsequent operations fail with 'unavailable', check the points above.`);
           } catch (emulatorError) {
-            console.error(`Failed to connect Firestore to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. Ensure the ngrok tunnel and emulator are running. Error:`, emulatorError);
-            // Fallback to cloud Firestore if emulator connection fails but app is initialized
+            console.error(`CRITICAL ERROR during Firestore SDK configuration for emulator: Failed to set up connection to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. This usually indicates a problem with the parameters passed to connectFirestoreEmulator or an internal SDK issue. Error:`, emulatorError);
+            console.error("Ensure the ngrok tunnel and emulator are running. The application might fall back to cloud Firestore or fail if this configuration step itself has an issue.");
           }
         }
         
@@ -97,12 +101,9 @@ if (typeof window !== "undefined") {
     } else { 
       app = getApps()[0];
       
-      if (!db) { // Check if db specifically is not initialized
+      if (!db) { 
         console.log("Re-initializing Firestore on existing app instance.");
-        // Firestore initialization using initializeFirestore for custom settings
-        db = initializeFirestore(app, {
-          // No host override here initially, will connect to emulator below if in dev mode
-        });
+        db = initializeFirestore(app, {});
         console.log(`Firestore re-configured to use default Google endpoints initially (existing app).`);
 
          if (process.env.NODE_ENV === 'development') {
@@ -111,46 +112,61 @@ if (typeof window !== "undefined") {
             `https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. \n` +
             "==> IF FIRESTORE OPERATIONS FAIL WITH '[code=unavailable]' OR CONNECTION ERRORS, PLEASE VERIFY: \n" +
             "    1. Your local Firebase Firestore emulator is running (e.g., `firebase emulators:start`).\n" +
-            `    2. Your ngrok tunnel for '${NGROK_EMULATOR_URL}' is active and correctly points to your local Firestore emulator port.\n` +
+            `    2. Your ngrok tunnel for '${NGROK_EMULATOR_URL}' is active and correctly points to your local Firestore emulator port (usually 8080).\n` +
             "    3. There are no firewall issues blocking the connection.\n" +
-            "    4. The ngrok URL has not expired (free tier ngrok URLs are temporary)."
+            "    4. The ngrok URL has not expired (free tier ngrok URLs are temporary).\n" +
+            "    5. Check the console where your ngrok client is running for any errors or status messages."
           );
           try {
             connectFirestoreEmulator(db, NGROK_EMULATOR_URL, NGROK_EMULATOR_PORT, { ssl: true });
-            console.log(`Firestore successfully configured to connect to ngrok emulator (on existing app): https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}`);
+            console.log(`Firestore SDK has been re-configured to attempt connection to ngrok emulator (on existing app): https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. If subsequent operations fail with 'unavailable', check the points above.`);
           } catch (emulatorError) {
-            console.error(`Failed to connect Firestore to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT} (on existing app). Ensure the ngrok tunnel and emulator are running. Error:`, emulatorError);
+            console.error(`CRITICAL ERROR during Firestore SDK re-configuration for emulator: Failed to set up connection to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT} (on existing app). Error:`, emulatorError);
+            console.error("Ensure the ngrok tunnel and emulator are running. The application might fall back to cloud Firestore or fail if this configuration step itself has an issue.");
           }
         }
       } else {
-        // Check if db exists but not connected to emulator, for hot-reloads
-        // @ts-ignore // Accessing private _settings for check, not ideal but for dev convenience
+        // @ts-ignore 
         if (process.env.NODE_ENV === 'development' && db && (!db.toJSON || (db.toJSON().settings && db.toJSON().settings.host !== NGROK_EMULATOR_URL && db.toJSON().settings.port !== NGROK_EMULATOR_PORT))) { 
              console.warn(
                 "DEVELOPMENT MODE DETECTED (hot-reload/existing db instance): Attempting to connect Firestore to emulator via ngrok at " +
                 `https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. \n` +
                 "==> IF FIRESTORE OPERATIONS FAIL WITH '[code=unavailable]' OR CONNECTION ERRORS, PLEASE VERIFY: \n" +
                 "    1. Your local Firebase Firestore emulator is running (e.g., `firebase emulators:start`).\n" +
-                `    2. Your ngrok tunnel for '${NGROK_EMULATOR_URL}' is active and correctly points to your local Firestore emulator port.\n` +
+                `    2. Your ngrok tunnel for '${NGROK_EMULATOR_URL}' is active and correctly points to your local Firestore emulator port (usually 8080).\n` +
                 "    3. There are no firewall issues blocking the connection.\n" +
-                "    4. The ngrok URL has not expired (free tier ngrok URLs are temporary)."
+                "    4. The ngrok URL has not expired (free tier ngrok URLs are temporary).\n" +
+                "    5. Check the console where your ngrok client is running for any errors or status messages."
              );
              try {
                 connectFirestoreEmulator(db, NGROK_EMULATOR_URL, NGROK_EMULATOR_PORT, { ssl: true });
-                console.log(`Firestore successfully re-configured to connect to ngrok emulator (hot-reload): https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}`);
+                console.log(`Firestore SDK has been re-configured to attempt connection to ngrok emulator (hot-reload): https://${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. If subsequent operations fail with 'unavailable', check the points above.`);
             } catch (emulatorError) {
-                console.error(`Failed to re-connect Firestore to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. Ensure the ngrok tunnel and emulator are running. Error:`, emulatorError);
+                console.error(`CRITICAL ERROR during Firestore SDK re-configuration for emulator (hot-reload): Failed to set up connection to ngrok emulator at ${NGROK_EMULATOR_URL}:${NGROK_EMULATOR_PORT}. Error:`, emulatorError);
+                console.error("Ensure the ngrok tunnel and emulator are running. The application might fall back to cloud Firestore or fail if this configuration step itself has an issue.");
             }
         } else if (process.env.NODE_ENV === 'development'){
-          console.log("Firestore already initialized and likely connected to ngrok emulator.");
+          // @ts-ignore
+          if (db && db.toJSON && db.toJSON().settings && db.toJSON().settings.host === NGROK_EMULATOR_URL) {
+             console.log("Firestore already initialized and configured for ngrok emulator.");
+          } else {
+             console.log("Firestore already initialized (likely for cloud, or emulator check not applicable).");
+          }
         } else {
-          console.log("Firestore already initialized.");
+          console.log("Firestore already initialized (production mode).");
         }
       }
     }
   } else {
     console.error("Firebase initialization SKIPPED due to missing critical configuration (API Key or Project ID). The app will not function correctly.");
+    // To prevent errors if db is used when not initialized.
+    if (!db) {
+        console.warn("Firestore 'db' instance is not initialized due to critical configuration errors. Firestore operations will fail.")
+    }
   }
 }
 
-export { app, db };
+
+export { app, db }; // auth is not exported as it's not used with mock login
+
+    
