@@ -37,3 +37,21 @@ export const FAILURE_REASONS_LIST_FOR_FALLBACK = [
   "盲目开团 / 不开团", "视野不足", "判断失误", "挂机、演员、互喷",
   "指责队友导致配合断裂", "网络卡顿 / 延迟高", "掉线、闪退", "匹配机制不平衡"
 ];
+
+export const PRE_GENERATED_AVATARS: string[] = [
+  "https://placehold.co/100x100/E6A4B4/white?text=A",
+  "https://placehold.co/100x100/99BC85/white?text=B",
+  "https://placehold.co/100x100/F3B95F/white?text=C",
+  "https://placehold.co/100x100/7469B6/white?text=D",
+  "https://placehold.co/100x100/FFC0D9/white?text=E",
+  "https://placehold.co/100x100/86B6F6/white?text=F",
+  "https://placehold.co/100x100/D7E4C0/white?text=G",
+  "https://placehold.co/100x100/F2C18D/white?text=H",
+  "https://placehold.co/100x100/ADA2FF/white?text=I",
+  "https://placehold.co/100x100/F99417/white?text=J",
+  "https://placehold.co/100x100/5DEBD7/black?text=K",
+  "https://placehold.co/100x100/C5EBAA/black?text=L",
+  "https://placehold.co/100x100/FFB84C/black?text=M",
+  "https://placehold.co/100x100/E1AFD1/black?text=N",
+  "https://placehold.co/100x100/91C8E4/black?text=P",
+];

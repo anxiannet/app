@@ -2,8 +2,8 @@
 // import type { Timestamp } from "firebase/firestore"; // Firestore Timestamp removed
 
 export type User = {
-  id: string; 
-  name: string; 
+  id: string;
+  name: string;
   avatarUrl?: string;
   isAdmin?: boolean;
 };
@@ -22,6 +22,11 @@ export enum GameRoomStatus {
   Waiting = "waiting",
   InProgress = "in-progress",
   Finished = "finished",
+}
+
+export enum RoomMode {
+  Online = "online",
+  ManualInput = "manual_input",
 }
 
 export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
@@ -51,7 +56,6 @@ export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_executio
 export type PlayerVote = {
   playerId: string;
   vote: 'approve' | 'reject';
-  // reasoning?: string; // Removed AI reasoning
 };
 
 export type VoteHistoryEntry = {
@@ -64,13 +68,14 @@ export type VoteHistoryEntry = {
 };
 
 export type GameRoom = {
-  id: string; 
+  id: string;
   name: string;
   players: Player[];
   maxPlayers: number;
   status: GameRoomStatus;
   hostId: string;
   createdAt: string; // Changed from Timestamp to string for localStorage
+  mode: RoomMode; // Added room mode
 
   currentGameInstanceId?: string;
   currentCaptainId?: string;
@@ -105,7 +110,7 @@ export type PlayerGameRecord = {
   gameInstanceId: string;
   roomId: string;
   roomName: string;
-  playedAt: string; 
+  playedAt: string;
   myRole: Role;
   gameOutcome: 'win' | 'loss' | 'draw';
   winningFaction: WinningFactionType;
