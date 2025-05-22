@@ -1,7 +1,8 @@
 
 "use client";
 
-import type { Player, PlayerVote, RoomMode, User as AuthUser } from "@/lib/types"; // Added RoomMode, AuthUser
+import type { Player, PlayerVote, User as AuthUser } from "@/lib/types"; // Removed RoomMode from type-only
+import { RoomMode } from "@/lib/types"; // Added RoomMode as a value import
 import { Button } from "@/components/ui/button";
 import { ThumbsUp, ThumbsDown, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -12,11 +13,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 type TeamVotingControlsProps = {
   roomMode: RoomMode;
   allPlayersInRoom: Player[];
-  currentUser: AuthUser; // Changed from User to AuthUser for clarity
+  currentUser: AuthUser;
   votesToDisplay: PlayerVote[];
   onPlayerVote: (vote: 'approve' | 'reject') => void; // For Online mode
   onBulkSubmitVotes: (votes: PlayerVote[]) => void; // For Manual Input mode
-  currentPhase: string | undefined;
+  currentPhase: string | undefined; // Used to reset manualVotes if phase changes
   totalPlayerCountInRoom: number;
   totalHumanPlayersInRoom: number;
 };
@@ -35,7 +36,6 @@ export function TeamVotingControls({
   const [manualVotes, setManualVotes] = useState<{ [playerId: string]: 'approve' | 'reject' }>({});
 
   useEffect(() => {
-    // Reset manual votes if the phase changes (e.g., new voting round) for ManualInput mode
     if (roomMode === RoomMode.ManualInput) {
         setManualVotes({});
     }
@@ -51,15 +51,14 @@ export function TeamVotingControls({
     if (!allManualVotesEntered) return;
     const collectedVotes: PlayerVote[] = allPlayersInRoom.map(player => ({
       playerId: player.id,
-      vote: manualVotes[player.id] || 'reject',
+      vote: manualVotes[player.id] || 'reject', // Default to reject if somehow missing, though UI should prevent this
     }));
     onBulkSubmitVotes(collectedVotes);
   };
 
   const hasUserVotedOnCurrentTeam = votesToDisplay.some(v => v.playerId === currentUser.id);
-  const isCurrentUserVirtual = currentUser.id.startsWith("virtual_");
+  const isCurrentUserVirtual = currentUser.id.startsWith("virtual_"); // Assuming virtual player IDs start with "virtual_"
   const humanPlayersVotedCount = votesToDisplay.filter(v => !v.playerId.startsWith("virtual_")).length;
-  const allHumansVoted = humanPlayersVotedCount === totalHumanPlayersInRoom;
   const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom;
 
   if (roomMode === RoomMode.ManualInput) {
@@ -120,7 +119,6 @@ export function TeamVotingControls({
   // Online Mode UI
   return (
     <div className="space-y-3 pt-4 text-center">
-      <h3 className="text-lg font-semibold">队伍投票</h3>
       {!isCurrentUserVirtual && !hasUserVotedOnCurrentTeam && (
         <div className="flex gap-4 justify-center">
           <Button onClick={() => onPlayerVote('approve')} className="bg-green-500 hover:bg-green-600 text-white">
