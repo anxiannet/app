@@ -149,7 +149,7 @@ export default function GameHistoryPage() {
                 {record.coachAssassinationAttempt && (
                   <div className="text-xs p-2 border border-dashed rounded-md bg-muted/30">
                     <p className="font-semibold flex items-center"><Info className="mr-1 h-3 w-3"/>教练指认环节:</p>
-                    <p>目标: {record.coachAssassinationAttempt.targetPlayerName} <Badge className={cn(getRoleBadgeClassName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role), "ml-1 text-[9px] px-1 py-0")}>{getRoleIcon(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role || Role.TeamMember )}</Badge></p>
+                    <div className="flex items-center">目标: {record.coachAssassinationAttempt.targetPlayerName} <Badge className={cn(getRoleBadgeClassName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role), "ml-1 text-[9px] px-1 py-0")}>{getRoleIcon(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role, "h-2 w-2 mr-0.5")}{getRoleChineseName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role || Role.TeamMember )}</Badge></div>
                     <p>结果: {record.coachAssassinationAttempt.assassinationSucceeded ? "指认成功 (卧底胜利)" : "指认失败 (战队胜利)"}</p>
                   </div>
                 )}
@@ -180,41 +180,40 @@ export default function GameHistoryPage() {
                             <ListChecks className="mr-2 h-4 w-4 text-muted-foreground" /> 查看本局详细记录
                         </AccordionTrigger>
                         <AccordionContent>
-                          {/* Combined Mission and Vote History */}
-                          {record.missionHistory && record.missionHistory.length > 0 && (
-                            <section className="mb-4">
-                              <h4 className="text-sm font-semibold mb-2 mt-2 text-primary">比赛过程回顾:</h4>
-                              <div className="space-y-2">
-                                {record.missionHistory.map((mission, mIdx) => (
-                                  <div key={`mission-hist-${record.gameInstanceId}-${mIdx}`} className="p-2 border rounded-md bg-muted/20 text-xs">
-                                    <p className="font-semibold">第 {mission.round} 场比赛: 
-                                      <span className={cn(mission.outcome === 'success' ? "text-green-600" : "text-red-500")}>
-                                        {mission.outcome === 'success' ? " 比赛成功" : " 比赛失败"}
-                                      </span>
-                                      {mission.outcome === 'fail' && mission.generatedFailureReason?.narrativeSummary && (
-                                        <span className="text-muted-foreground text-xs"> ({mission.generatedFailureReason.narrativeSummary})</span>
-                                      )}
-                                      {mission.outcome === 'fail' && !mission.generatedFailureReason?.narrativeSummary && mission.failCardsPlayed > 0 && (
-                                         <span className="text-muted-foreground text-xs"> (因 {mission.failCardsPlayed} 个破坏行动而失败)</span>
-                                      )}
-                                    </p>
-                                    <p>出战队伍: {mission.teamPlayerIds.map(pid => {
-                                      const player = record.playersInGame.find(p => p.id === pid);
-                                      return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
-                                    }).join(', ')}
-                                    </p>
-                                    {mission.outcome === 'fail' && mission.cardPlays && mission.cardPlays.length > 0 && (
-                                      <p>破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
-                                        const player = record.playersInGame.find(p => p.id === cp.playerId);
-                                        return player ? player.name : '未知玩家'; 
-                                      }).join(', ')}</p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </section>
-                          )}
-
+                            {record.missionHistory && record.missionHistory.length > 0 && (
+                                <section className="mb-4">
+                                <h4 className="text-sm font-semibold mb-2 mt-2 text-primary">比赛过程回顾:</h4>
+                                <div className="space-y-2">
+                                    {record.missionHistory.map((mission, mIdx) => (
+                                    <div key={`mission-hist-${record.gameInstanceId}-${mIdx}`} className="p-2 border rounded-md bg-muted/20 text-xs">
+                                        <p className="font-semibold">第 {mission.round} 场比赛: 
+                                        <span className={cn(mission.outcome === 'success' ? "text-green-600" : "text-red-500")}>
+                                            {mission.outcome === 'success' ? " 比赛成功" : " 比赛失败"}
+                                        </span>
+                                        {mission.outcome === 'fail' && mission.generatedFailureReason?.narrativeSummary && (
+                                            <span className="text-muted-foreground text-xs"> ({mission.generatedFailureReason.narrativeSummary})</span>
+                                        )}
+                                        {mission.outcome === 'fail' && !mission.generatedFailureReason?.narrativeSummary && mission.failCardsPlayed > 0 && (
+                                            <span className="text-muted-foreground text-xs"> (因 {mission.failCardsPlayed} 个破坏行动而失败)</span>
+                                        )}
+                                        </p>
+                                        <p>出战队伍: {mission.teamPlayerIds.map(pid => {
+                                        const player = record.playersInGame.find(p => p.id === pid);
+                                        return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
+                                        }).join(', ')}
+                                        </p>
+                                        {mission.outcome === 'fail' && mission.cardPlays && mission.cardPlays.length > 0 && (
+                                        <p>破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
+                                            const player = record.playersInGame.find(p => p.id === cp.playerId);
+                                            return player ? player.name : '未知玩家'; 
+                                        }).join(', ')}</p>
+                                        )}
+                                    </div>
+                                    ))}
+                                </div>
+                                </section>
+                            )}
+                           
                             {(record.fullVoteHistory && record.fullVoteHistory.length > 0) && (
                                 <section>
                                     
@@ -336,3 +335,4 @@ export default function GameHistoryPage() {
     </div>
   );
 }
+
