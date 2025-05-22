@@ -111,12 +111,8 @@ export default function LobbyPage() {
       return;
     }
 
-    if (!user.isAdmin) {
-      toast({ title: "权限不足", description: "只有管理员才能创建房间。", variant: "destructive" });
-      return;
-    }
-
-    const newRoomName = `房间 ${Math.floor(Math.random() * 1000) + 1}`; 
+    // Any logged-in user can create a room now
+    const newRoomName = `${user.name}的房间`; 
     const defaultPlayerCountForMissions = MIN_PLAYERS_TO_START;
     const missionPlayerCountsForNewRoom = MISSIONS_CONFIG[defaultPlayerCountForMissions] || MISSIONS_CONFIG[5];
 
@@ -159,7 +155,7 @@ export default function LobbyPage() {
         <p className="mt-4 text-xl text-muted-foreground">
           解开谜团，揭露隐藏，赢取胜利。
         </p>
-        {user?.isAdmin && (
+        {user && ( // Show button if user is logged in
           <div className="mt-8">
             <Button
               size="lg"
@@ -175,7 +171,7 @@ export default function LobbyPage() {
       <section>
         <h2 className="text-3xl font-semibold mb-6 text-center text-foreground/80">可用房间</h2>
         {rooms.length === 0 ? (
-          <p className="text-center text-muted-foreground">暂无可用房间。{user?.isAdmin ? "创建一个吧？" : ""}</p>
+          <p className="text-center text-muted-foreground">暂无可用房间。{user ? "创建一个吧？" : ""}</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
@@ -192,8 +188,9 @@ export default function LobbyPage() {
                 displayStatusText = "等待中";
                 displayStatusVariant = "outline";
                 displayStatusClass = "border-yellow-500 text-yellow-600";
+              } else if (room.status === GameRoomStatus.Finished) {
+                displayStatusText = "游戏结束";
               }
-              // Finished rooms are already filtered out
 
 
               return (
