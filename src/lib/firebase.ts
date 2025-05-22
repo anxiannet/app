@@ -3,8 +3,8 @@
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-// For Firestore, we use initializeFirestore to allow custom host.
-import { initializeFirestore, getFirestore, type Firestore } from "firebase/firestore";
+// For Firestore, we use initializeFirestore to allow custom host, or getFirestore for default.
+import { getFirestore, type Firestore } from "firebase/firestore"; // Standard import
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -19,9 +19,6 @@ const firebaseConfig = {
 let app: FirebaseApp | undefined = undefined;
 let auth: Auth | undefined = undefined;
 let db: Firestore | undefined = undefined;
-
-// Firestore Proxy Configuration (using the simplified worker script)
-const FIRESTORE_PROXY_HOST = "black-rain-7f1e.bostage.workers.dev"; // Your Cloudflare Worker for Firestore
 
 // Authentication Proxy (User-intended, but not directly configurable in SDK for all API calls)
 const AUTH_PROXY_HOST = "auth-jolly-bread-8cd4.bostage.workers.dev";
@@ -74,15 +71,10 @@ if (typeof window !== "undefined") {
           "Advanced proxying for Auth usually requires backend-mediated calls or network-level solutions."
         );
 
-        // Initialize Firestore with the simpler proxy configuration
-        // This assumes your worker at FIRESTORE_PROXY_HOST directly forwards paths.
-        console.log(`Attempting to initialize Firestore with proxy host: ${FIRESTORE_PROXY_HOST}`);
-        db = initializeFirestore(app, {
-          host: FIRESTORE_PROXY_HOST, 
-          ssl: true,
-          ignoreUndefinedProperties: true,
-        });
-        console.log(`Firestore configured to use proxy host: ${FIRESTORE_PROXY_HOST}. The Firebase SDK will append paths like /v1/projects/... directly to this host.`);
+        // Initialize Firestore using default Google endpoints
+        console.log("Attempting to initialize Firestore with default Google endpoints.");
+        db = getFirestore(app); // Reverted to standard initialization
+        console.log(`Firestore configured to use default Google endpoints.`);
         
         console.warn("Firebase Storage is NOT configured to use any proxy with the current client SDK setup. It will use default Google endpoints.");
         console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}.`);
@@ -101,20 +93,13 @@ if (typeof window !== "undefined") {
       app = getApps()[0];
       auth = getAuth(app); // Auth will still use default endpoints
       
-      // Firestore re-initialization logic if needed (e.g., if settings changed during hot reload)
-      const currentDbHost = db && (db.settings as any)?.host;
-      const targetFirestoreHost = FIRESTORE_PROXY_HOST;
-
-      if (!db || currentDbHost !== targetFirestoreHost) {
-        console.log(`Re-initializing Firestore on existing app instance with proxy host: ${targetFirestoreHost}`);
-        db = initializeFirestore(app, {
-          host: targetFirestoreHost,
-          ssl: true,
-          ignoreUndefinedProperties: true,
-        });
-        console.log(`Firestore re-configured to use proxy host: ${targetFirestoreHost}.`);
+      // Standard Firestore initialization if app already exists
+      if (!db) { // Check if db is already initialized
+        console.log("Re-initializing Firestore on existing app instance with default Google endpoints.");
+        db = getFirestore(app);
+        console.log(`Firestore re-configured to use default Google endpoints.`);
       } else {
-        console.log("Firestore already initialized with proxy settings. Current host:", currentDbHost);
+        console.log("Firestore already initialized with default Google endpoints.");
       }
     }
   } else {
