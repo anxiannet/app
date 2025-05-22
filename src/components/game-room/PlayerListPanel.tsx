@@ -19,7 +19,7 @@ type PlayerListPanelProps = {
   votesToDisplay: PlayerVote[];
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
-  isSelectionModeActive?: boolean;
+  isInSelectionMode?: boolean; // Renamed from isSelectionModeActive
   selectedPlayersForMission?: string[];
   onTogglePlayerForMission?: (playerId: string) => void;
   selectionLimitForMission?: number;
@@ -38,7 +38,7 @@ export function PlayerListPanel({
   votesToDisplay,
   fellowUndercovers,
   knownUndercoversByCoach,
-  isSelectionModeActive = false,
+  isInSelectionMode = false, // Renamed from isSelectionModeActive
   selectedPlayersForMission = [],
   onTogglePlayerForMission,
   selectionLimitForMission = 0,
@@ -71,13 +71,18 @@ export function PlayerListPanel({
   };
 
   const handlePlayerCardClick = (playerId: string) => {
-    if (isSelectionModeActive && onTogglePlayerForMission && user.id === room.currentCaptainId) {
+    if (isInSelectionMode && onTogglePlayerForMission) {
       const canBeSelectedCurrently = selectedPlayersForMission.length < selectionLimitForMission || selectedPlayersForMission.includes(playerId);
       if (canBeSelectedCurrently) {
         onTogglePlayerForMission(playerId);
       }
-    } else if (isCoachAssassinationModeActive && onSelectCoachCandidate && assassinationTargetOptionsPlayerIds.includes(playerId) && currentUserRole === Role.Undercover) {
-      onSelectCoachCandidate(playerId);
+    } else if (isCoachAssassinationModeActive && onSelectCoachCandidate && assassinationTargetOptionsPlayerIds.includes(playerId)) {
+      const isUndercoverOnline = room.mode === RoomMode.Online && currentUserRole === Role.Undercover;
+      const isHostManual = room.mode === RoomMode.ManualInput && user.id === room.hostId;
+
+      if (isUndercoverOnline || isHostManual) {
+        onSelectCoachCandidate(playerId);
+      }
     }
   };
 
@@ -93,7 +98,25 @@ export function PlayerListPanel({
     );
   } else {
     panelTitleNode = <>角色分布</>;
+    const roleCounts = localPlayers.reduce((acc, player) => {
+      if (player.role) {
+        acc[player.role] = (acc[player.role] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<Role, number>);
+
+    panelTitleNode = (
+      <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-sm">
+        <span>角色分布:</span>
+        {Object.entries(roleCounts).map(([role, count]) => (
+          <span key={role} className="flex items-center">
+            {getRoleIcon(role as Role, "h-3 w-3 mr-1")} {role}: {count}
+          </span>
+        ))}
+      </div>
+    );
   }
+
 
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
@@ -108,7 +131,7 @@ export function PlayerListPanel({
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
-              const allVotesInForCurrentTeam = (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && votesToDisplay.length === room.players.length && room.players.length > 0;
+              const allVotesInForCurrentTeam = votesToDisplay.length === room.players.length && room.players.length > 0;
 
               const isOnMissionTeamForDisplay = (
                 room.currentPhase === 'team_selection' ||
@@ -122,16 +145,14 @@ export function PlayerListPanel({
               const missionCardPlayed = missionCardPlayInfo?.card;
 
               const isVirtualPlayer = p.id.startsWith("virtual_");
-              const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
+              const isSelectedForMissionByCaptain = isInSelectionMode && selectedPlayersForMission.includes(p.id);
               const isSelectableForCoachAssassination = isCoachAssassinationModeActive && assassinationTargetOptionsPlayerIds.includes(p.id);
               const isSelectedAsCoachCandidate = isCoachAssassinationModeActive && selectedCoachCandidateId === p.id;
 
-              const canBeClickedForTeamSelection = isSelectionModeActive && user.id === room.currentCaptainId &&
-                                               (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
+              const canBeClickedForTeamSelection = isInSelectionMode && (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
+              const canBeClicked = (isInSelectionMode && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
 
-              const canBeClicked = (isSelectionModeActive && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
-
-              let cardClassName = "relative flex flex-col items-center justify-start p-1 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-[10px]";
+              let cardClassName = "relative flex flex-col items-center justify-start p-1.5 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-xs";
 
               if (isOnMissionTeamForDisplay) {
                  cardClassName = cn(cardClassName, "bg-accent/20 border-accent");
@@ -141,11 +162,11 @@ export function PlayerListPanel({
                 cardClassName = cn(cardClassName, "border-muted");
               }
 
-              if (isSelectionModeActive && user.id === room.currentCaptainId) {
+              if (isInSelectionMode) { // Authority is checked in GameRoomPage before setting isInSelectionMode
                 if (canBeClickedForTeamSelection) cardClassName = cn(cardClassName, "cursor-pointer hover:border-accent");
                 if (isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "border-primary ring-2 ring-primary bg-primary/10");
                 if (!canBeClickedForTeamSelection && !isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
-              } else if (isCoachAssassinationModeActive && currentUserRole === Role.Undercover) {
+              } else if (isCoachAssassinationModeActive) { // Authority for coach assassination is checked in GameRoomPage
                   if (isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "cursor-pointer hover:border-destructive");
                   if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
                   if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
@@ -173,25 +194,29 @@ export function PlayerListPanel({
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   )}
-                  <div className="relative">
-                    <Avatar className="h-8 w-8 border-2 border-primary/30">
-                      <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
-                      <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
-                      <Crown className="absolute -top-1 -right-1 h-3 w-3 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
-                    )}
-                    {isSelectedForMissionByCaptain && (
-                      <SelectedIcon className="absolute -bottom-1 -left-1 h-3 w-3 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
-                    )}
-                    {isSelectedAsCoachCandidate && (
-                      <Target className="absolute -bottom-1 -left-1 h-3 w-3 text-red-500 bg-background rounded-full p-0.5" title="Targeted Candidate"/>
-                    )}
+                  <div className="flex items-center space-x-1.5 w-full"> {/* Name next to avatar */}
+                    <div className="relative"> {/* Container for avatar and icons */}
+                        <Avatar className="h-7 w-7 border-2 border-primary/30">
+                        <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
+                        <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
+                        <Crown className="absolute -top-1 -right-1 h-3 w-3 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
+                        )}
+                        {isSelectedForMissionByCaptain && (
+                        <SelectedIcon className="absolute -bottom-1 -left-1 h-3 w-3 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
+                        )}
+                        {isSelectedAsCoachCandidate && (
+                        <Target className="absolute -bottom-1 -left-1 h-3 w-3 text-red-500 bg-background rounded-full p-0.5" title="Targeted Candidate"/>
+                        )}
+                        {isOnMissionTeamForDisplay && room.currentPhase !== 'team_selection' && ( // No Zap icon during selection phase with new highlighting
+                            // <Zap className="absolute -bottom-1 -left-1 h-3 w-3 text-orange-400 bg-background rounded-full p-0.5" title="On Mission Team" />
+                            null // Zap icon removed
+                        )}
+                    </div>
+                    <span className="font-medium text-center truncate flex-1 text-[11px]">{p.name}</span>
                   </div>
 
-                  <div className="flex items-center space-x-1 mt-0.5">
-                    <span className="font-medium text-center truncate w-full text-xs">{p.name}</span>
-                  </div>
 
                   <div className="flex items-center space-x-1 mt-0.5 h-4">
                     {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
@@ -230,7 +255,7 @@ export function PlayerListPanel({
                       <Badge
                         className={cn(
                           "px-1 py-0 text-[9px]",
-                          missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white"
+                          missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-red-500 text-white"
                         )}
                         title={missionCardPlayed === 'success' ? "成功" : "破坏"}
                       >
@@ -249,5 +274,3 @@ export function PlayerListPanel({
     </Card>
   );
 }
-
-    

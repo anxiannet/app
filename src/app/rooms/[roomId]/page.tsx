@@ -155,7 +155,7 @@ export default function GameRoomPage() {
       if (roomIndex !== -1) {
         allRooms[roomIndex] = updatedRoomData;
       } else {
-        allRooms.push(updatedRoomData);
+        allRooms.push(updatedRoomData); // Should not happen often for existing rooms
       }
       localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms));
     } catch (e) {
@@ -311,6 +311,7 @@ export default function GameRoomPage() {
     let aiGeneratedFailureReason: GeneratedFailureReason | undefined = undefined;
     if (outcome === 'fail' && failCardsPlayed > 0) {
         try {
+            // Use a simplified fallback directly
             const defaultReasonsCount = Math.min(failCardsPlayed, FAILURE_REASONS_LIST_FOR_FALLBACK.length, 3);
             const defaultReasons = FAILURE_REASONS_LIST_FOR_FALLBACK.slice(0, defaultReasonsCount);
             aiGeneratedFailureReason = {
@@ -334,7 +335,7 @@ export default function GameRoomPage() {
       teamPlayerIds: [...room.selectedTeamForMission],
       outcome: outcome,
       failCardsPlayed: failCardsPlayed,
-      cardPlays: finalPlays,
+      cardPlays: finalPlays, // Save actual card plays
     };
     if (aiGeneratedFailureReason) {
       missionRecordData.generatedFailureReason = aiGeneratedFailureReason;
@@ -621,55 +622,6 @@ export default function GameRoomPage() {
   }, [room, user, toast, saveGameRecordForAllPlayers]);
 
 
-  // ONLINE MODE: Virtual Player Team Proposal
-  useEffect(() => {
-    if (!room || !user || room.mode !== RoomMode.Online || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_selection' || !room.players || room.players.length === 0) {
-      return;
-    }
-    const playersInRoom = room.players;
-    const currentCaptain = playersInRoom.find(p => p.id === room.currentCaptainId);
-
-    if (currentCaptain && currentCaptain.id.startsWith("virtual_")) {
-      const performVirtualCaptainTeamProposal = () => {
-        if (!room.currentRound || !room.missionPlayerCounts || playersInRoom.length === 0 || (room.captainChangesThisRound || 0) >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) return;
-
-        toast({ description: `${currentCaptain.name} (虚拟玩家) 正在选择队伍...`, duration: 1500 });
-        const requiredPlayers = room.missionPlayerCounts[room.currentRound - 1];
-        let proposedTeamIds = [currentCaptain.id];
-        const otherPlayerIds = playersInRoom
-            .filter(p => p.id !== currentCaptain.id)
-            .map(p => p.id);
-
-        const shuffledOtherPlayers = [...otherPlayerIds].sort(() => 0.5 - Math.random());
-
-        while (proposedTeamIds.length < requiredPlayers && shuffledOtherPlayers.length > 0) {
-            proposedTeamIds.push(shuffledOtherPlayers.shift()!);
-        }
-        proposedTeamIds = Array.from(new Set(proposedTeamIds));
-         while (proposedTeamIds.length < requiredPlayers && playersInRoom.length > proposedTeamIds.length) {
-            const availablePlayers = playersInRoom.filter(p => !proposedTeamIds.includes(p.id));
-            if (availablePlayers.length > 0) {
-                proposedTeamIds.push(availablePlayers[Math.floor(Math.random() * availablePlayers.length)].id);
-            } else {
-                break;
-            }
-        }
-        proposedTeamIds = proposedTeamIds.slice(0, requiredPlayers);
-
-        setRoom(prevRoom => prevRoom ? {
-            ...prevRoom,
-            selectedTeamForMission: proposedTeamIds,
-            currentPhase: 'team_voting',
-            teamVotes: [],
-        } : null);
-        toast({ title: "虚拟队长已提议", description: `${currentCaptain.name} 提议队伍: ${proposedTeamIds.map(id => playersInRoom.find(p => p.id === id)?.name).join(', ')}.`, duration: 2000 });
-        setSelectedMissionTeam([]);
-      };
-      const timer = setTimeout(performVirtualCaptainTeamProposal, 1500 + Math.random() * 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [room?.currentPhase, room?.currentCaptainId, room?.status, room?.currentRound, room?.players, room?.missionPlayerCounts, room?.captainChangesThisRound, room?.maxCaptainChangesPerRound, user, toast, setRoom, setSelectedMissionTeam, room?.mode]);
-
   // ONLINE MODE: Individual Player Voting
   const handlePlayerVote = (vote: 'approve' | 'reject') => {
     if (!room || !user || room.mode !== RoomMode.Online || room.currentPhase !== 'team_voting' || !(room.players?.length)) {
@@ -714,7 +666,6 @@ export default function GameRoomPage() {
 
         const finalVotesWithAI = [...currentVotes, ...aiVotesBatch];
         setRoom(prevRoom => prevRoom ? { ...prevRoom, teamVotes: finalVotesWithAI } : null);
-        // The useEffect below will now pick up that all votes are in and call processTeamVotes
       }
     }
   }, [room?.teamVotes, room?.players, room?.currentPhase, room?.status, room?.mode, user, toast, setRoom]);
@@ -727,7 +678,6 @@ export default function GameRoomPage() {
         return;
     }
     setRoom(prevRoom => prevRoom ? { ...prevRoom, teamVotes: submittedVotes } : null);
-    // The useEffect below will now pick up that all votes are in and call processTeamVotes
   };
 
   // Process team votes once all players have voted (for both Online and Manual modes)
@@ -737,19 +687,17 @@ export default function GameRoomPage() {
       room?.currentPhase === 'team_voting' &&
       room.teamVotes &&
       room.players &&
-      room.teamVotes.length === room.players.length && // All votes are in
+      room.teamVotes.length === room.players.length &&
       room.players.length > 0
     ) {
-      // Delay before processing to allow players to see the votes
       timer = setTimeout(() => {
-        // Double check the condition inside the timeout in case state changed rapidly
         if (room?.currentPhase === 'team_voting' && room.teamVotes && room.players && room.teamVotes.length === room.players.length) {
           processTeamVotes(room.teamVotes);
         }
-      }, 3000); // 3-second delay
+      }, 3000);
     }
     return () => clearTimeout(timer);
-  }, [room?.teamVotes, room?.currentPhase, room?.players, processTeamVotes, room]); // Added room dependency
+  }, [room?.teamVotes, room?.currentPhase, room?.players, processTeamVotes, room]);
 
 
   const handleHumanUndercoverPlayCard = (card: 'success' | 'fail') => {
@@ -1132,7 +1080,8 @@ export default function GameRoomPage() {
                                  !manualRoleRevealCompleted &&
                                  manualRoleRevealIndex !== null;
 
-  const enableSelectionInterfaceForPlayerList =
+  // Renamed for clarity
+  const isPlayerListInSelectionMode =
        room.status === GameRoomStatus.InProgress &&
        room.currentPhase === 'team_selection' &&
        (
@@ -1190,11 +1139,11 @@ export default function GameRoomPage() {
             votesToDisplay={votesToDisplay}
             fellowUndercovers={fellowUndercovers}
             knownUndercoversByCoach={knownUndercoversByCoach}
-            isSelectionModeActive={enableSelectionInterfaceForPlayerList}
+            isInSelectionMode={isPlayerListInSelectionMode}
             selectedPlayersForMission={selectedMissionTeam}
             onTogglePlayerForMission={handlePlayerSelectionForMission}
             selectionLimitForMission={requiredPlayersForCurrentMission}
-            isCoachAssassinationModeActive={room.currentPhase === 'coach_assassination' && currentUserRole === Role.Undercover && (room.mode === RoomMode.Online || (room.mode === RoomMode.ManualInput && isHostCurrentUser)) }
+            isCoachAssassinationModeActive={room.currentPhase === 'coach_assassination' && ((room.mode === RoomMode.Online && currentUserRole === Role.Undercover) || (room.mode === RoomMode.ManualInput && isHostCurrentUser)) }
             selectedCoachCandidateId={selectedCoachCandidate}
             onSelectCoachCandidate={setSelectedCoachCandidate}
             assassinationTargetOptionsPlayerIds={assassinationTargetOptions.map(p => p.id)}
@@ -1226,7 +1175,7 @@ export default function GameRoomPage() {
                       votesToDisplay={votesToDisplay}
                       onPlayerVote={handlePlayerVote} // Online mode
                       onBulkSubmitVotes={handleBulkSubmitVotes} // Manual mode
-                      currentPhase={room.currentPhase} // For resetting manual votes
+                      currentPhase={room.currentPhase} // Used to reset manualVotes if phase changes
                       totalPlayerCountInRoom={room.players.length}
                       totalHumanPlayersInRoom={totalHumanPlayersInRoom}
                     />
