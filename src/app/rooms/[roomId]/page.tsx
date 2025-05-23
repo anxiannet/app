@@ -131,11 +131,10 @@ export default function GameRoomPage() {
         }
         setRoom(currentRoomData);
 
-        // Initialize manual reveal state based on localStorage
         if (currentRoomData.mode === RoomMode.ManualInput &&
             currentRoomData.status === GameRoomStatus.InProgress &&
             currentRoomData.currentGameInstanceId) {
-
+              
           const revealCompletedKey = getManualRevealCompletedKey(currentRoomData.id, currentRoomData.currentGameInstanceId);
           const isRevealSequenceCompleted = localStorage.getItem(revealCompletedKey) === 'true';
 
@@ -159,15 +158,13 @@ export default function GameRoomPage() {
               setManualRoleRevealIndex(0); // Start from the beginning if no index is stored
               localStorage.setItem(revealIndexKey, "0");
             }
-            setIsManualRoleVisible(false); // Crucial: ensure role is hidden on load/refresh
+            setIsManualRoleVisible(false);
           }
         } else {
-          // Not manual mode or not in progress, or no game instance ID, reset reveal states
           setManualRoleRevealCompleted(false);
           setManualRoleRevealIndex(null);
           setIsManualRoleVisible(false);
         }
-
       } else {
         toast({ title: "房间未找到", description: "请求的房间不存在。", variant: "destructive" });
         router.push("/");
@@ -443,7 +440,7 @@ export default function GameRoomPage() {
 
     if (room.mode === RoomMode.ManualInput && room.id && newGameInstanceId) {
       localStorage.removeItem(getManualRevealCompletedKey(room.id, newGameInstanceId));
-      localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, newGameInstanceId)); 
+      localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, newGameInstanceId));
     }
 
 
@@ -480,7 +477,7 @@ export default function GameRoomPage() {
     setManualMissionPlaysCollected([]);
 
     if (room?.mode === RoomMode.ManualInput) {
-      setManualRoleRevealIndex(0); 
+      setManualRoleRevealIndex(0);
       setIsManualRoleVisible(false);
       setManualRoleRevealCompleted(false);
       if (room.id && newGameInstanceId) {
@@ -1084,9 +1081,16 @@ export default function GameRoomPage() {
     toast({ title: "虚拟玩家已移除", description: `${playerToRemove.name} 已被移除出房间。` });
   };
 
-  const handleShowMyRoleManual = () => {
+  const handleShowMyRoleManual = useCallback(() => {
     setIsManualRoleVisible(true);
-  };
+    if (room && room.id && room.currentGameInstanceId && manualRoleRevealIndex !== null) {
+      localStorage.setItem(
+        getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId),
+        manualRoleRevealIndex.toString()
+      );
+    }
+  }, [room, manualRoleRevealIndex, setIsManualRoleVisible]);
+
 
   const handleNextPlayerForRoleReveal = () => {
     setIsManualRoleVisible(false); 
@@ -1215,7 +1219,7 @@ export default function GameRoomPage() {
         onPromptTerminateGame={requestForceEndGame}
       />
 
-      {!showManualRoleRevealUI && room.status === GameRoomStatus.InProgress && room.mode === RoomMode.Online && (
+      {!showManualRoleRevealUI && room.status === GameRoomStatus.InProgress && (
           <RoleAlerts
             currentUserRole={currentUserRole}
             roomStatus={room.status}
@@ -1335,7 +1339,7 @@ export default function GameRoomPage() {
             )}
 
             {room.status === GameRoomStatus.Waiting && (
-              <Card><CardContent className="pt-6">
+              <Card><CardContent className="pt-6"> 
                   <WaitingPhaseActions
                       isHost={isHostCurrentUser}
                       canStartGame={canStartGame}
@@ -1388,3 +1392,5 @@ export default function GameRoomPage() {
     </div>
   );
 }
+
+    
