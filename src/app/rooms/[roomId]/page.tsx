@@ -1,8 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, useCallback }
-from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { useAuth } from "@/contexts/auth-context";
@@ -150,17 +149,19 @@ export default function GameRoomPage() {
               const parsedIndex = parseInt(storedIndex, 10);
               if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < currentRoomData.players.length) {
                 setManualRoleRevealIndex(parsedIndex);
+                 setIsManualRoleVisible(false); 
               } else {
                 console.warn("Invalid manual role reveal index found in localStorage, defaulting to 0.");
                 setManualRoleRevealIndex(0); 
                 localStorage.setItem(revealIndexKey, "0");
+                setIsManualRoleVisible(false); 
               }
             } else {
               setManualRoleRevealIndex(0); 
               localStorage.setItem(revealIndexKey, "0");
+              setIsManualRoleVisible(false);
             }
           }
-          setIsManualRoleVisible(false); 
         } else {
           setManualRoleRevealCompleted(false);
           setManualRoleRevealIndex(null);
@@ -484,6 +485,7 @@ export default function GameRoomPage() {
       if (room.id && newGameInstanceId) {
         // Set for the new game instance
         localStorage.setItem(getManualRevealCurrentIndexKey(room.id, newGameInstanceId), "0");
+         localStorage.removeItem(getManualRevealCompletedKey(room.id, newGameInstanceId)); // Explicitly remove completed flag for new game
       }
     }
 
@@ -528,6 +530,34 @@ export default function GameRoomPage() {
     setRoom(prevRoom => prevRoom ? { ...prevRoom, players: [...(prevRoom.players || []), newVirtualPlayer] } : null);
     toast({ title: "虚拟玩家已添加", description: `${virtualPlayerName} 已加入房间。` });
   };
+
+  const handleManualAddPlayer = (nickname: string) => {
+    if (!room || !user || room.hostId !== user.id || room.status !== GameRoomStatus.Waiting || room.mode !== RoomMode.ManualInput) {
+      toast({ title: "操作无效", description: "当前无法手动添加玩家。", variant: "destructive" });
+      return;
+    }
+    if (room.players.length >= room.maxPlayers) {
+      toast({ title: "房间已满", description: "无法添加更多玩家。", variant: "destructive" });
+      return;
+    }
+    if (!nickname.trim()) {
+      toast({ title: "昵称不能为空", variant: "destructive" });
+      return;
+    }
+    if (room.players.some(p => p.name === nickname.trim())) {
+      toast({ title: "昵称已存在", description: "该昵称已被使用，请输入其他昵称。", variant: "destructive" });
+      return;
+    }
+
+    const newManualPlayer: Player = {
+      id: `manual_${Date.now()}_${nickname.trim()}`,
+      name: nickname.trim(),
+      avatarUrl: PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)],
+    };
+    setRoom(prevRoom => prevRoom ? { ...prevRoom, players: [...(prevRoom.players || []), newManualPlayer] } : null);
+    toast({ title: "真实玩家已添加", description: `${nickname.trim()} 已加入房间。` });
+  };
+
 
   const handleHumanProposeTeam = () => {
     if (!room || !user || room.currentPhase !== 'team_selection' || !room.missionPlayerCounts || room.currentRound === undefined) {
@@ -1084,12 +1114,16 @@ export default function GameRoomPage() {
   };
 
   const handleShowMyRoleManual = useCallback(() => {
-    if (!room || manualRoleRevealIndex === null || !room.id || !room.currentGameInstanceId) return;
+    if (!room || !room.players || manualRoleRevealIndex === null || !room.id || !room.currentGameInstanceId) return;
+    
     setIsManualRoleVisible(true);
-    const nextPlayerIndexInSequence = (manualRoleRevealIndex ?? -1) + 1;
-    if (nextPlayerIndexInSequence < room.players.length) {
-        localStorage.setItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId), nextPlayerIndexInSequence.toString());
+
+    // Persist that this player *will be next* if a refresh occurs after viewing.
+    const nextPlayerIndexInSequenceIfRefresh = (manualRoleRevealIndex + 1); 
+    if (nextPlayerIndexInSequenceIfRefresh < room.players.length) {
+        localStorage.setItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId), nextPlayerIndexInSequenceIfRefresh.toString());
     } else {
+        // This was the last player, so mark sequence as completed
         localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
         localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId));
     }
@@ -1098,22 +1132,25 @@ export default function GameRoomPage() {
 
   const handleNextPlayerForRoleReveal = () => {
     setIsManualRoleVisible(false); 
-    if (room && manualRoleRevealIndex !== null && room.id && room.currentGameInstanceId) {
+    if (room && room.players && manualRoleRevealIndex !== null && room.id && room.currentGameInstanceId) {
       const nextIndexForReactState = manualRoleRevealIndex + 1;
       
       if (nextIndexForReactState < room.players.length) {
         setManualRoleRevealIndex(nextIndexForReactState);
+        // The localStorage for current index was already updated in handleShowMyRoleManual for the *next* turn.
+        // No need to update localStorage index here again for the *current* (now past) turn.
       } else {
         setManualRoleRevealCompleted(true);
         setManualRoleRevealIndex(null); 
+         // Ensure completed flag is also set in localStorage if somehow missed by handleShowMyRoleManual (e.g. last player)
+        localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
+        localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId));
       }
     }
   };
 
-  useEffect(() => { // Added explicit `useEffect` to reinforce `isManualRoleVisible` reset on relevant state changes
+  useEffect(() => { 
     if (room?.mode === RoomMode.ManualInput && room.status === GameRoomStatus.InProgress && !manualRoleRevealCompleted) {
-      // This ensures that if manualRoleRevealIndex changes (e.g., after a refresh and loading from localStorage),
-      // the role visibility is reset to false for the new "turn" being displayed.
       setIsManualRoleVisible(false);
     }
   }, [manualRoleRevealIndex, room?.mode, room?.status, manualRoleRevealCompleted]);
@@ -1321,7 +1358,6 @@ export default function GameRoomPage() {
                       currentUserHasPlayedMissionCard={currentUserHasPlayedMissionCard}
                       onHumanUndercoverPlayCard={handleHumanUndercoverPlayCard}
                       missionCardPlaysForCurrentMission={room.missionCardPlaysForCurrentMission || []}
-                      onFinalizeMissionManually={() => { /* Placeholder, logic now in useEffect */ }}
                       manualMissionPlayerIndex={manualMissionPlayerIndex}
                       isManualCardInputVisible={isManualCardInputVisible}
                       onShowManualCardInput={handleShowManualCardInput}
@@ -1365,6 +1401,8 @@ export default function GameRoomPage() {
                       canAddVirtualPlayer={canAddVirtualPlayer}
                       onAddVirtualPlayer={handleAddVirtualPlayer}
                       onReturnToLobby={handleReturnToLobbyAndLeaveRoom}
+                      roomMode={room.mode}
+                      onManualAddPlayer={handleManualAddPlayer}
                   />
               </CardContent></Card>
             )}
