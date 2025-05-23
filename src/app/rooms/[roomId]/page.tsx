@@ -1,7 +1,8 @@
 
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback }
+from "react";
 import { useParams, useRouter } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { useAuth } from "@/contexts/auth-context";
@@ -141,7 +142,6 @@ export default function GameRoomPage() {
           if (isRevealSequenceCompleted) {
             setManualRoleRevealCompleted(true);
             setManualRoleRevealIndex(null);
-            setIsManualRoleVisible(false); 
           } else {
             setManualRoleRevealCompleted(false);
             const revealIndexKey = getManualRevealCurrentIndexKey(currentRoomData.id, currentRoomData.currentGameInstanceId);
@@ -151,15 +151,17 @@ export default function GameRoomPage() {
               if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < currentRoomData.players.length) {
                 setManualRoleRevealIndex(parsedIndex);
               } else {
-                setManualRoleRevealIndex(0); // Default to 0 if stored index is invalid
+                // Invalid stored index, default to 0 or handle as error
+                console.warn("Invalid manual role reveal index found in localStorage, defaulting to 0.");
+                setManualRoleRevealIndex(0); 
                 localStorage.setItem(revealIndexKey, "0");
               }
             } else {
               setManualRoleRevealIndex(0); // Start from the beginning if no index is stored
               localStorage.setItem(revealIndexKey, "0");
             }
-            setIsManualRoleVisible(false);
           }
+          setIsManualRoleVisible(false); // Always start with role hidden for the current turn
         } else {
           setManualRoleRevealCompleted(false);
           setManualRoleRevealIndex(null);
@@ -481,6 +483,7 @@ export default function GameRoomPage() {
       setIsManualRoleVisible(false);
       setManualRoleRevealCompleted(false);
       if (room.id && newGameInstanceId) {
+        // Set for the new game instance
         localStorage.setItem(getManualRevealCurrentIndexKey(room.id, newGameInstanceId), "0");
       }
     }
@@ -669,7 +672,7 @@ export default function GameRoomPage() {
     }
   }, [room, user, toast, saveGameRecordForAllPlayers]);
 
-  const handlePlayerVote = (vote: 'approve' | 'reject') => {
+  const handlePlayerVote = async (vote: 'approve' | 'reject') => {
     if (!room || !user || room.mode !== RoomMode.Online || room.currentPhase !== 'team_voting' || !(room.players?.length)) {
       toast({ title: "错误", description: "当前无法投票。", variant: "destructive" }); return;
     }
@@ -1082,27 +1085,34 @@ export default function GameRoomPage() {
   };
 
   const handleShowMyRoleManual = useCallback(() => {
+    if (!room || manualRoleRevealIndex === null || !room.id || !room.currentGameInstanceId) return;
     setIsManualRoleVisible(true);
-    if (room && room.id && room.currentGameInstanceId && manualRoleRevealIndex !== null) {
-      localStorage.setItem(
-        getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId),
-        manualRoleRevealIndex.toString()
-      );
+    // Advance the persistent turn *after* showing the role.
+    // This means if refresh happens now, it's still this player's turn to *see* the prompt.
+    // But if they click "View" and then refresh, it *should* advance.
+    const nextPlayerIndexInSequence = (manualRoleRevealIndex ?? -1) + 1;
+    if (nextPlayerIndexInSequence < room.players.length) {
+        localStorage.setItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId), nextPlayerIndexInSequence.toString());
+    } else {
+        localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
+        localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId));
     }
-  }, [room, manualRoleRevealIndex, setIsManualRoleVisible]);
+  }, [room, manualRoleRevealIndex]);
 
 
   const handleNextPlayerForRoleReveal = () => {
     setIsManualRoleVisible(false); 
     if (room && manualRoleRevealIndex !== null && room.id && room.currentGameInstanceId) {
-      const nextIndex = manualRoleRevealIndex + 1;
-      if (nextIndex < room.players.length) {
-        setManualRoleRevealIndex(nextIndex);
-        localStorage.setItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId), nextIndex.toString());
+      const nextIndexForReactState = manualRoleRevealIndex + 1; // This is the index for the *next* player's prompt.
+      
+      if (nextIndexForReactState < room.players.length) {
+        setManualRoleRevealIndex(nextIndexForReactState);
+        // localStorage for currentIndexKey was already updated in handleShowMyRoleManual
+        // to point to this nextIndexForReactState.
       } else {
         setManualRoleRevealCompleted(true);
-        localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
-        localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId)); 
+        // localStorage for completedKey was already updated in handleShowMyRoleManual
+        // if this was the last player viewing their role.
         setManualRoleRevealIndex(null); 
       }
     }
@@ -1141,9 +1151,8 @@ export default function GameRoomPage() {
 
     assassinationTargetOptions = room.players.filter(p => {
       if (!successfulCaptainIds.has(p.id)) return false;
-      if (room.mode === RoomMode.Online && p.id === user.id) return false;
-      if (room.mode === RoomMode.Online && currentUserRole === Role.Undercover && p.role === Role.Undercover) return false;
-      if (room.mode === RoomMode.ManualInput && p.role === Role.Undercover) return false;
+      if (room.mode === RoomMode.Online && p.id === user.id) return false; // Cannot target self in Online mode
+      if (currentUserRole === Role.Undercover && p.role === Role.Undercover) return false; // Undercover cannot target another Undercover
       return true;
     });
   }
@@ -1392,5 +1401,3 @@ export default function GameRoomPage() {
     </div>
   );
 }
-
-    
