@@ -157,7 +157,7 @@ export default function GameRoomPage() {
       router.push("/");
     }
     setIsLoading(false);
-  }, [roomId, user, authLoading, router, toast]); 
+  }, [roomId, user, authLoading, router, toast, manualRoleRevealIndex, manualRoleRevealCompleted]); 
 
   const updateLocalStorageRoom = useCallback((updatedRoomData: GameRoom | null) => {
     if (!updatedRoomData) return;
@@ -328,6 +328,7 @@ export default function GameRoomPage() {
     let aiGeneratedFailureReason: GeneratedFailureReason | undefined = undefined;
     if (outcome === 'fail' && failCardsPlayed > 0) {
         try {
+            // For simplicity, using a fallback directly as AI is disabled.
             const defaultReasonsCount = Math.min(failCardsPlayed, FAILURE_REASONS_LIST_FOR_FALLBACK.length, 3);
             const defaultReasons = FAILURE_REASONS_LIST_FOR_FALLBACK.slice(0, defaultReasonsCount);
             aiGeneratedFailureReason = {
@@ -650,6 +651,7 @@ export default function GameRoomPage() {
     }
   }, [room, user, toast, saveGameRecordForAllPlayers]);
 
+  // For Online Mode - Individual Player Voting
   const handlePlayerVote = (vote: 'approve' | 'reject') => {
     if (!room || !user || room.mode !== RoomMode.Online || room.currentPhase !== 'team_voting' || !(room.players?.length)) {
       toast({ title: "错误", description: "当前无法投票。", variant: "destructive" }); return;
@@ -668,6 +670,7 @@ export default function GameRoomPage() {
     });
   };
 
+  // For Online Mode - Virtual Player Voting
   useEffect(() => {
     if (!room || !user || room.mode !== RoomMode.Online || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_voting' || !room.players || room.players.length === 0) {
       return;
@@ -686,6 +689,7 @@ export default function GameRoomPage() {
         toast({ description: "虚拟玩家正在投票..." });
         let aiVotesBatch: PlayerVote[] = [];
         for (const vp of virtualPlayersWhoHaventVoted) {
+          // Simple non-AI logic: virtual players always approve
           aiVotesBatch.push({ playerId: vp.id, vote: 'approve' }); 
         }
 
@@ -695,6 +699,7 @@ export default function GameRoomPage() {
     }
   }, [room?.teamVotes, room?.players, room?.currentPhase, room?.status, room?.mode, user, toast, setRoom]);
 
+  // For Manual Input Mode - Bulk Vote Submission
   const handleBulkSubmitVotes = (submittedVotes: PlayerVote[]) => {
     if (!room || room.mode !== RoomMode.ManualInput || room.currentPhase !== 'team_voting') {
         toast({ title: "错误", description: "当前无法提交投票。", variant: "destructive" });
@@ -703,6 +708,7 @@ export default function GameRoomPage() {
     setRoom(prevRoom => prevRoom ? { ...prevRoom, teamVotes: submittedVotes } : null);
   };
 
+  // Process votes when all votes are in (for both modes)
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (
@@ -713,10 +719,11 @@ export default function GameRoomPage() {
       room.players.length > 0
     ) {
       timer = setTimeout(() => {
+        // Double check condition inside timeout as state might have changed
         if (room?.currentPhase === 'team_voting' && room.teamVotes && room.players && room.teamVotes.length === room.players.length) {
           processTeamVotes(room.teamVotes);
         }
-      }, 3000);
+      }, 3000); // 3-second delay to show results
     }
     return () => clearTimeout(timer);
   }, [room?.teamVotes, room?.currentPhase, room?.players, processTeamVotes, room]);
@@ -776,10 +783,22 @@ export default function GameRoomPage() {
             ...prevRoom,
             missionCardPlaysForCurrentMission: updatedManualPlays
         } : null);
-        finalizeAndRevealMissionOutcome(); // This should be called after setRoom has processed for missionCardPlaysForCurrentMission to be available
+        // Call finalizeAndRevealMissionOutcome after state is updated
+        // This will now be handled by an effect watching missionCardPlaysForCurrentMission
         setManualMissionPlayerIndex(null); // Reset for next mission
     }
   };
+
+  // Effect to finalize mission in manual mode once all cards are collected
+  useEffect(() => {
+      if (room && room.mode === RoomMode.ManualInput && room.currentPhase === 'mission_execution' && room.selectedTeamForMission &&
+          manualMissionPlaysCollected.length === room.selectedTeamForMission.length && room.selectedTeamForMission.length > 0) {
+            // Ensure missionCardPlaysForCurrentMission is updated before finalizing
+            // The setRoom call for missionCardPlaysForCurrentMission might be in handleManualCardPlay
+            // If it's not, we ensure it's updated here or the finalize function uses manualMissionPlaysCollected
+            finalizeAndRevealMissionOutcome();
+      }
+  }, [room, manualMissionPlaysCollected, finalizeAndRevealMissionOutcome]);
 
 
   const handleProceedToNextRoundOrGameOver = () => {
@@ -1055,6 +1074,21 @@ export default function GameRoomPage() {
     toast({ title: "虚拟玩家已移除", description: `${playerToRemove.name} 已被移除出房间。` });
   };
 
+  const handleShowMyRoleManual = () => {
+    setIsManualRoleVisible(true);
+  };
+
+  const handleNextPlayerForRoleReveal = () => {
+    setIsManualRoleVisible(false);
+    if (room && manualRoleRevealIndex !== null && manualRoleRevealIndex < room.players.length - 1) {
+      setManualRoleRevealIndex(manualRoleRevealIndex + 1);
+    } else if (room && room.id && room.currentGameInstanceId) {
+      setManualRoleRevealCompleted(true);
+      localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
+      setManualRoleRevealIndex(null);
+    }
+  };
+
   if (isLoading || authLoading) return <div className="text-center py-10">载入房间...</div>;
   if (!room || !user) return <div className="text-center py-10 text-destructive">载入房间错误或用户未验证。请尝试返回大厅。</div>;
 
@@ -1090,6 +1124,7 @@ export default function GameRoomPage() {
       if (!successfulCaptainIds.has(p.id)) return false; 
       if (room.mode === RoomMode.Online && p.id === user.id) return false; 
       if (room.mode === RoomMode.Online && currentUserRole === Role.Undercover && p.role === Role.Undercover) return false;
+      if (room.mode === RoomMode.ManualInput && p.role === Role.Undercover) return false; // In manual mode, host shouldn't pick undercover
       return true;
     });
   }
@@ -1249,7 +1284,8 @@ export default function GameRoomPage() {
                       currentUserIsOnMission={currentUserIsOnMission}
                       currentUserRole={currentUserRole}
                       currentUserHasPlayedMissionCard={currentUserHasPlayedMissionCard}
-                      onFinalizeMissionManually={finalizeAndRevealMissionOutcome} 
+                      onHumanUndercoverPlayCard={handleHumanUndercoverPlayCard}
+                      // onFinalizeMissionManually={finalizeAndRevealMissionOutcome} // finalizeAndRevealMissionOutcome is called from effect now
                       missionCardPlaysForCurrentMission={room.missionCardPlaysForCurrentMission || []}
                       // Manual mode specific props
                       manualMissionPlayerIndex={manualMissionPlayerIndex}
@@ -1284,7 +1320,7 @@ export default function GameRoomPage() {
             )}
 
             {room.status === GameRoomStatus.Waiting && (
-              <Card><CardContent className="pt-6">
+              <Card><CardContent className="pt-6"> 
                   <WaitingPhaseActions
                       isHost={isHostCurrentUser}
                       canStartGame={canStartGame}
