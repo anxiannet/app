@@ -27,8 +27,8 @@ type PlayerListPanelProps = {
   selectedCoachCandidateId?: string | null;
   onSelectCoachCandidate?: (playerId: string) => void;
   assassinationTargetOptionsPlayerIds?: string[];
-  onRemovePlayer?: (playerId: string) => void; // Renamed from onRemoveVirtualPlayer
-  isHostCurrentUser?: boolean; // New prop
+  onRemovePlayer?: (playerId: string) => void;
+  isHostCurrentUser?: boolean;
 };
 
 export function PlayerListPanel({
@@ -51,7 +51,7 @@ export function PlayerListPanel({
   isHostCurrentUser,
 }: PlayerListPanelProps) {
 
-  const getRoleIcon = (role?: Role, iconSizeClass = "h-3.5 w-3.5 mr-1") => { // Adjusted icon size
+  const getRoleIcon = (role?: Role, iconSizeClass = "h-3 w-3 mr-0.5") => { // Smaller icon
     switch (role) {
       case Role.Undercover: return <Swords className={cn(iconSizeClass, "text-destructive")} />;
       case Role.TeamMember: return <Shield className={cn(iconSizeClass, "text-blue-500")} />;
@@ -61,7 +61,7 @@ export function PlayerListPanel({
   };
 
   const getRoleBadgeClassName = (role?: Role): string => {
-    let baseClass = "flex items-center gap-1 text-xs px-1.5 py-0.5 border rounded-full"; // Adjusted padding and rounded
+    let baseClass = "flex items-center gap-0.5 text-[10px] px-1 py-0 border rounded-full"; // Smaller text & padding
     if (role === Role.TeamMember) {
       return cn(baseClass, "bg-blue-100 text-blue-700 border-blue-300");
     } else if (role === Role.Coach) {
@@ -97,25 +97,13 @@ export function PlayerListPanel({
       </>
     );
   } else {
-    const roleCounts = localPlayers.reduce((acc, player) => {
-      if (player.role) {
-        acc[player.role] = (acc[player.role] || 0) + 1;
-      }
-      return acc;
-    }, {} as Record<Role, number>);
-
-    panelTitleNode = (
-       <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-sm">
-        <span>角色分布:</span>
-        {Object.entries(roleCounts).map(([role, count]) => (
-          <span key={role} className="flex items-center">
-            {getRoleIcon(role as Role, "h-4 w-4 mr-1")} {role as Role}: {count}
-          </span>
-        ))}
+     panelTitleNode = (
+      <div className="flex items-center text-sm"> {/* Removed flex-wrap and gap for simpler title */}
+        <UsersIcon className="mr-1 h-4 w-4 text-primary" />
+        角色分布
       </div>
     );
   }
-
 
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
@@ -126,12 +114,11 @@ export function PlayerListPanel({
       </CardHeader>
       <CardContent className="flex-grow overflow-y-auto p-2">
         {localPlayers.length > 0 ? (
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2"> {/* 3 columns */}
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
-              const allVotesInForCurrentTeam = votesToDisplay.length === room.players.length && room.players.length > 0;
-
+              const allVotesIn = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
 
               const isOnMissionTeamForDisplay = (
                 room.currentPhase === 'team_selection' ||
@@ -152,12 +139,12 @@ export function PlayerListPanel({
               const canBeClickedForTeamSelection = isInSelectionMode && (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
               const canBeClicked = (isInSelectionMode && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
 
-              let cardClassName = "relative flex flex-col items-center justify-start p-1 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-xs"; // Reduced padding
+              let cardClassName = "relative flex flex-row items-center p-1.5 rounded-md border bg-card shadow-sm h-auto transition-all text-xs"; // flex-row, reduced padding
 
               if (isOnMissionTeamForDisplay) {
                  cardClassName = cn(cardClassName, "bg-accent/20 border-accent");
               } else if (isCurrentUser) {
-                cardClassName = cn(cardClassName, "border-primary ring-1 ring-primary");
+                // cardClassName = cn(cardClassName, "border-primary ring-1 ring-primary"); // Current user highlight can be subtle if desired
               } else {
                 cardClassName = cn(cardClassName, "border-muted");
               }
@@ -172,16 +159,15 @@ export function PlayerListPanel({
                   if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
               }
 
-              const canRemoveThisPlayer = 
-                isHostCurrentUser && 
-                room.status === GameRoomStatus.Waiting && 
-                p.id !== user.id && // Host cannot remove themselves
+              const canRemoveThisPlayer =
+                isHostCurrentUser &&
+                room.status === GameRoomStatus.Waiting &&
+                p.id !== user.id &&
                 (
-                  (room.mode === RoomMode.Online && isVirtualPlayer) || // Online mode: only virtual players
-                  (room.mode === RoomMode.ManualInput) // Manual mode: any player (except host)
+                  (room.mode === RoomMode.Online && isVirtualPlayer) ||
+                  (room.mode === RoomMode.ManualInput)
                 ) &&
                 onRemovePlayer;
-
 
               return (
                 <div
@@ -193,79 +179,78 @@ export function PlayerListPanel({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute top-0 right-0 h-5 w-5 text-destructive hover:bg-destructive/10 z-10 p-0.5"
+                      className="absolute top-0 right-0 h-4 w-4 text-destructive hover:bg-destructive/10 z-10 p-0.5" // Smaller remove button
                       onClick={(e) => {
                         e.stopPropagation();
                         if (onRemovePlayer) onRemovePlayer(p.id);
                       }}
                       title={`移除 ${p.name}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   )}
-                   <div className="flex items-center space-x-1.5 w-full"> {/* Name next to avatar */}
-                    <div className="relative flex-shrink-0">
-                        <Avatar className="h-8 w-8 border-2 border-primary/30"> {/* Reduced avatar size */}
+                   <div className="relative flex-shrink-0 mr-1.5">
+                        <Avatar className="h-8 w-8 border-2 border-primary/30">
                         <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
                         <AvatarFallback className="text-sm">{p.name.charAt(0).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
-                        <Crown className="absolute -top-1 -right-1 h-3.5 w-3.5 text-yellow-500 bg-background rounded-full p-0.5" title="队长" />
+                        <Crown className="absolute -top-1 -right-1 h-3 w-3 text-yellow-500 bg-background rounded-full p-0.5" title="队长" />
                         )}
                         {isSelectedForMissionByCaptain && (
-                        <SelectedIcon className="absolute -bottom-1 -left-1 h-3.5 w-3.5 text-green-500 bg-background rounded-full p-0.5" title="已选择出战"/>
+                        <SelectedIcon className="absolute -bottom-1 -left-1 h-3 w-3 text-green-500 bg-background rounded-full p-0.5" title="已选择出战"/>
                         )}
                         {isSelectedAsCoachCandidate && (
-                        <Target className="absolute -bottom-1 -left-1 h-3.5 w-3.5 text-red-500 bg-background rounded-full p-0.5" title="指认目标"/>
+                        <Target className="absolute -bottom-1 -left-1 h-3 w-3 text-red-500 bg-background rounded-full p-0.5" title="指认目标"/>
                         )}
                     </div>
-                    <span className="font-medium text-center truncate text-xs flex-grow">{p.name}</span> {/* Reduced name font size */}
-                  </div>
+                  <div className="flex flex-col flex-grow overflow-hidden">
+                    <span className="font-medium truncate text-[11px]">{p.name}</span> {/* Smaller name font */}
+                    <div className="flex items-center space-x-1 mt-0.5 h-auto min-h-[1rem] flex-wrap">
+                      {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
+                          (allVotesIn || room.currentPhase === 'mission_reveal') ? (
+                              playerVoteInfo.vote === 'approve' ? (
+                              <Badge variant="default" className="px-1 py-0 text-[10px] bg-green-500 hover:bg-green-600 text-white" title="同意">
+                                  <ThumbsUp className="h-2.5 w-2.5" />
+                              </Badge>
+                              ) : (
+                              <Badge variant="destructive" className="px-1 py-0 text-[10px]" title="反对">
+                                  <ThumbsDown className="h-2.5 w-2.5" />
+                              </Badge>
+                              )
+                          ) : (
+                              votesToDisplay.some(v => v.playerId === p.id) && (
+                                  <Badge variant="default" className="px-1 py-0 text-[10px] bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
+                                  <VotedIcon className="h-2.5 w-2.5" />
+                                  </Badge>
+                              )
+                          )
+                      ) : null}
 
-                  <div className="flex items-center justify-center space-x-1 mt-1 h-auto min-h-[1rem]">
-                     {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
-                        (allVotesInForCurrentTeam || room.currentPhase === 'mission_reveal') ? (
-                            playerVoteInfo.vote === 'approve' ? (
-                            <Badge variant="default" className="px-1 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white" title="同意">
-                                <ThumbsUp className="h-2.5 w-2.5" />
-                            </Badge>
-                            ) : (
-                            <Badge variant="destructive" className="px-1 py-0.5 text-xs" title="反对">
-                                <ThumbsDown className="h-2.5 w-2.5" />
-                            </Badge>
-                            )
-                        ) : (
-                            votesToDisplay.some(v => v.playerId === p.id) && (
-                                <Badge variant="default" className="px-1 py-0.5 text-xs bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
-                                <VotedIcon className="h-2.5 w-2.5" />
-                                </Badge>
-                            )
-                        )
-                    ) : null}
+                      {room.mode !== RoomMode.ManualInput && p.role && (
+                        (isCurrentUser && room.status === GameRoomStatus.InProgress) ||
+                        (room.status === GameRoomStatus.Finished) ||
+                        (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) ||
+                        (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover)
+                      ) && (
+                        <Badge className={cn(getRoleBadgeClassName(p.role))}>
+                          {getRoleIcon(p.role)}
+                          {p.role}
+                        </Badge>
+                      )}
 
-                    {room.mode !== RoomMode.ManualInput && p.role && (
-                      (isCurrentUser && room.status === GameRoomStatus.InProgress) ||
-                      (room.status === GameRoomStatus.Finished) ||
-                      (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) ||
-                      (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover)
-                    ) && (
-                      <Badge className={cn(getRoleBadgeClassName(p.role))}>
-                        {getRoleIcon(p.role)}
-                        {p.role}
-                      </Badge>
-                    )}
-
-                    {room.status === GameRoomStatus.Finished && room.mode !== RoomMode.ManualInput && missionCardPlayed && (
-                      <Badge
-                        className={cn(
-                          "px-1 py-0.5 text-xs",
-                          missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-red-500 text-white"
-                        )}
-                        title={missionCardPlayed === 'success' ? "成功" : "破坏"}
-                      >
-                        {missionCardPlayed === 'success' ? <VotedIcon className="h-2.5 w-2.5" /> : <MissionCardFailIcon className="h-2.5 w-2.5" />}
-                      </Badge>
-                    )}
+                      {room.status === GameRoomStatus.Finished && room.mode !== RoomMode.ManualInput && missionCardPlayed && (
+                        <Badge
+                          className={cn(
+                            "px-1 py-0 text-[10px]",
+                            missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-red-500 text-white"
+                          )}
+                          title={missionCardPlayed === 'success' ? "成功" : "破坏"}
+                        >
+                          {missionCardPlayed === 'success' ? <VotedIcon className="h-2.5 w-2.5" /> : <MissionCardFailIcon className="h-2.5 w-2.5" />}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
