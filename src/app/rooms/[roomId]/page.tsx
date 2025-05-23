@@ -45,7 +45,7 @@ import { MissionRevealDisplay } from "@/components/game-room/MissionRevealDispla
 import { CoachAssassinationControls } from "@/components/game-room/CoachAssassinationControls";
 import { GameOverSummary } from "@/components/game-room/GameOverSummary";
 import { ManualRoleRevealControls } from "@/components/game-room/ManualRoleRevealControls";
-// Swords, Shield, HelpCircle icons are imported locally in PlayerListPanel and VoteHistoryAccordion if needed there.
+import { Swords, Shield, HelpCircle } from "lucide-react";
 
 import {
   ROLES_CONFIG,
@@ -55,7 +55,8 @@ import {
   MAX_CAPTAIN_CHANGES_PER_ROUND,
   HONOR_OF_KINGS_HERO_NAMES,
   FAILURE_REASONS_LIST_FOR_FALLBACK,
-  PRE_GENERATED_AVATARS
+  PRE_GENERATED_AVATARS,
+  PRESET_ROOM_TEMPLATES
 } from '@/lib/game-config';
 
 
@@ -88,12 +89,10 @@ export default function GameRoomPage() {
   const [selectedCoachCandidate, setSelectedCoachCandidate] = useState<string | null>(null);
   const [showTerminateConfirmDialog, setShowTerminateConfirmDialog] = useState(false);
 
-  // State for Manual Input Mode - Role Reveal
   const [manualRoleRevealIndex, setManualRoleRevealIndex] = useState<number | null>(null);
   const [isManualRoleVisible, setIsManualRoleVisible] = useState<boolean>(false);
   const [manualRoleRevealCompleted, setManualRoleRevealCompleted] = useState<boolean>(false);
 
-  // State for Manual Input Mode - Mission Execution
   const [manualMissionPlayerIndex, setManualMissionPlayerIndex] = useState<number | null>(null);
   const [isManualCardInputVisible, setIsManualCardInputVisible] = useState<boolean>(false);
   const [manualMissionPlaysCollected, setManualMissionPlaysCollected] = useState<MissionCardPlay[]>([]);
@@ -111,19 +110,51 @@ export default function GameRoomPage() {
     setIsLoading(true);
     try {
       const storedRoomsRaw = localStorage.getItem(ROOMS_LOCAL_STORAGE_KEY);
-      const allRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
+      let allRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
       let currentRoomData = allRooms.find(r => r.id === roomId);
 
+      if (!currentRoomData) {
+        const template = PRESET_ROOM_TEMPLATES.find(t => t.id === roomId);
+        if (template && user) {
+          const newPlayer: Player = { id: user.id, name: user.name, avatarUrl: user.avatarUrl || undefined };
+          const newRoomForStorage: GameRoom = {
+            id: template.id,
+            name: template.name,
+            players: [newPlayer],
+            maxPlayers: template.maxPlayers,
+            status: GameRoomStatus.Waiting,
+            hostId: user.id,
+            createdAt: new Date().toISOString(),
+            mode: template.mode,
+            teamScores: { teamMemberWins: 0, undercoverWins: 0 },
+            missionHistory: [],
+            fullVoteHistory: [],
+            missionPlayerCounts: template.missionPlayerCounts || MISSIONS_CONFIG[template.maxPlayers] || MISSIONS_CONFIG[MIN_PLAYERS_TO_START],
+            totalRounds: template.totalRounds || TOTAL_ROUNDS_PER_GAME,
+            maxCaptainChangesPerRound: template.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND,
+            // Initialize other game state fields to defaults
+            selectedTeamForMission: [],
+            teamVotes: [],
+            missionCardPlaysForCurrentMission: [],
+          };
+          allRooms.push(newRoomForStorage);
+          localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms));
+          currentRoomData = newRoomForStorage;
+          toast({ title: `已加入 ${template.name}`, description: "你是当前房间的主持人。" });
+        }
+      }
+
+
       if (currentRoomData) {
-        if (!currentRoomData.mode) { 
-            currentRoomData.mode = RoomMode.Online;
+        if (!currentRoomData.mode) {
+            currentRoomData.mode = RoomMode.Online; // Default for older rooms
         }
 
         const playerExists = currentRoomData.players.some(p => p.id === user.id);
         if (!playerExists && currentRoomData.status === GameRoomStatus.Waiting && currentRoomData.players.length < currentRoomData.maxPlayers) {
-          const newPlayer: Player = { id: user.id, name: user.name };
-          if (user.avatarUrl) newPlayer.avatarUrl = user.avatarUrl;
+          const newPlayer: Player = { id: user.id, name: user.name, avatarUrl: user.avatarUrl || PRE_GENERATED_AVATARS[currentRoomData.players.length % PRE_GENERATED_AVATARS.length] };
           currentRoomData.players.push(newPlayer);
+          // No need to save here, will be saved by useEffect watching `room`
         } else if (!playerExists && currentRoomData.status !== GameRoomStatus.Waiting) {
           toast({ title: "游戏已开始或结束", description: "无法加入已开始或结束的游戏。", variant: "destructive" });
           router.push("/");
@@ -135,13 +166,15 @@ export default function GameRoomPage() {
         }
         setRoom(currentRoomData);
 
+        // Manual Mode Reveal State Initialization from localStorage
         if (currentRoomData.mode === RoomMode.ManualInput &&
             currentRoomData.status === GameRoomStatus.InProgress &&
             currentRoomData.currentGameInstanceId) {
-              
+
           const revealCompletedKey = getManualRevealCompletedKey(currentRoomData.id, currentRoomData.currentGameInstanceId);
           const isRevealSequenceCompleted = localStorage.getItem(revealCompletedKey) === 'true';
           setManualRoleRevealCompleted(isRevealSequenceCompleted);
+          setIsManualRoleVisible(false);
 
           if (isRevealSequenceCompleted) {
             setManualRoleRevealIndex(null);
@@ -153,19 +186,15 @@ export default function GameRoomPage() {
                 if (!isNaN(parsedIndex) && parsedIndex >= 0 && currentRoomData.players && parsedIndex < currentRoomData.players.length) {
                     setManualRoleRevealIndex(parsedIndex);
                 } else {
-                    console.warn("Invalid manual role reveal index found in localStorage for game:", currentRoomData.currentGameInstanceId, "defaulting to 0.");
+                    console.warn("Invalid manual role reveal index found in localStorage, defaulting to 0 for game:", currentRoomData.currentGameInstanceId);
                     setManualRoleRevealIndex(0);
-                    if (currentRoomData.id && currentRoomData.currentGameInstanceId) {
-                        localStorage.setItem(revealIndexKey, "0");
-                    }
+                    localStorage.setItem(revealIndexKey, "0");
                 }
             } else {
                 setManualRoleRevealIndex(0);
-                 if (currentRoomData.id && currentRoomData.currentGameInstanceId) {
-                    localStorage.setItem(revealIndexKey, "0");
-                 }
+                // localStorage.setItem(revealIndexKey, "0"); // Index will be set when "View My Role" is clicked
             }
-            setIsManualRoleVisible(false); 
+             setIsManualRoleVisible(false); // Always start with role hidden for the current player
           }
         } else {
             setManualRoleRevealCompleted(false);
@@ -173,6 +202,7 @@ export default function GameRoomPage() {
             setIsManualRoleVisible(false);
         }
 
+        // Manual Mode Mission Execution State Initialization
         if (currentRoomData.mode === RoomMode.ManualInput &&
             currentRoomData.status === GameRoomStatus.InProgress &&
             currentRoomData.currentPhase === 'mission_execution' &&
@@ -182,19 +212,15 @@ export default function GameRoomPage() {
             const storedMissionIndex = localStorage.getItem(missionIndexKey);
             if (storedMissionIndex !== null) {
                 const parsedIndex = parseInt(storedMissionIndex, 10);
-                if (!isNaN(parsedIndex) && parsedIndex >= 0 && currentRoomData.selectedTeamForMission && parsedIndex < currentRoomData.selectedTeamForMission.length) {
+                 if (!isNaN(parsedIndex) && parsedIndex >= 0 && currentRoomData.selectedTeamForMission && parsedIndex < currentRoomData.selectedTeamForMission.length) {
                     setManualMissionPlayerIndex(parsedIndex);
                 } else {
-                    setManualMissionPlayerIndex(0); 
-                    if (currentRoomData.id && currentRoomData.currentGameInstanceId) {
-                        localStorage.setItem(missionIndexKey, "0");
-                    }
-                }
-            } else {
-                setManualMissionPlayerIndex(0); 
-                if (currentRoomData.id && currentRoomData.currentGameInstanceId) {
+                    setManualMissionPlayerIndex(0);
                     localStorage.setItem(missionIndexKey, "0");
                 }
+            } else {
+                setManualMissionPlayerIndex(0);
+                localStorage.setItem(missionIndexKey, "0");
             }
             setIsManualCardInputVisible(false);
 
@@ -206,15 +232,11 @@ export default function GameRoomPage() {
                 } catch (e) {
                     console.error("Error parsing stored manual mission plays:", e);
                     setManualMissionPlaysCollected([]);
-                    if (currentRoomData.id && currentRoomData.currentGameInstanceId) {
-                        localStorage.setItem(playsCollectedKey, JSON.stringify([]));
-                    }
+                    localStorage.setItem(playsCollectedKey, JSON.stringify([]));
                 }
             } else {
                 setManualMissionPlaysCollected([]);
-                if (currentRoomData.id && currentRoomData.currentGameInstanceId) {
-                    localStorage.setItem(playsCollectedKey, JSON.stringify([]));
-                }
+                 localStorage.setItem(playsCollectedKey, JSON.stringify([]));
             }
         } else {
              setManualMissionPlayerIndex(null);
@@ -224,7 +246,8 @@ export default function GameRoomPage() {
 
 
       } else {
-        toast({ title: "房间未找到", description: "请求的房间不存在。", variant: "destructive" });
+        // Room not found in localStorage and not a known preset template
+        toast({ title: "房间未找到", description: "请求的房间不存在或已关闭。", variant: "destructive" });
         router.push("/");
       }
     } catch (e) {
@@ -236,28 +259,29 @@ export default function GameRoomPage() {
   }, [roomId, user, authLoading, router, toast]);
 
   const updateLocalStorageRoom = useCallback((updatedRoomData: GameRoom | null) => {
-    if (!updatedRoomData) return; 
+    if (!updatedRoomData || !roomId) return;
     try {
       const storedRoomsRaw = localStorage.getItem(ROOMS_LOCAL_STORAGE_KEY);
       let allRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
-      const roomIndex = allRooms.findIndex(r => r.id === updatedRoomData.id);
+      const roomIndex = allRooms.findIndex(r => r.id === roomId);
       if (roomIndex !== -1) {
         allRooms[roomIndex] = updatedRoomData;
       } else {
-        allRooms.push(updatedRoomData); // Should not happen if room is loaded first
+        // This case can happen if the room was initialized from a template
+        allRooms.push(updatedRoomData);
       }
       localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms));
     } catch (e) {
       console.error("Error saving room to localStorage:", e);
     }
-  }, []);
+  }, [roomId]);
 
   useEffect(() => {
     if (room) {
       updateLocalStorageRoom(room);
     }
   }, [room, updateLocalStorageRoom]);
-  
+
 
   useEffect(() => {
     if (room?.selectedTeamForMission) {
@@ -307,13 +331,13 @@ export default function GameRoomPage() {
           gameSummaryMessage = "游戏平局!";
         }
       } else {
-        winningFaction = 'Draw'; 
+        winningFaction = 'Draw';
         gameSummaryMessage = "游戏平局! (未知原因)";
       }
     }
 
     allPlayersInGame.forEach(player => {
-      if (!player.role) return; 
+      if (!player.role) return;
 
       let playerOutcome: 'win' | 'loss' | 'draw' = 'loss';
       if (winningFaction === 'Draw') {
@@ -338,7 +362,7 @@ export default function GameRoomPage() {
           const playerDetail: { id: string; name: string; role: Role; avatarUrl?: string; } = {
             id: p.id,
             name: p.name,
-            role: p.role || Role.TeamMember, 
+            role: p.role || Role.TeamMember,
           };
           if (p.avatarUrl) playerDetail.avatarUrl = p.avatarUrl;
           return playerDetail;
@@ -361,9 +385,9 @@ export default function GameRoomPage() {
           playerHistory = JSON.parse(existingHistoryRaw);
         }
         playerHistory = playerHistory.filter(r => r.gameInstanceId !== record.gameInstanceId);
-        playerHistory.unshift(record); 
-        playerHistory = playerHistory.slice(0, 10); // Keep only the latest 10 records
-        localStorage.setItem(historyKey, JSON.stringify(playerHistory)); 
+        playerHistory.unshift(record);
+        playerHistory = playerHistory.slice(0, 10);
+        localStorage.setItem(historyKey, JSON.stringify(playerHistory));
       } catch (e) {
         console.error(`Failed to save game record for player ${player.id}:`, e);
       }
@@ -376,6 +400,7 @@ export default function GameRoomPage() {
     let finalPlays: MissionCardPlay[] = [...(room.missionCardPlaysForCurrentMission || [])];
     const playersInRoom = room.players;
 
+    // This auto-play logic is for online mode with virtual players
     if (room.mode === RoomMode.Online) {
         room.selectedTeamForMission.forEach(playerId => {
         const player = playersInRoom.find(p => p.id === playerId);
@@ -385,6 +410,7 @@ export default function GameRoomPage() {
         }
         });
     }
+    // For manual mode, finalPlays should already be populated by manual input steps
 
     const failCardsPlayed = finalPlays.filter(p => p.card === 'fail').length;
     let missionSuccessful: boolean;
@@ -403,7 +429,6 @@ export default function GameRoomPage() {
     let aiGeneratedFailureReason: GeneratedFailureReason | undefined = undefined;
     if (outcome === 'fail' && failCardsPlayed > 0) {
         try {
-            // Using fallback directly as AI is removed
             const defaultReasonsCount = Math.min(failCardsPlayed, FAILURE_REASONS_LIST_FOR_FALLBACK.length, 3);
             const defaultReasons = FAILURE_REASONS_LIST_FOR_FALLBACK.slice(0, defaultReasonsCount);
             aiGeneratedFailureReason = {
@@ -412,7 +437,7 @@ export default function GameRoomPage() {
             };
         } catch (e) {
             console.error("Error generating fallback failure reason:", e);
-             const defaultReasonsCount = Math.min(failCardsPlayed, FAILURE_REASONS_LIST_FOR_FALLBACK.length, 3);
+            const defaultReasonsCount = Math.min(failCardsPlayed, FAILURE_REASONS_LIST_FOR_FALLBACK.length, 3);
             const defaultReasons = FAILURE_REASONS_LIST_FOR_FALLBACK.slice(0, defaultReasonsCount);
             aiGeneratedFailureReason = {
               selectedReasons: defaultReasons,
@@ -427,7 +452,7 @@ export default function GameRoomPage() {
       teamPlayerIds: [...room.selectedTeamForMission],
       outcome: outcome,
       failCardsPlayed: failCardsPlayed,
-      cardPlays: finalPlays, 
+      cardPlays: finalPlays,
     };
     if (aiGeneratedFailureReason) {
       missionRecordData.generatedFailureReason = aiGeneratedFailureReason;
@@ -446,7 +471,7 @@ export default function GameRoomPage() {
     toast({ title: `第 ${room.currentRound} 场比赛结束`, description: `结果: ${outcome === 'success' ? '成功' : '失败'}${outcome === 'fail' && aiGeneratedFailureReason ? ` (${aiGeneratedFailureReason.narrativeSummary})` : ''}` });
   }, [room, toast]);
 
-  useEffect(() => {
+  useEffect(() => { // For online mode with human players' actions
     if (!room || room.mode !== RoomMode.Online || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'mission_execution' || !user) {
       return;
     }
@@ -457,8 +482,8 @@ export default function GameRoomPage() {
       return player && !player.id.startsWith("virtual_");
     });
 
-    if (humanPlayersOnMission.length === 0 && missionTeamPlayerIds.length > 0) {
-      const timer = setTimeout(() => finalizeAndRevealMissionOutcome(), 1000); 
+    if (humanPlayersOnMission.length === 0 && missionTeamPlayerIds.length > 0) { // All virtual players on mission
+      const timer = setTimeout(() => finalizeAndRevealMissionOutcome(), 1000);
       return () => clearTimeout(timer);
     }
 
@@ -469,54 +494,7 @@ export default function GameRoomPage() {
     }
   }, [room, user, finalizeAndRevealMissionOutcome]);
 
-  useEffect(() => {
-    if (!room || !user || room.mode !== RoomMode.Online || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_selection' || !room.players || room.players.length === 0) {
-      return;
-    }
-    const playersInRoom = room.players;
-    const currentCaptain = playersInRoom.find(p => p.id === room.currentCaptainId);
-
-    if (currentCaptain && currentCaptain.id.startsWith("virtual_")) {
-      const performVirtualCaptainTeamProposal = () => {
-        if (!room.currentRound || !room.missionPlayerCounts || playersInRoom.length === 0 || (room.captainChangesThisRound || 0) >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND) || !currentCaptain.role) return;
-        
-        toast({ description: `${currentCaptain.name} (虚拟玩家) 正在选择队伍...` });
-        const requiredPlayers = room.missionPlayerCounts[room.currentRound - 1];
-        let proposedTeamIds = [currentCaptain.id]; 
-        const otherPlayerIds = playersInRoom
-            .filter(p => p.id !== currentCaptain.id)
-            .map(p => p.id);
-
-        const shuffledOtherPlayers = [...otherPlayerIds].sort(() => 0.5 - Math.random());
-
-        while (proposedTeamIds.length < requiredPlayers && shuffledOtherPlayers.length > 0) {
-            proposedTeamIds.push(shuffledOtherPlayers.shift()!);
-        }
-        proposedTeamIds = Array.from(new Set(proposedTeamIds));
-         while (proposedTeamIds.length < requiredPlayers && playersInRoom.length > proposedTeamIds.length) {
-            const availablePlayers = playersInRoom.filter(p => !proposedTeamIds.includes(p.id));
-            if (availablePlayers.length > 0) {
-                proposedTeamIds.push(availablePlayers[Math.floor(Math.random() * availablePlayers.length)].id);
-            } else {
-                break;
-            }
-        }
-        proposedTeamIds = proposedTeamIds.slice(0, requiredPlayers);
-
-        setRoom(prevRoom => prevRoom ? {
-            ...prevRoom,
-            selectedTeamForMission: proposedTeamIds,
-            currentPhase: 'team_voting',
-            teamVotes: [],
-        } : null);
-        toast({ title: "虚拟队长已提议", description: `${currentCaptain.name} 提议队伍: ${proposedTeamIds.map(id => playersInRoom.find(p => p.id === id)?.name).join(', ')}.` });
-        setSelectedMissionTeam([]); 
-      };
-      const timer = setTimeout(performVirtualCaptainTeamProposal, 1500 + Math.random() * 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [room, user, toast]);
-
+  // Removed AI virtual captain team proposal useEffect as AI is disabled
 
   const assignRolesAndCaptain = () => {
     if (!room || !(room.players?.length) || room.players.length < MIN_PLAYERS_TO_START) return;
@@ -524,7 +502,7 @@ export default function GameRoomPage() {
     const playerCount = currentPlayers.length;
 
     const configKey = Math.max(...Object.keys(ROLES_CONFIG).map(Number).filter(k => k <= playerCount)) || MIN_PLAYERS_TO_START;
-    const config = ROLES_CONFIG[configKey] || ROLES_CONFIG[MIN_PLAYERS_TO_START]; 
+    const config = ROLES_CONFIG[configKey] || ROLES_CONFIG[MIN_PLAYERS_TO_START];
 
     let rolesToAssign: Role[] = [];
     Object.entries(config).forEach(([role, count]) => {
@@ -537,7 +515,7 @@ export default function GameRoomPage() {
       const newPlayer: Player = {
         id: playerData.id,
         name: playerData.name,
-        role: rolesToAssign[index], 
+        role: rolesToAssign[index],
       };
       if (playerData.avatarUrl) newPlayer.avatarUrl = playerData.avatarUrl;
       return newPlayer;
@@ -592,9 +570,9 @@ export default function GameRoomPage() {
       setManualRoleRevealIndex(0);
       setIsManualRoleVisible(false);
       setManualRoleRevealCompleted(false);
-      if (room.id && newGameInstanceId) { 
-        localStorage.setItem(getManualRevealCurrentIndexKey(room.id, newGameInstanceId), "0");
-         localStorage.removeItem(getManualRevealCompletedKey(room.id, newGameInstanceId)); 
+      if (room.id && newGameInstanceId) {
+        // localStorage.setItem(getManualRevealCurrentIndexKey(room.id, newGameInstanceId), "0"); // Set when "View My Role" is clicked
+         localStorage.removeItem(getManualRevealCompletedKey(room.id, newGameInstanceId));
       }
     }
 
@@ -659,7 +637,7 @@ export default function GameRoomPage() {
     }
 
     const newManualPlayer: Player = {
-      id: `manual_${Date.now()}_${nickname.trim()}`,
+      id: `manual_${Date.now()}_${nickname.trim().replace(/\s+/g, '_')}`, // Ensure ID is valid
       name: nickname.trim(),
       avatarUrl: PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)],
     };
@@ -688,7 +666,7 @@ export default function GameRoomPage() {
         ...prevRoom,
         selectedTeamForMission: [...selectedMissionTeam],
         currentPhase: 'team_voting',
-        teamVotes: [], 
+        teamVotes: [],
     } : null);
   };
 
@@ -735,7 +713,7 @@ export default function GameRoomPage() {
 
     if (voteOutcome === 'approved') {
       const currentSelectedTeam = room.selectedTeamForMission || [];
-      let autoPlays: MissionCardPlay[] = []; 
+      let autoPlays: MissionCardPlay[] = [];
 
       if (room.mode === RoomMode.Online) {
         currentSelectedTeam.forEach(playerId => {
@@ -752,10 +730,10 @@ export default function GameRoomPage() {
         if (!prevRoom) return null;
         const updates: Partial<GameRoom> = {
             currentPhase: 'mission_execution',
-            missionCardPlaysForCurrentMission: autoPlays, 
+            missionCardPlaysForCurrentMission: autoPlays,
             fullVoteHistory: updatedFullVoteHistory,
-            captainChangesThisRound: 0, 
-            teamVotes: currentVotes, 
+            captainChangesThisRound: 0,
+            teamVotes: currentVotes,
         };
         if (prevRoom.mode === RoomMode.ManualInput) {
             setManualMissionPlayerIndex(0);
@@ -768,9 +746,9 @@ export default function GameRoomPage() {
         }
         return { ...prevRoom, ...updates };
       });
-      setHumanUndercoverCardChoice(null); 
+      setHumanUndercoverCardChoice(null);
 
-    } else { 
+    } else {
       let newCaptainChangesThisRound = (room.captainChangesThisRound || 0) + 1;
       if (newCaptainChangesThisRound >= (room.maxCaptainChangesPerRound || MAX_CAPTAIN_CHANGES_PER_ROUND)) {
         const finalTeamScores = { ...(room.teamScores || { teamMemberWins: 0, undercoverWins: 0 }), undercoverWins: room.totalRounds || TOTAL_ROUNDS_PER_GAME };
@@ -780,7 +758,7 @@ export default function GameRoomPage() {
           status: GameRoomStatus.Finished,
           currentPhase: 'game_over' as GameRoomPhase,
           teamScores: finalTeamScores,
-          teamVotes: currentVotes, 
+          teamVotes: currentVotes,
           fullVoteHistory: updatedFullVoteHistory,
           captainChangesThisRound: newCaptainChangesThisRound,
         };
@@ -794,7 +772,7 @@ export default function GameRoomPage() {
           teamScores: finalTeamScores,
           fullVoteHistory: updatedFullVoteHistory,
           captainChangesThisRound: newCaptainChangesThisRound,
-          teamVotes: currentVotes, 
+          teamVotes: currentVotes,
         } : null);
       } else {
         const currentCaptainIndex = playersInRoom.findIndex(p => p.id === room.currentCaptainId);
@@ -805,15 +783,16 @@ export default function GameRoomPage() {
           currentCaptainId: newCaptainId,
           captainChangesThisRound: newCaptainChangesThisRound,
           currentPhase: 'team_selection',
-          selectedTeamForMission: [], 
-          teamVotes: [], 
+          selectedTeamForMission: [],
+          teamVotes: [],
           fullVoteHistory: updatedFullVoteHistory,
         } : null);
-        setSelectedMissionTeam([]); 
+        setSelectedMissionTeam([]);
       }
     }
   }, [room, user, toast, saveGameRecordForAllPlayers]);
 
+  // For online mode: individual player voting
   const handlePlayerVote = (vote: 'approve' | 'reject') => {
     if (!room || !user || room.currentPhase !== 'team_voting' || !(room.players?.length)) {
       toast({ title: "错误", description: "当前无法投票。", variant: "destructive" }); return;
@@ -836,7 +815,8 @@ export default function GameRoomPage() {
     });
   };
 
-  useEffect(() => { // AI/Virtual player voting effect for Online mode
+  // For online mode: virtual player voting (after humans)
+  useEffect(() => {
     if (!room || room.mode !== RoomMode.Online || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'team_voting' || !room.players || room.players.length === 0 || !user) {
       return;
     }
@@ -848,22 +828,21 @@ export default function GameRoomPage() {
     if (humanPlayersWhoVotedIds.size === humanPlayers.length) { // All human players have voted
       const virtualPlayers = room.players.filter(p => p.id.startsWith("virtual_"));
       const virtualPlayersWhoHaventVoted = virtualPlayers.filter(vp => !currentVotes.some(v => v.playerId === vp.id));
-      
+
       if (virtualPlayersWhoHaventVoted.length > 0) {
         toast({ description: "虚拟玩家正在投票..." });
         let virtualVotesBatch: PlayerVote[] = [];
         for (const vp of virtualPlayersWhoHaventVoted) {
-          // Simple logic: virtual players always approve
-          virtualVotesBatch.push({ playerId: vp.id, vote: 'approve' }); 
+          virtualVotesBatch.push({ playerId: vp.id, vote: 'approve' });
         }
         const finalVotesWithVirtual = [...currentVotes, ...virtualVotesBatch];
         setRoom(prevRoom => prevRoom ? { ...prevRoom, teamVotes: finalVotesWithVirtual } : null);
-        // processTeamVotes will be triggered by the useEffect watching room.teamVotes.length
       }
     }
   }, [room?.teamVotes, room?.players, room?.currentPhase, room?.status, room?.mode, user, toast, setRoom]);
 
-  const handleBulkSubmitVotes = (submittedVotes: PlayerVote[]) => { // For Manual Mode
+  // For manual mode: host submits all votes at once
+  const handleBulkSubmitVotes = (submittedVotes: PlayerVote[]) => {
     if (!room || room.currentPhase !== 'team_voting') {
         toast({ title: "错误", description: "当前无法提交投票。", variant: "destructive" });
         return;
@@ -872,25 +851,25 @@ export default function GameRoomPage() {
         toast({ title: "模式错误", description: "批量提交投票仅适用于手动模式。", variant: "destructive" }); return;
     }
     setRoom(prevRoom => prevRoom ? { ...prevRoom, teamVotes: submittedVotes } : null);
-    // processTeamVotes will be triggered by the useEffect watching room.teamVotes.length
   };
 
-  useEffect(() => { // Process votes once all are in (for both modes)
+  // For both modes: process votes once all are in
+  useEffect(() => {
     let timer: NodeJS.Timeout;
     if (
       room?.currentPhase === 'team_voting' &&
       room.teamVotes &&
       room.players &&
-      room.teamVotes.length === room.players.length && 
+      room.teamVotes.length === room.players.length &&
       room.players.length > 0
     ) {
       timer = setTimeout(() => {
         if (room?.currentPhase === 'team_voting' && room.teamVotes && room.players && room.teamVotes.length === room.players.length) {
           processTeamVotes(room.teamVotes);
         }
-      }, 3000); 
+      }, 3000);
     }
-    return () => clearTimeout(timer); 
+    return () => clearTimeout(timer);
   }, [room?.teamVotes, room?.currentPhase, room?.players, processTeamVotes, room]);
 
 
@@ -904,12 +883,12 @@ export default function GameRoomPage() {
         return;
     }
     const existingPlay = room.missionCardPlaysForCurrentMission?.find(p => p.playerId === user.id);
-    if (existingPlay && room.mode === RoomMode.Online) { 
+    if (existingPlay && room.mode === RoomMode.Online) {
       toast({ title: "已行动", description: "您已在本轮比赛中行动过。", variant: "default" });
       return;
     }
 
-    setHumanUndercoverCardChoice(card); 
+    setHumanUndercoverCardChoice(card);
     const newPlay: MissionCardPlay = { playerId: user.id, card };
 
     setRoom(prevRoom => prevRoom ? {
@@ -919,11 +898,11 @@ export default function GameRoomPage() {
     toast({ title: "比赛牌已打出", description: `你打出了【${card === 'success' ? '成功' : '破坏'}】。` });
   };
 
-  const handleShowManualCardInput = () => {
+  const handleShowManualCardInput = useCallback(() => {
     setIsManualCardInputVisible(true);
-  };
+  }, []);
 
-  const handleManualCardPlay = (card: 'success' | 'fail') => {
+  const handleManualCardPlay = useCallback((card: 'success' | 'fail') => {
     if (!room || !user || room.hostId !== user.id || room.mode !== RoomMode.ManualInput || manualMissionPlayerIndex === null || !room.selectedTeamForMission) {
         toast({ title: "错误", description: "无法记录手动出牌。", variant: "destructive" });
         return;
@@ -940,7 +919,7 @@ export default function GameRoomPage() {
     if (room.id && room.currentGameInstanceId) {
         localStorage.setItem(getManualMissionPlaysCollectedKey(room.id, room.currentGameInstanceId), JSON.stringify(updatedManualPlays));
     }
-    setIsManualCardInputVisible(false); 
+    setIsManualCardInputVisible(false);
 
     const nextMissionPlayerIndex = manualMissionPlayerIndex + 1;
     if (nextMissionPlayerIndex < missionTeam.length) {
@@ -948,27 +927,27 @@ export default function GameRoomPage() {
         if (room.id && room.currentGameInstanceId) {
             localStorage.setItem(getManualMissionPlayerIndexKey(room.id, room.currentGameInstanceId), nextMissionPlayerIndex.toString());
         }
-    } else { 
+    } else {
         setRoom(prevRoom => {
             if (!prevRoom) return null;
             return { ...prevRoom, missionCardPlaysForCurrentMission: updatedManualPlays };
         });
-        setManualMissionPlayerIndex(null); 
+        setManualMissionPlayerIndex(null);
          if (room.id && room.currentGameInstanceId) {
             localStorage.removeItem(getManualMissionPlayerIndexKey(room.id, room.currentGameInstanceId));
         }
     }
-  };
+  }, [room, user, manualMissionPlayerIndex, manualMissionPlaysCollected, toast]);
 
   useEffect(() => { // Finalize manual mission plays when all collected
       if (room && room.mode === RoomMode.ManualInput && room.currentPhase === 'mission_execution' &&
           room.selectedTeamForMission && room.missionCardPlaysForCurrentMission &&
-          room.missionCardPlaysForCurrentMission.length === room.selectedTeamForMission.length && 
-          room.selectedTeamForMission.length > 0 && 
-          manualMissionPlayerIndex === null // Indicates collection is complete
+          room.missionCardPlaysForCurrentMission.length === room.selectedTeamForMission.length &&
+          room.selectedTeamForMission.length > 0 &&
+          manualMissionPlayerIndex === null
           ) {
             finalizeAndRevealMissionOutcome();
-            if (room.id && room.currentGameInstanceId) { // Clean up collected plays from localStorage
+            if (room.id && room.currentGameInstanceId) {
                 localStorage.removeItem(getManualMissionPlaysCollectedKey(room.id, room.currentGameInstanceId));
             }
       }
@@ -1025,7 +1004,7 @@ export default function GameRoomPage() {
         failCardsPlayedForDisplay: undefined,
         generatedFailureReason: undefined,
       } : null);
-    } else { 
+    } else {
       const nextRoundNumber = room.currentRound + 1;
       const currentCaptainIndex = playersInRoom.findIndex(p => p.id === room.currentCaptainId);
       const nextCaptainIndex = (currentCaptainIndex + 1) % playersInRoom.length;
@@ -1091,7 +1070,6 @@ export default function GameRoomPage() {
     if (selectedCoachCandidate === actualCoach.id) {
       toastTitle = "指认成功！卧底方反败为胜！";
       toastDescription = `${playersInRoom.find(p => p.id === actualCoach.id)?.name || '教练'} 是教练！`;
-      // finalTeamScores.undercoverWins = room.totalRounds || TOTAL_ROUNDS_PER_GAME; //卧底胜场数不变
       if (finalTeamScores.teamMemberWins >=3) finalTeamScores.teamMemberWins = 2;
     } else {
       toastTitle = "指认失败！战队方获胜！";
@@ -1102,7 +1080,7 @@ export default function GameRoomPage() {
       status: GameRoomStatus.Finished,
       currentPhase: 'game_over',
       coachCandidateId: selectedCoachCandidate,
-      teamScores: finalTeamScores, 
+      teamScores: finalTeamScores,
     };
     saveGameRecordForAllPlayers({ ...room, ...finalUpdates } as GameRoom);
     setRoom(prevRoom => prevRoom ? { ...prevRoom, ...finalUpdates } : null);
@@ -1182,11 +1160,11 @@ export default function GameRoomPage() {
       selectedTeamForMission: [],
       teamVotes: [],
       missionCardPlaysForCurrentMission: [],
-      currentGameInstanceId: newGameInstanceId, 
+      currentGameInstanceId: newGameInstanceId,
       currentCaptainId: undefined,
       currentRound: undefined,
       captainChangesThisRound: undefined,
-      currentPhase: undefined, 
+      currentPhase: undefined,
       missionOutcomeForDisplay: undefined,
       failCardsPlayedForDisplay: undefined,
       coachCandidateId: undefined,
@@ -1229,10 +1207,10 @@ export default function GameRoomPage() {
     }
     const finalUpdates: Partial<GameRoom> = {
       status: GameRoomStatus.Finished,
-      currentPhase: 'game_over', 
-      teamScores: room.teamScores || { teamMemberWins: 0, undercoverWins: 0 }, 
+      currentPhase: 'game_over',
+      teamScores: room.teamScores || { teamMemberWins: 0, undercoverWins: 0 },
     };
-    const finalRoomState = { ...room, ...finalUpdates, currentPhase: 'game_over' } as GameRoom; 
+    const finalRoomState = { ...room, ...finalUpdates, currentPhase: 'game_over' } as GameRoom;
     saveGameRecordForAllPlayers(finalRoomState);
     setRoom(prevRoom => prevRoom ? { ...prevRoom, ...finalUpdates } : null);
     toast({ title: "游戏已结束", description: "主持人已强制结束本场游戏。" });
@@ -1255,7 +1233,7 @@ export default function GameRoomPage() {
       return;
     }
 
-    const canRemove = (room.mode === RoomMode.ManualInput) || 
+    const canRemove = (room.mode === RoomMode.ManualInput) ||
                       (room.mode === RoomMode.Online && playerToRemove.id.startsWith("virtual_"));
 
     if (!canRemove) {
@@ -1271,16 +1249,15 @@ export default function GameRoomPage() {
     toast({ title: "玩家已移除", description: `${playerToRemove.name} 已被移除出房间。` });
   };
 
-
   const handleShowMyRoleManual = useCallback(() => {
     if (!room || !room.players || manualRoleRevealIndex === null || !room.id || !room.currentGameInstanceId) return;
-    
-    setIsManualRoleVisible(true); 
 
-    const nextPlayerIndexInSequence = (manualRoleRevealIndex ?? -1) + 1; 
+    setIsManualRoleVisible(true);
+
+    const nextPlayerIndexInSequence = (manualRoleRevealIndex ?? -1) + 1;
     if (nextPlayerIndexInSequence < room.players.length) {
         localStorage.setItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId), nextPlayerIndexInSequence.toString());
-    } else { 
+    } else {
         localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
         localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId));
     }
@@ -1288,28 +1265,26 @@ export default function GameRoomPage() {
 
 
   const handleNextPlayerForRoleReveal = () => {
-    setIsManualRoleVisible(false); 
+    setIsManualRoleVisible(false);
     if (room && room.players && manualRoleRevealIndex !== null && room.id && room.currentGameInstanceId) {
-      const nextIndexForReactState = (manualRoleRevealIndex ?? -1) + 1; 
-      
+      const nextIndexForReactState = (manualRoleRevealIndex ?? -1) + 1;
+
       if (nextIndexForReactState < room.players.length) {
-        setManualRoleRevealIndex(nextIndexForReactState); 
-        // localStorage for current index is now set in handleShowMyRoleManual
-      } else { 
+        setManualRoleRevealIndex(nextIndexForReactState);
+      } else {
         setManualRoleRevealCompleted(true);
-        setManualRoleRevealIndex(null); 
-        // localStorage for completed flag is now set in handleShowMyRoleManual if it was the last player
+        setManualRoleRevealIndex(null);
       }
     }
   };
 
-  useEffect(() => { // Initialize or resume manual role reveal state from localStorage
+  useEffect(() => {
     if (room?.mode === RoomMode.ManualInput && room.status === GameRoomStatus.InProgress && room.id && room.currentGameInstanceId) {
       const revealCompletedKey = getManualRevealCompletedKey(room.id, room.currentGameInstanceId);
       const isRevealSequenceCompleted = localStorage.getItem(revealCompletedKey) === 'true';
-      
+
       setManualRoleRevealCompleted(isRevealSequenceCompleted);
-      setIsManualRoleVisible(false); // Always hide role initially on load/refresh
+      setIsManualRoleVisible(false);
 
       if (isRevealSequenceCompleted) {
         setManualRoleRevealIndex(null);
@@ -1320,17 +1295,15 @@ export default function GameRoomPage() {
             const parsedIndex = parseInt(storedIndex, 10);
             if (!isNaN(parsedIndex) && parsedIndex >= 0 && room.players && parsedIndex < room.players.length) {
                 setManualRoleRevealIndex(parsedIndex);
-            } else { 
+            } else {
                 console.warn("Invalid manual role reveal index found in localStorage, defaulting to 0 for game:", room.currentGameInstanceId);
                 setManualRoleRevealIndex(0);
-                 if (room.id && room.currentGameInstanceId) { // Correct the stored index if invalid
-                    localStorage.setItem(revealIndexKey, "0");
-                 }
+                localStorage.setItem(revealIndexKey, "0"); // Correct to store "0"
             }
-        } else { // No index found, means reveal hasn't started or was interrupted before first view
+        } else {
             setManualRoleRevealIndex(0);
-            // localStorage for current index will be set when the first player clicks "View My Role"
         }
+        setIsManualRoleVisible(false); // Ensure role is hidden when loading/resuming
       }
     }
   }, [room?.mode, room?.status, room?.id, room?.currentGameInstanceId, room?.players?.length]);
@@ -1362,7 +1335,8 @@ export default function GameRoomPage() {
   let assassinationTargetOptions: Player[] = [];
   if (room.status === GameRoomStatus.InProgress && room.currentPhase === 'coach_assassination') {
     if (room.mode === RoomMode.ManualInput) {
-      assassinationTargetOptions = room.players.filter(p => p.role !== Role.Undercover && p.id !== user.id); // Host in manual mode cannot target self.
+      // In manual mode, host can select any non-undercover player (excluding self if host is also an undercover which shouldn't happen)
+      assassinationTargetOptions = room.players.filter(p => p.role !== Role.Undercover);
     } else { // Online Mode
       const successfulCaptainIds = new Set(
         (room.missionHistory || [])
@@ -1370,9 +1344,9 @@ export default function GameRoomPage() {
           .map(mission => mission.captainId)
       );
       assassinationTargetOptions = room.players.filter(p => {
-        if (!successfulCaptainIds.has(p.id)) return false; 
-        if (currentUserRole === Role.Undercover && p.id === user.id) return false; 
-        if (currentUserRole === Role.Undercover && p.role === Role.Undercover) return false; 
+        if (!successfulCaptainIds.has(p.id)) return false;
+        if (currentUserRole === Role.Undercover && p.id === user.id) return false;
+        if (currentUserRole === Role.Undercover && p.role === Role.Undercover) return false;
         return true;
       });
     }
@@ -1384,11 +1358,11 @@ export default function GameRoomPage() {
     const teamMemberMissionWins = room.teamScores?.teamMemberWins || 0;
     const undercoverMissionWins = room.teamScores?.undercoverWins || 0;
 
-    if (room.coachCandidateId) { 
+    if (room.coachCandidateId) {
         const actualCoach = room.players.find(p => p.role === Role.Coach);
-        if (actualCoach && room.coachCandidateId === actualCoach.id) { 
+        if (actualCoach && room.coachCandidateId === actualCoach.id) {
              gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (通过指认教练)</span>;
-        } else { 
+        } else {
              gameOverMessageNode = <span className="text-green-600">指认失败，战队方获胜</span>;
         }
     } else if (undercoverMissionWins >= 3 && undercoverMissionWins > teamMemberMissionWins) {
@@ -1397,20 +1371,19 @@ export default function GameRoomPage() {
       gameOverMessageNode = <span className="text-green-600">战队阵营胜利! (通过完成比赛)</span>;
     } else if (room.captainChangesThisRound && room.maxCaptainChangesPerRound && room.captainChangesThisRound >= room.maxCaptainChangesPerRound) {
       gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (由于队伍连续5次组队失败)</span>;
-    } else if (room.currentRound && room.totalRounds && room.currentRound > room.totalRounds) { 
+    } else if (room.currentRound && room.totalRounds && room.currentRound > room.totalRounds) {
       if (undercoverMissionWins > teamMemberMissionWins) {
         gameOverMessageNode = <span className="text-destructive">卧底阵营胜利! (比赛结束时胜场较多)</span>;
       } else if (teamMemberMissionWins > undercoverMissionWins) {
         gameOverMessageNode = <span className="text-green-600">战队阵营胜利! (比赛结束时胜场较多)</span>;
-      } else { 
+      } else {
         gameOverMessageNode = <span className="text-foreground">游戏平局! (比分 {teamMemberMissionWins} : {undercoverMissionWins})</span>;
       }
-    } else { 
+    } else {
       gameOverMessageNode = <span className="text-foreground">游戏已结束. (最终比分 战队 {teamMemberMissionWins} : 卧底 {undercoverMissionWins})</span>;
     }
   }
 
-  // const totalHumanPlayersInRoom = room.players.filter(p => !p.id.startsWith("virtual_") && !p.id.startsWith("manual_")).length;
   const totalHumanPlayersInRoom = room.players.filter(p => !p.id.startsWith("virtual_")).length;
 
 
@@ -1424,7 +1397,7 @@ export default function GameRoomPage() {
                                  room.status === GameRoomStatus.InProgress &&
                                  !manualRoleRevealCompleted &&
                                  manualRoleRevealIndex !== null &&
-                                 user.id === room.hostId; // Only host operates this UI
+                                 user.id === room.hostId;
 
   const isPlayerListInSelectionMode =
        room.status === GameRoomStatus.InProgress &&
@@ -1525,9 +1498,9 @@ export default function GameRoomPage() {
                       allPlayersInRoom={room.players}
                       currentUser={user}
                       votesToDisplay={votesToDisplay}
-                      onPlayerVote={handlePlayerVote} 
-                      onBulkSubmitVotes={handleBulkSubmitVotes} 
-                      currentPhase={room.currentPhase} 
+                      onPlayerVote={handlePlayerVote}
+                      onBulkSubmitVotes={handleBulkSubmitVotes}
+                      currentPhase={room.currentPhase}
                       totalPlayerCountInRoom={room.players.length}
                       totalHumanPlayersInRoom={totalHumanPlayersInRoom}
                     />
@@ -1543,7 +1516,7 @@ export default function GameRoomPage() {
                       currentUserIsOnMission={currentUserIsOnMission}
                       currentUserRole={currentUserRole}
                       currentUserHasPlayedMissionCard={currentUserHasPlayedMissionCard}
-                      onHumanUndercoverPlayCard={handleHumanUndercoverPlayCard} 
+                      onHumanUndercoverPlayCard={handleHumanUndercoverPlayCard}
                       missionCardPlaysForCurrentMission={room.missionCardPlaysForCurrentMission || []}
                       manualMissionPlayerIndex={manualMissionPlayerIndex}
                       isManualCardInputVisible={isManualCardInputVisible}
@@ -1577,7 +1550,7 @@ export default function GameRoomPage() {
             )}
 
             {room.status === GameRoomStatus.Waiting && (
-              <Card><CardContent className="pt-6"> 
+              <Card><CardContent className="pt-6">
                   <WaitingPhaseActions
                       isHost={isHostCurrentUser}
                       canStartGame={canStartGame}
@@ -1585,11 +1558,11 @@ export default function GameRoomPage() {
                       minPlayersToStart={MIN_PLAYERS_TO_START}
                       maxPlayers={room.maxPlayers}
                       onStartGame={handleStartGame}
-                      canAddVirtualPlayer={canAddVirtualPlayer} 
+                      canAddVirtualPlayer={canAddVirtualPlayer}
                       onAddVirtualPlayer={handleAddVirtualPlayer}
                       onReturnToLobby={handleReturnToLobbyAndLeaveRoom}
-                      roomMode={room.mode} 
-                      onManualAddPlayer={handleManualAddPlayer} 
+                      roomMode={room.mode}
+                      onManualAddPlayer={handleManualAddPlayer}
                   />
               </CardContent></Card>
             )}
@@ -1632,5 +1605,3 @@ export default function GameRoomPage() {
     </div>
   );
 }
-
-    

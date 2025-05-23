@@ -1,5 +1,5 @@
 
-import { Role } from '@/lib/types';
+import { Role, type GameRoom, RoomMode } from '@/lib/types';
 
 export const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.Coach]: number, [Role.TeamMember]: number } } = {
   5: { [Role.Undercover]: 2, [Role.Coach]: 1, [Role.TeamMember]: 2 },
@@ -13,10 +13,10 @@ export const ROLES_CONFIG: { [key: number]: { [Role.Undercover]: number, [Role.C
 export const MISSIONS_CONFIG: { [playerCount: number]: number[] } = {
   5: [2, 3, 2, 3, 3],
   6: [2, 3, 4, 3, 4],
-  7: [2, 3, 3, 4, 4], 
-  8: [3, 4, 4, 5, 5], 
-  9: [3, 4, 4, 5, 5], 
-  10: [3, 4, 4, 5, 5], 
+  7: [2, 3, 3, 4, 4],
+  8: [3, 4, 4, 5, 5],
+  9: [3, 4, 4, 5, 5],
+  10: [3, 4, 4, 5, 5],
 };
 
 export const MIN_PLAYERS_TO_START = 5;
@@ -54,4 +54,13 @@ export const PRE_GENERATED_AVATARS: string[] = [
   "https://placehold.co/100x100/FFB84C/black?text=M",
   "https://placehold.co/100x100/E1AFD1/black?text=N",
   "https://placehold.co/100x100/91C8E4/black?text=P",
+];
+
+export const PRESET_ROOM_TEMPLATES: Array<Partial<GameRoom> & { id: string; name: string; maxPlayers: number; mode: RoomMode }> = [
+  { id: 'preset-5-manual', name: '5人手动局', maxPlayers: 5, mode: RoomMode.ManualInput, missionPlayerCounts: MISSIONS_CONFIG[5], totalRounds: TOTAL_ROUNDS_PER_GAME, maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND },
+  { id: 'preset-6-manual', name: '6人手动局', maxPlayers: 6, mode: RoomMode.ManualInput, missionPlayerCounts: MISSIONS_CONFIG[6], totalRounds: TOTAL_ROUNDS_PER_GAME, maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND },
+  { id: 'preset-7-manual', name: '7人手动局', maxPlayers: 7, mode: RoomMode.ManualInput, missionPlayerCounts: MISSIONS_CONFIG[7], totalRounds: TOTAL_ROUNDS_PER_GAME, maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND },
+  { id: 'preset-8-manual', name: '8人手动局', maxPlayers: 8, mode: RoomMode.ManualInput, missionPlayerCounts: MISSIONS_CONFIG[8], totalRounds: TOTAL_ROUNDS_PER_GAME, maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND },
+  { id: 'preset-9-manual', name: '9人手动局', maxPlayers: 9, mode: RoomMode.ManualInput, missionPlayerCounts: MISSIONS_CONFIG[9], totalRounds: TOTAL_ROUNDS_PER_GAME, maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND },
+  { id: 'preset-10-manual', name: '10人手动局', maxPlayers: 10, mode: RoomMode.ManualInput, missionPlayerCounts: MISSIONS_CONFIG[10], totalRounds: TOTAL_ROUNDS_PER_GAME, maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND },
 ];
