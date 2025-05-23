@@ -141,6 +141,7 @@ export default function GameRoomPage() {
           if (isRevealSequenceCompleted) {
             setManualRoleRevealCompleted(true);
             setManualRoleRevealIndex(null);
+            setIsManualRoleVisible(false); 
           } else {
             setManualRoleRevealCompleted(false);
             const revealIndexKey = getManualRevealCurrentIndexKey(currentRoomData.id, currentRoomData.currentGameInstanceId);
@@ -149,18 +150,16 @@ export default function GameRoomPage() {
               const parsedIndex = parseInt(storedIndex, 10);
               if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < currentRoomData.players.length) {
                 setManualRoleRevealIndex(parsedIndex);
-                 setIsManualRoleVisible(false); 
               } else {
-                console.warn("Invalid manual role reveal index found in localStorage, defaulting to 0.");
+                console.warn("Invalid manual role reveal index found in localStorage, defaulting to 0 for game:", currentRoomData.currentGameInstanceId);
                 setManualRoleRevealIndex(0); 
                 localStorage.setItem(revealIndexKey, "0");
-                setIsManualRoleVisible(false); 
               }
             } else {
               setManualRoleRevealIndex(0); 
               localStorage.setItem(revealIndexKey, "0");
-              setIsManualRoleVisible(false);
             }
+            setIsManualRoleVisible(false);
           }
         } else {
           setManualRoleRevealCompleted(false);
@@ -483,9 +482,8 @@ export default function GameRoomPage() {
       setIsManualRoleVisible(false);
       setManualRoleRevealCompleted(false);
       if (room.id && newGameInstanceId) {
-        // Set for the new game instance
         localStorage.setItem(getManualRevealCurrentIndexKey(room.id, newGameInstanceId), "0");
-         localStorage.removeItem(getManualRevealCompletedKey(room.id, newGameInstanceId)); // Explicitly remove completed flag for new game
+         localStorage.removeItem(getManualRevealCompletedKey(room.id, newGameInstanceId)); 
       }
     }
 
@@ -701,7 +699,7 @@ export default function GameRoomPage() {
     }
   }, [room, user, toast, saveGameRecordForAllPlayers]);
 
-  const handlePlayerVote = async (vote: 'approve' | 'reject') => {
+  const handlePlayerVote = (vote: 'approve' | 'reject') => {
     if (!room || !user || room.mode !== RoomMode.Online || room.currentPhase !== 'team_voting' || !(room.players?.length)) {
       toast({ title: "错误", description: "当前无法投票。", variant: "destructive" }); return;
     }
@@ -837,7 +835,7 @@ export default function GameRoomPage() {
           ) {
             finalizeAndRevealMissionOutcome();
       }
-  }, [room?.missionCardPlaysForCurrentMission, room?.mode, room?.currentPhase, room?.selectedTeamForMission, manualMissionPlayerIndex, finalizeAndRevealMissionOutcome]);
+  }, [room?.missionCardPlaysForCurrentMission, room?.mode, room?.currentPhase, room?.selectedTeamForMission, manualMissionPlayerIndex, finalizeAndRevealMissionOutcome, room]);
 
 
   const handleProceedToNextRoundOrGameOver = () => {
@@ -1013,7 +1011,7 @@ export default function GameRoomPage() {
     const oldGameInstanceId = room.currentGameInstanceId;
     const newGameInstanceId = `gameinst_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    if (room.mode === RoomMode.ManualInput && room.id && oldGameInstanceId) {
+    if (room.mode === RoomMode.ManualInput && room.id && oldGameInstanceId && room.currentGameInstanceId) {
       localStorage.removeItem(getManualRevealCompletedKey(room.id, oldGameInstanceId));
       localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, oldGameInstanceId));
     }
@@ -1118,12 +1116,10 @@ export default function GameRoomPage() {
     
     setIsManualRoleVisible(true);
 
-    // Persist that this player *will be next* if a refresh occurs after viewing.
     const nextPlayerIndexInSequenceIfRefresh = (manualRoleRevealIndex + 1); 
     if (nextPlayerIndexInSequenceIfRefresh < room.players.length) {
         localStorage.setItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId), nextPlayerIndexInSequenceIfRefresh.toString());
     } else {
-        // This was the last player, so mark sequence as completed
         localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
         localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId));
     }
@@ -1137,12 +1133,9 @@ export default function GameRoomPage() {
       
       if (nextIndexForReactState < room.players.length) {
         setManualRoleRevealIndex(nextIndexForReactState);
-        // The localStorage for current index was already updated in handleShowMyRoleManual for the *next* turn.
-        // No need to update localStorage index here again for the *current* (now past) turn.
       } else {
         setManualRoleRevealCompleted(true);
         setManualRoleRevealIndex(null); 
-         // Ensure completed flag is also set in localStorage if somehow missed by handleShowMyRoleManual (e.g. last player)
         localStorage.setItem(getManualRevealCompletedKey(room.id, room.currentGameInstanceId), 'true');
         localStorage.removeItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId));
       }
@@ -1152,8 +1145,25 @@ export default function GameRoomPage() {
   useEffect(() => { 
     if (room?.mode === RoomMode.ManualInput && room.status === GameRoomStatus.InProgress && !manualRoleRevealCompleted) {
       setIsManualRoleVisible(false);
+      if(manualRoleRevealIndex === null && room.currentGameInstanceId) { 
+          const revealIndexKey = getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId);
+          const storedIndex = localStorage.getItem(revealIndexKey);
+          if (storedIndex !== null) {
+              const parsedIndex = parseInt(storedIndex, 10);
+              if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < room.players.length) {
+                  setManualRoleRevealIndex(parsedIndex);
+              } else {
+                  setManualRoleRevealIndex(0);
+                  localStorage.setItem(revealIndexKey, "0");
+              }
+          } else {
+              setManualRoleRevealIndex(0);
+              localStorage.setItem(revealIndexKey, "0");
+          }
+      }
     }
-  }, [manualRoleRevealIndex, room?.mode, room?.status, manualRoleRevealCompleted]);
+  }, [manualRoleRevealIndex, room?.mode, room?.status, manualRoleRevealCompleted, room?.id, room?.currentGameInstanceId, room?.players?.length]);
+
 
   if (isLoading || authLoading) return <div className="text-center py-10">载入房间...</div>;
   if (!room || !user) return <div className="text-center py-10 text-destructive">载入房间错误或用户未验证。请尝试返回大厅。</div>;
@@ -1180,18 +1190,21 @@ export default function GameRoomPage() {
 
   let assassinationTargetOptions: Player[] = [];
   if (room.status === GameRoomStatus.InProgress && room.currentPhase === 'coach_assassination') {
-    const successfulCaptainIds = new Set(
-      (room.missionHistory || [])
-        .filter(mission => mission.outcome === 'success')
-        .map(mission => mission.captainId)
-    );
-
-    assassinationTargetOptions = room.players.filter(p => {
-      if (!successfulCaptainIds.has(p.id)) return false;
-      if (room.mode === RoomMode.Online && p.id === user.id) return false; 
-      if (currentUserRole === Role.Undercover && p.role === Role.Undercover) return false; 
-      return true;
-    });
+    if (room.mode === RoomMode.ManualInput) {
+      assassinationTargetOptions = room.players.filter(p => p.role !== Role.Undercover);
+    } else { // Online Mode
+      const successfulCaptainIds = new Set(
+        (room.missionHistory || [])
+          .filter(mission => mission.outcome === 'success')
+          .map(mission => mission.captainId)
+      );
+      assassinationTargetOptions = room.players.filter(p => {
+        if (!successfulCaptainIds.has(p.id)) return false; 
+        if (p.id === user.id) return false; 
+        if (currentUserRole === Role.Undercover && p.role === Role.Undercover) return false; 
+        return true;
+      });
+    }
   }
 
 
@@ -1445,4 +1458,5 @@ export default function GameRoomPage() {
     </div>
   );
 }
+
 
