@@ -13,25 +13,26 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+// Dialog related imports are removed as dialog is removed
+// import {
+//   Dialog,
+//   DialogContent,
+//   DialogDescription,
+//   DialogFooter,
+//   DialogHeader,
+//   DialogTitle,
+//   DialogTrigger,
+//   DialogClose,
+// } from "@/components/ui/dialog";
+// import { Input } from "@/components/ui/input";
+// import { Label } from "@/components/ui/label";
+// import {
+//   Select,
+//   SelectContent,
+//   SelectItem,
+//   SelectTrigger,
+//   SelectValue,
+// } from "@/components/ui/select";
 
 import { MIN_PLAYERS_TO_START, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, MISSIONS_CONFIG } from "@/lib/game-config";
 
@@ -44,9 +45,10 @@ export default function LobbyPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [isCreateRoomDialogOpen, setIsCreateRoomDialogOpen] = useState(false);
-  const [newRoomNameInput, setNewRoomNameInput] = useState("");
-  const [selectedRoomMode, setSelectedRoomMode] = useState<RoomMode>(RoomMode.Online);
+  // State for dialog removed
+  // const [isCreateRoomDialogOpen, setIsCreateRoomDialogOpen] = useState(false);
+  // const [newRoomNameInput, setNewRoomNameInput] = useState("");
+  // const [selectedRoomMode, setSelectedRoomMode] = useState<RoomMode>(RoomMode.Online);
 
 
   const loadRoomsFromLocalStorage = useCallback(() => {
@@ -58,16 +60,16 @@ export default function LobbyPage() {
       fetchedRooms = fetchedRooms.filter(room => {
         if (room.players.length === 0) {
           console.log(`Room ${room.name} (${room.id}) is empty and will be removed.`);
-          return false; // Filter out empty rooms
+          return false;
         }
         if (room.status === GameRoomStatus.Finished) return false;
-        if (room.status === GameRoomStatus.InProgress) {
-          return user ? room.players.some(p => p.id === user.id) : false;
+        // Logic to hide in-progress rooms from users not in them
+        if (room.status === GameRoomStatus.InProgress && (!user || !room.players.some(p => p.id === user.id))) {
+          return false;
         }
         return true;
       });
 
-      // Update localStorage if any empty rooms were filtered out
       const currentRoomIds = fetchedRooms.map(r => r.id);
       const originalRooms = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
       const updatedOriginalRooms = originalRooms.filter((r: GameRoom) => currentRoomIds.includes(r.id));
@@ -78,7 +80,7 @@ export default function LobbyPage() {
       const statusPriority: { [key in GameRoomStatus]: number } = {
         [GameRoomStatus.InProgress]: 1,
         [GameRoomStatus.Waiting]: 2,
-        [GameRoomStatus.Finished]: 3,
+        [GameRoomStatus.Finished]: 3, // Should be filtered out before sorting
       };
 
       fetchedRooms.sort((a, b) => {
@@ -87,7 +89,7 @@ export default function LobbyPage() {
 
         if (isUserInA && !isUserInB) return -1;
         if (!isUserInA && isUserInB) return 1;
-
+        
         const statusDiff = statusPriority[a.status] - statusPriority[b.status];
         if (statusDiff !== 0) return statusDiff;
 
@@ -107,14 +109,16 @@ export default function LobbyPage() {
     loadRoomsFromLocalStorage();
   }, [authLoading, user, loadRoomsFromLocalStorage]);
 
-  const handleCreateRoom = async (roomName: string, roomMode: RoomMode) => {
+  const handleCreateRoom = async (mode: RoomMode) => {
     if (!user) {
       toast({ title: "需要登录", description: "请先登录再创建房间。", variant: "destructive" });
       router.push("/login?redirect=/");
       return;
     }
 
-    const finalRoomName = roomName.trim() || `${user.name}的房间`;
+    const modeText = mode === RoomMode.Online ? "模拟" : "线下";
+    const finalRoomName = `${user.name}的${modeText}游戏`;
+    
     const defaultPlayerCountForMissions = MIN_PLAYERS_TO_START;
     const missionPlayerCountsForNewRoom = MISSIONS_CONFIG[defaultPlayerCountForMissions] || MISSIONS_CONFIG[5];
 
@@ -126,7 +130,7 @@ export default function LobbyPage() {
       status: GameRoomStatus.Waiting,
       hostId: user.id,
       createdAt: new Date().toISOString(),
-      mode: roomMode, // Set room mode
+      mode: mode,
       teamScores: { teamMemberWins: 0, undercoverWins: 0 },
       missionHistory: [],
       fullVoteHistory: [],
@@ -140,20 +144,13 @@ export default function LobbyPage() {
       const currentRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
       currentRooms.push(newRoomData);
       localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(currentRooms));
-      loadRoomsFromLocalStorage();
-      toast({ title: "房间已创建", description: `房间 "${finalRoomName}" 创建成功！模式: ${roomMode === RoomMode.Online ? '在线' : '手动输入'}` });
-      setIsCreateRoomDialogOpen(false);
-      setNewRoomNameInput(""); // Reset input
-      setSelectedRoomMode(RoomMode.Online); // Reset mode
+      loadRoomsFromLocalStorage(); // Reload and re-sort
+      toast({ title: "房间已创建", description: `房间 "${finalRoomName}" (${modeText}模式) 创建成功！` });
       router.push(`/rooms/${newRoomData.id}`);
     } catch (error) {
       console.error("Error creating room in localStorage:", error);
       toast({ title: "创建房间失败", description: "无法创建房间。", variant: "destructive" });
     }
-  };
-
-  const handleConfirmCreateRoom = () => {
-    handleCreateRoom(newRoomNameInput, selectedRoomMode);
   };
 
   if (authLoading || isLoadingRooms) {
@@ -170,63 +167,21 @@ export default function LobbyPage() {
           解开谜团，揭露隐藏，赢取胜利。
         </p>
         {user && (
-          <div className="mt-8">
-            <Dialog open={isCreateRoomDialogOpen} onOpenChange={setIsCreateRoomDialogOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  size="lg"
-                  onClick={() => setIsCreateRoomDialogOpen(true)}
-                  className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
-                >
-                  <PlusCircle className="mr-2 h-6 w-6" /> 创建新房间
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>创建新房间</DialogTitle>
-                  <DialogDescription>
-                    输入房间名称并选择房间模式。
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="room-name" className="text-right">
-                      房间名称
-                    </Label>
-                    <Input
-                      id="room-name"
-                      value={newRoomNameInput}
-                      onChange={(e) => setNewRoomNameInput(e.target.value)}
-                      placeholder={`${user?.name || '玩家'}的房间`}
-                      className="col-span-3"
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="room-mode" className="text-right">
-                      房间模式
-                    </Label>
-                    <Select
-                      value={selectedRoomMode}
-                      onValueChange={(value) => setSelectedRoomMode(value as RoomMode)}
-                    >
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="选择模式" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value={RoomMode.Online}>在线模式</SelectItem>
-                        <SelectItem value={RoomMode.ManualInput}>手动输入模式</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <DialogClose asChild>
-                     <Button variant="outline">取消</Button>
-                  </DialogClose>
-                  <Button onClick={handleConfirmCreateRoom}>确认创建</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+          <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+            <Button
+              size="lg"
+              onClick={() => handleCreateRoom(RoomMode.Online)}
+              className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
+            >
+              <PlusCircle className="mr-2 h-6 w-6" /> 创建模拟游戏
+            </Button>
+            <Button
+              size="lg"
+              onClick={() => handleCreateRoom(RoomMode.ManualInput)}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
+            >
+              <PlusCircle className="mr-2 h-6 w-6" /> 创建线下游戏
+            </Button>
           </div>
         )}
       </section>
@@ -251,7 +206,10 @@ export default function LobbyPage() {
                 displayStatusText = "等待中";
                 displayStatusVariant = "outline";
                 displayStatusClass = "border-yellow-500 text-yellow-600";
+              } else if (room.status === GameRoomStatus.Finished) {
+                displayStatusText = "游戏结束"; // This should ideally not be shown due to filtering
               }
+
 
               return (
                 <Link key={room.id} href={`/rooms/${room.id}`} passHref legacyBehavior>
@@ -284,7 +242,7 @@ export default function LobbyPage() {
                       </CardHeader>
                       <CardContent className="space-y-2">
                         <Image
-                          src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name)}`}
+                          src={`https://placehold.co/600x400.png?text=${encodeURIComponent(room.name.substring(0,10))}`}
                           alt={room.name}
                           width={600}
                           height={400}
