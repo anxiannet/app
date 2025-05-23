@@ -81,6 +81,7 @@ export default function GameRoomPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [selectedMissionTeam, setSelectedMissionTeam] = useState<string[]>([]);
+  // humanUndercoverCardChoice is now only relevant for online mode
   const [humanUndercoverCardChoice, setHumanUndercoverCardChoice] = useState<'success' | 'fail' | null>(null);
   const [selectedCoachCandidate, setSelectedCoachCandidate] = useState<string | null>(null);
   const [showTerminateConfirmDialog, setShowTerminateConfirmDialog] = useState(false);
@@ -89,6 +90,11 @@ export default function GameRoomPage() {
   const [manualRoleRevealIndex, setManualRoleRevealIndex] = useState<number | null>(null);
   const [isManualRoleVisible, setIsManualRoleVisible] = useState<boolean>(false);
   const [manualRoleRevealCompleted, setManualRoleRevealCompleted] = useState<boolean>(false);
+
+  // New state for manual mission execution
+  const [manualMissionPlayerIndex, setManualMissionPlayerIndex] = useState<number | null>(null);
+  const [isManualCardInputVisible, setIsManualCardInputVisible] = useState<boolean>(false);
+  const [manualMissionPlaysCollected, setManualMissionPlaysCollected] = useState<MissionCardPlay[]>([]);
 
 
   useEffect(() => {
@@ -134,8 +140,8 @@ export default function GameRoomPage() {
           const revealCompletedKey = getManualRevealCompletedKey(currentRoomData.id, currentRoomData.currentGameInstanceId);
           if (localStorage.getItem(revealCompletedKey) === 'true') {
             setManualRoleRevealCompleted(true);
-            setManualRoleRevealIndex(null); // Ensure controls are hidden
-          } else if (manualRoleRevealIndex === null && !manualRoleRevealCompleted) { // Initialize if not completed and not already started
+            setManualRoleRevealIndex(null); 
+          } else if (manualRoleRevealIndex === null && !manualRoleRevealCompleted) { 
             setManualRoleRevealIndex(0);
             setIsManualRoleVisible(false);
           }
@@ -151,7 +157,7 @@ export default function GameRoomPage() {
       router.push("/");
     }
     setIsLoading(false);
-  }, [roomId, user, authLoading, router, toast]); // manualRoleRevealIndex & manualRoleRevealCompleted removed to avoid loops on init
+  }, [roomId, user, authLoading, router, toast]); 
 
   const updateLocalStorageRoom = useCallback((updatedRoomData: GameRoom | null) => {
     if (!updatedRoomData) return;
@@ -288,9 +294,13 @@ export default function GameRoomPage() {
 
   const finalizeAndRevealMissionOutcome = useCallback(async () => {
     if (!room || !room.selectedTeamForMission || !room.players || !room.teamScores || room.currentRound === undefined) return;
+    
+    // Use missionCardPlaysForCurrentMission which should be populated by now for both modes
     let finalPlays: MissionCardPlay[] = [...(room.missionCardPlaysForCurrentMission || [])];
     const playersInRoom = room.players;
 
+    // This section for virtual player card plays in online mode might be redundant if AI is disabled
+    // or if their plays are already recorded. For now, let's assume it's still needed for online virtuals.
     if (room.mode === RoomMode.Online) { 
         room.selectedTeamForMission.forEach(playerId => {
         const player = playersInRoom.find(p => p.id === playerId);
@@ -361,11 +371,8 @@ export default function GameRoomPage() {
   }, [room, toast]);
 
   useEffect(() => {
-    if (!room || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'mission_execution' || !user) {
+    if (!room || room.mode !== RoomMode.Online || room.status !== GameRoomStatus.InProgress || room.currentPhase !== 'mission_execution' || !user) {
       return;
-    }
-    if (room.mode === RoomMode.ManualInput) { 
-        return;
     }
     const missionTeamPlayerIds = room.selectedTeamForMission || [];
     const playersInRoom = room.players || [];
@@ -418,7 +425,7 @@ export default function GameRoomPage() {
 
     if (room.mode === RoomMode.ManualInput && room.id && newGameInstanceId) {
       const revealCompletedKey = getManualRevealCompletedKey(room.id, newGameInstanceId);
-      localStorage.removeItem(revealCompletedKey); // Clear flag for new game instance
+      localStorage.removeItem(revealCompletedKey); 
     }
 
 
@@ -449,6 +456,10 @@ export default function GameRoomPage() {
     setSelectedMissionTeam([]);
     setHumanUndercoverCardChoice(null);
     setSelectedCoachCandidate(null);
+    
+    setManualMissionPlayerIndex(null);
+    setIsManualCardInputVisible(false);
+    setManualMissionPlaysCollected([]);
 
     if (room?.mode === RoomMode.ManualInput) {
       setManualRoleRevealIndex(0);
@@ -577,14 +588,22 @@ export default function GameRoomPage() {
         });
       } 
 
-      setRoom(prevRoom => prevRoom ? {
-        ...prevRoom,
-        currentPhase: 'mission_execution',
-        missionCardPlaysForCurrentMission: autoPlays, 
-        fullVoteHistory: updatedFullVoteHistory,
-        captainChangesThisRound: 0,
-        teamVotes: currentVotes, 
-      } : null);
+      setRoom(prevRoom => {
+        if (!prevRoom) return null;
+        const updates: Partial<GameRoom> = {
+            currentPhase: 'mission_execution',
+            missionCardPlaysForCurrentMission: autoPlays, 
+            fullVoteHistory: updatedFullVoteHistory,
+            captainChangesThisRound: 0,
+            teamVotes: currentVotes, 
+        };
+        if (prevRoom.mode === RoomMode.ManualInput) {
+            setManualMissionPlayerIndex(0);
+            setIsManualCardInputVisible(false);
+            setManualMissionPlaysCollected([]);
+        }
+        return { ...prevRoom, ...updates };
+      });
       setHumanUndercoverCardChoice(null);
 
     } else {
@@ -708,8 +727,8 @@ export default function GameRoomPage() {
       toast({ title: "错误", description: "当前无法打出比赛牌。", variant: "destructive" });
       return;
     }
-     if (room.mode === RoomMode.ManualInput && user.id !== room.hostId) {
-        toast({ title: "错误", description: "手动模式下只有主持人可以输入比赛牌。", variant: "destructive" });
+     if (room.mode === RoomMode.ManualInput) {
+        toast({ title: "错误", description: "手动模式下请使用主持人的专门输入界面。", variant: "destructive" });
         return;
     }
     const existingPlay = room.missionCardPlaysForCurrentMission?.find(p => p.playerId === user.id);
@@ -727,6 +746,41 @@ export default function GameRoomPage() {
     } : null);
     toast({ title: "比赛牌已打出", description: `你打出了【${card === 'success' ? '成功' : '破坏'}】。` });
   };
+
+  // Manual Mode Mission Card Handlers
+  const handleShowManualCardInput = () => {
+    setIsManualCardInputVisible(true);
+  };
+
+  const handleManualCardPlay = (card: 'success' | 'fail') => {
+    if (!room || !user || room.hostId !== user.id || room.mode !== RoomMode.ManualInput || manualMissionPlayerIndex === null || !room.selectedTeamForMission) {
+        toast({ title: "错误", description: "无法记录手动出牌。", variant: "destructive" });
+        return;
+    }
+    const missionTeam = room.selectedTeamForMission;
+    if (manualMissionPlayerIndex >= missionTeam.length) {
+        toast({ title: "错误", description: "无效的玩家索引。", variant: "destructive" });
+        return;
+    }
+
+    const currentPlayerId = missionTeam[manualMissionPlayerIndex];
+    const updatedManualPlays = [...manualMissionPlaysCollected, { playerId: currentPlayerId, card }];
+    setManualMissionPlaysCollected(updatedManualPlays);
+    setIsManualCardInputVisible(false);
+
+    if (manualMissionPlayerIndex < missionTeam.length - 1) {
+        setManualMissionPlayerIndex(manualMissionPlayerIndex + 1);
+    } else {
+        // All players on mission team have played in manual mode
+        setRoom(prevRoom => prevRoom ? {
+            ...prevRoom,
+            missionCardPlaysForCurrentMission: updatedManualPlays
+        } : null);
+        finalizeAndRevealMissionOutcome(); // This should be called after setRoom has processed for missionCardPlaysForCurrentMission to be available
+        setManualMissionPlayerIndex(null); // Reset for next mission
+    }
+  };
+
 
   const handleProceedToNextRoundOrGameOver = () => {
     if (!room || !room.teamScores || room.currentRound === undefined || room.totalRounds === undefined || !(room.players?.length)) return;
@@ -793,9 +847,10 @@ export default function GameRoomPage() {
       };
 
       if (room?.mode === RoomMode.ManualInput && room.id && room.currentGameInstanceId) {
-         // When moving to next round in manual mode, role reveal for new round is not needed,
-         // it only happens once per game instance at the very start.
-         // The existing check on load for revealCompletedKey should suffice.
+         // Reset manual mission execution state for the new round
+         setManualMissionPlayerIndex(null);
+         setIsManualCardInputVisible(false);
+         setManualMissionPlaysCollected([]);
       }
 
       setRoom(prevRoom => prevRoom ? { ...prevRoom, ...newRoomState } : null);
@@ -811,7 +866,6 @@ export default function GameRoomPage() {
       toast({ title: "错误", description: "无法确认指认。", variant: "destructive" });
       return;
     }
-    // In online mode, only an undercover can trigger. In manual, only host.
     if (room.mode === RoomMode.Online && currentUserRole !== Role.Undercover) {
       toast({ title: "错误", description: "只有卧底可以指认教练。", variant: "destructive" });
       return;
@@ -870,7 +924,7 @@ export default function GameRoomPage() {
 
       if (user.id === room.hostId && room.status === GameRoomStatus.Waiting) {
         updatedRooms = updatedRooms.filter(r => r.id !== currentRoomId);
-        toast({ title: "房间已关闭", description: `您作为主持人已离开并关闭了等待中的房间 ${currentRoomName}。` });
+        toast({ title: "房间已关闭", description: `您作为主持人已关闭了等待中的房间 ${currentRoomName}。` });
       } else {
         const roomIndex = updatedRooms.findIndex(r => r.id === currentRoomId);
         if (roomIndex !== -1) {
@@ -940,6 +994,10 @@ export default function GameRoomPage() {
     setManualRoleRevealIndex(null);
     setIsManualRoleVisible(false);
     setManualRoleRevealCompleted(false);
+    setManualMissionPlayerIndex(null);
+    setIsManualCardInputVisible(false);
+    setManualMissionPlaysCollected([]);
+
 
     setSelectedMissionTeam([]);
     setHumanUndercoverCardChoice(null);
@@ -995,24 +1053,6 @@ export default function GameRoomPage() {
         players: updatedPlayers
     } : null);
     toast({ title: "虚拟玩家已移除", description: `${playerToRemove.name} 已被移除出房间。` });
-  };
-
-  const handleShowMyRoleManual = () => {
-    setIsManualRoleVisible(true);
-  };
-
-  const handleNextPlayerForRoleReveal = () => {
-    setIsManualRoleVisible(false);
-    if (room && manualRoleRevealIndex !== null && manualRoleRevealIndex < room.players.length - 1) {
-      setManualRoleRevealIndex(manualRoleRevealIndex + 1);
-    } else {
-      setManualRoleRevealIndex(null); 
-      setManualRoleRevealCompleted(true); 
-      if(room && room.id && room.currentGameInstanceId) {
-        const revealCompletedKey = getManualRevealCompletedKey(room.id, room.currentGameInstanceId);
-        localStorage.setItem(revealCompletedKey, 'true');
-      }
-    }
   };
 
   if (isLoading || authLoading) return <div className="text-center py-10">载入房间...</div>;
@@ -1205,14 +1245,17 @@ export default function GameRoomPage() {
                       isHostCurrentUser={isHostCurrentUser}
                       currentRound={room.currentRound}
                       missionTeamPlayerIds={room.selectedTeamForMission || []}
-                      missionTeamPlayerNames={missionTeamPlayerObjects.map(p => p.name)}
+                      allPlayersInRoom={room.players}
                       currentUserIsOnMission={currentUserIsOnMission}
                       currentUserRole={currentUserRole}
                       currentUserHasPlayedMissionCard={currentUserHasPlayedMissionCard}
-                      humanUndercoverCardChoice={humanUndercoverCardChoice}
-                      onHumanUndercoverPlayCard={handleHumanUndercoverPlayCard}
                       onFinalizeMissionManually={finalizeAndRevealMissionOutcome} 
                       missionCardPlaysForCurrentMission={room.missionCardPlaysForCurrentMission || []}
+                      // Manual mode specific props
+                      manualMissionPlayerIndex={manualMissionPlayerIndex}
+                      isManualCardInputVisible={isManualCardInputVisible}
+                      onShowManualCardInput={handleShowManualCardInput}
+                      onManualCardPlay={handleManualCardPlay}
                     />
                   )}
 
