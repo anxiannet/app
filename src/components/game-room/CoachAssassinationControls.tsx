@@ -1,7 +1,8 @@
 
 "use client";
 
-import type { Player, Role as RoleEnum, RoomMode } from "@/lib/types"; // Renamed Role to RoleEnum
+import type { Player } from "@/lib/types"; // Player can remain a type-only import if only used for type annotations
+import { Role as RoleEnum, RoomMode } from "@/lib/types"; // Import Role (as RoleEnum) and RoomMode as values
 import { Button } from "@/components/ui/button";
 import { Target } from "lucide-react";
 
