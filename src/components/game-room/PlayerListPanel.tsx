@@ -27,7 +27,8 @@ type PlayerListPanelProps = {
   selectedCoachCandidateId?: string | null;
   onSelectCoachCandidate?: (playerId: string) => void;
   assassinationTargetOptionsPlayerIds?: string[];
-  onRemoveVirtualPlayer?: (playerId: string) => void;
+  onRemovePlayer?: (playerId: string) => void; // Renamed from onRemoveVirtualPlayer
+  isHostCurrentUser?: boolean; // New prop
 };
 
 export function PlayerListPanel({
@@ -46,10 +47,11 @@ export function PlayerListPanel({
   selectedCoachCandidateId,
   onSelectCoachCandidate,
   assassinationTargetOptionsPlayerIds = [],
-  onRemoveVirtualPlayer,
+  onRemovePlayer,
+  isHostCurrentUser,
 }: PlayerListPanelProps) {
 
-  const getRoleIcon = (role?: Role, iconSizeClass = "h-3 w-3 mr-1") => {
+  const getRoleIcon = (role?: Role, iconSizeClass = "h-3.5 w-3.5 mr-1") => { // Adjusted icon size
     switch (role) {
       case Role.Undercover: return <Swords className={cn(iconSizeClass, "text-destructive")} />;
       case Role.TeamMember: return <Shield className={cn(iconSizeClass, "text-blue-500")} />;
@@ -59,7 +61,7 @@ export function PlayerListPanel({
   };
 
   const getRoleBadgeClassName = (role?: Role): string => {
-    let baseClass = "flex items-center gap-1 text-xs px-2 py-0.5 border";
+    let baseClass = "flex items-center gap-1 text-xs px-1.5 py-0.5 border rounded-full"; // Adjusted padding and rounded
     if (role === Role.TeamMember) {
       return cn(baseClass, "bg-blue-100 text-blue-700 border-blue-300");
     } else if (role === Role.Coach) {
@@ -86,8 +88,6 @@ export function PlayerListPanel({
     }
   };
 
-  const isHost = user.id === room.hostId;
-
   let panelTitleNode: React.ReactNode;
   if (room.status === GameRoomStatus.Waiting) {
     panelTitleNode = (
@@ -96,7 +96,7 @@ export function PlayerListPanel({
         玩家 ({localPlayers.length}/{room.maxPlayers})
       </>
     );
-  } else { // Game InProgress or Finished
+  } else {
     const roleCounts = localPlayers.reduce((acc, player) => {
       if (player.role) {
         acc[player.role] = (acc[player.role] || 0) + 1;
@@ -116,6 +116,7 @@ export function PlayerListPanel({
     );
   }
 
+
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
       <CardHeader>
@@ -125,11 +126,12 @@ export function PlayerListPanel({
       </CardHeader>
       <CardContent className="flex-grow overflow-y-auto p-2">
         {localPlayers.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3"> {/* Reverted to 2 columns */}
+          <div className="grid grid-cols-3 gap-2">
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
               const allVotesInForCurrentTeam = votesToDisplay.length === room.players.length && room.players.length > 0;
+
 
               const isOnMissionTeamForDisplay = (
                 room.currentPhase === 'team_selection' ||
@@ -150,7 +152,7 @@ export function PlayerListPanel({
               const canBeClickedForTeamSelection = isInSelectionMode && (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
               const canBeClicked = (isInSelectionMode && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
 
-              let cardClassName = "relative flex flex-col items-center justify-start p-2 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-sm"; // Original padding, base text size
+              let cardClassName = "relative flex flex-col items-center justify-start p-1 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-xs"; // Reduced padding
 
               if (isOnMissionTeamForDisplay) {
                  cardClassName = cn(cardClassName, "bg-accent/20 border-accent");
@@ -170,7 +172,16 @@ export function PlayerListPanel({
                   if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
               }
 
-              const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
+              const canRemoveThisPlayer = 
+                isHostCurrentUser && 
+                room.status === GameRoomStatus.Waiting && 
+                p.id !== user.id && // Host cannot remove themselves
+                (
+                  (room.mode === RoomMode.Online && isVirtualPlayer) || // Online mode: only virtual players
+                  (room.mode === RoomMode.ManualInput) // Manual mode: any player (except host)
+                ) &&
+                onRemovePlayer;
+
 
               return (
                 <div
@@ -178,55 +189,55 @@ export function PlayerListPanel({
                   onClick={canBeClicked ? () => handlePlayerCardClick(p.id) : undefined}
                   className={cardClassName}
                 >
-                  {canRemoveVirtualPlayer && (
+                  {canRemoveThisPlayer && (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="absolute top-0 right-0 h-5 w-5 text-destructive hover:bg-destructive/10 z-10 p-0.5"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onRemoveVirtualPlayer) onRemoveVirtualPlayer(p.id);
+                        if (onRemovePlayer) onRemovePlayer(p.id);
                       }}
                       title={`移除 ${p.name}`}
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   )}
-                  <div className="flex flex-col items-center space-y-1"> {/* Name below avatar */}
-                    <div className="relative">
-                        <Avatar className="h-10 w-10 border-2 border-primary/30"> {/* Original avatar size */}
+                   <div className="flex items-center space-x-1.5 w-full"> {/* Name next to avatar */}
+                    <div className="relative flex-shrink-0">
+                        <Avatar className="h-8 w-8 border-2 border-primary/30"> {/* Reduced avatar size */}
                         <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
-                        <AvatarFallback className="text-lg">{p.name.charAt(0).toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="text-sm">{p.name.charAt(0).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
-                        <Crown className="absolute -top-1.5 -right-1.5 h-4 w-4 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
+                        <Crown className="absolute -top-1 -right-1 h-3.5 w-3.5 text-yellow-500 bg-background rounded-full p-0.5" title="队长" />
                         )}
                         {isSelectedForMissionByCaptain && (
-                        <SelectedIcon className="absolute -bottom-1 -left-1 h-4 w-4 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
+                        <SelectedIcon className="absolute -bottom-1 -left-1 h-3.5 w-3.5 text-green-500 bg-background rounded-full p-0.5" title="已选择出战"/>
                         )}
                         {isSelectedAsCoachCandidate && (
-                        <Target className="absolute -bottom-1 -left-1 h-4 w-4 text-red-500 bg-background rounded-full p-0.5" title="Targeted Candidate"/>
+                        <Target className="absolute -bottom-1 -left-1 h-3.5 w-3.5 text-red-500 bg-background rounded-full p-0.5" title="指认目标"/>
                         )}
                     </div>
-                    <span className="font-medium text-center truncate text-xs">{p.name}</span> {/* Original name size */}
+                    <span className="font-medium text-center truncate text-xs flex-grow">{p.name}</span> {/* Reduced name font size */}
                   </div>
 
-                  <div className="flex items-center justify-center space-x-1 mt-1.5 h-auto min-h-[1rem]">
+                  <div className="flex items-center justify-center space-x-1 mt-1 h-auto min-h-[1rem]">
                      {(room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
-                        allVotesInForCurrentTeam || room.currentPhase === 'mission_reveal' ? (
+                        (allVotesInForCurrentTeam || room.currentPhase === 'mission_reveal') ? (
                             playerVoteInfo.vote === 'approve' ? (
-                            <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white" title="同意">
-                                <ThumbsUp className="h-3 w-3" />
+                            <Badge variant="default" className="px-1 py-0.5 text-xs bg-green-500 hover:bg-green-600 text-white" title="同意">
+                                <ThumbsUp className="h-2.5 w-2.5" />
                             </Badge>
                             ) : (
-                            <Badge variant="destructive" className="px-1.5 py-0.5 text-xs" title="反对">
-                                <ThumbsDown className="h-3 w-3" />
+                            <Badge variant="destructive" className="px-1 py-0.5 text-xs" title="反对">
+                                <ThumbsDown className="h-2.5 w-2.5" />
                             </Badge>
                             )
                         ) : (
                             votesToDisplay.some(v => v.playerId === p.id) && (
-                                <Badge variant="default" className="px-1.5 py-0.5 text-xs bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
-                                <VotedIcon className="h-3 w-3" />
+                                <Badge variant="default" className="px-1 py-0.5 text-xs bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
+                                <VotedIcon className="h-2.5 w-2.5" />
                                 </Badge>
                             )
                         )
@@ -238,8 +249,8 @@ export function PlayerListPanel({
                       (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) ||
                       (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover)
                     ) && (
-                      <Badge className={cn(getRoleBadgeClassName(p.role), "text-xs px-1.5 py-0.5")}>
-                        {getRoleIcon(p.role, "h-3 w-3 mr-0.5")}
+                      <Badge className={cn(getRoleBadgeClassName(p.role))}>
+                        {getRoleIcon(p.role)}
                         {p.role}
                       </Badge>
                     )}
@@ -247,12 +258,12 @@ export function PlayerListPanel({
                     {room.status === GameRoomStatus.Finished && room.mode !== RoomMode.ManualInput && missionCardPlayed && (
                       <Badge
                         className={cn(
-                          "px-1.5 py-0.5 text-xs",
+                          "px-1 py-0.5 text-xs",
                           missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-red-500 text-white"
                         )}
                         title={missionCardPlayed === 'success' ? "成功" : "破坏"}
                       >
-                        {missionCardPlayed === 'success' ? <VotedIcon className="h-3 w-3" /> : <MissionCardFailIcon className="h-3 w-3" />}
+                        {missionCardPlayed === 'success' ? <VotedIcon className="h-2.5 w-2.5" /> : <MissionCardFailIcon className="h-2.5 w-2.5" />}
                       </Badge>
                     )}
                   </div>
@@ -261,9 +272,11 @@ export function PlayerListPanel({
             })}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground text-center">Waiting for players to join...</p>
+          <p className="text-sm text-muted-foreground text-center">等待玩家加入...</p>
         )}
       </CardContent>
     </Card>
   );
 }
+
+    
