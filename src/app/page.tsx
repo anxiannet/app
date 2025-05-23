@@ -6,33 +6,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PlusCircle, Users, CheckSquare } from "lucide-react";
+import { PlusCircle, Users, CheckSquare, Eye } from "lucide-react";
 import { GameRoomStatus, type GameRoom, type Player, RoomMode } from "@/lib/types";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-// Dialog related imports are removed as dialog is removed
-// import {
-//   Dialog,
-//   DialogContent,
-//   DialogDescription,
-//   DialogFooter,
-//   DialogHeader,
-//   DialogTitle,
-//   DialogTrigger,
-//   DialogClose,
-// } from "@/components/ui/dialog";
-// import { Input } from "@/components/ui/input";
-// import { Label } from "@/components/ui/label";
-// import {
-//   Select,
-//   SelectContent,
-//   SelectItem,
-//   SelectTrigger,
-//   SelectValue,
-// } from "@/components/ui/select";
 
 import { MIN_PLAYERS_TO_START, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, MISSIONS_CONFIG } from "@/lib/game-config";
 
@@ -44,12 +24,6 @@ export default function LobbyPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-
-  // State for dialog removed
-  // const [isCreateRoomDialogOpen, setIsCreateRoomDialogOpen] = useState(false);
-  // const [newRoomNameInput, setNewRoomNameInput] = useState("");
-  // const [selectedRoomMode, setSelectedRoomMode] = useState<RoomMode>(RoomMode.Online);
-
 
   const loadRoomsFromLocalStorage = useCallback(() => {
     setIsLoadingRooms(true);
@@ -63,7 +37,7 @@ export default function LobbyPage() {
           return false;
         }
         if (room.status === GameRoomStatus.Finished) return false;
-        // Logic to hide in-progress rooms from users not in them
+        
         if (room.status === GameRoomStatus.InProgress && (!user || !room.players.some(p => p.id === user.id))) {
           return false;
         }
@@ -80,7 +54,7 @@ export default function LobbyPage() {
       const statusPriority: { [key in GameRoomStatus]: number } = {
         [GameRoomStatus.InProgress]: 1,
         [GameRoomStatus.Waiting]: 2,
-        [GameRoomStatus.Finished]: 3, // Should be filtered out before sorting
+        [GameRoomStatus.Finished]: 3, 
       };
 
       fetchedRooms.sort((a, b) => {
@@ -144,7 +118,7 @@ export default function LobbyPage() {
       const currentRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
       currentRooms.push(newRoomData);
       localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(currentRooms));
-      loadRoomsFromLocalStorage(); // Reload and re-sort
+      loadRoomsFromLocalStorage(); 
       toast({ title: "房间已创建", description: `房间 "${finalRoomName}" (${modeText}模式) 创建成功！` });
       router.push(`/rooms/${newRoomData.id}`);
     } catch (error) {
@@ -166,30 +140,28 @@ export default function LobbyPage() {
         <p className="mt-4 text-xl text-muted-foreground">
           解开谜团，揭露隐藏，赢取胜利。
         </p>
-        {user && (
-          <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-            <Button
-              size="lg"
-              onClick={() => handleCreateRoom(RoomMode.Online)}
-              className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
-            >
-              <PlusCircle className="mr-2 h-6 w-6" /> 创建模拟游戏
-            </Button>
-            <Button
-              size="lg"
-              onClick={() => handleCreateRoom(RoomMode.ManualInput)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
-            >
-              <PlusCircle className="mr-2 h-6 w-6" /> 创建线下游戏
-            </Button>
-          </div>
-        )}
+        <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+          <Button
+            size="lg"
+            onClick={() => handleCreateRoom(RoomMode.Online)}
+            className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
+          >
+            <PlusCircle className="mr-2 h-6 w-6" /> 创建模拟游戏
+          </Button>
+          <Button
+            size="lg"
+            onClick={() => handleCreateRoom(RoomMode.ManualInput)}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md"
+          >
+            <PlusCircle className="mr-2 h-6 w-6" /> 创建线下游戏
+          </Button>
+        </div>
       </section>
 
       <section>
         <h2 className="text-3xl font-semibold mb-6 text-center text-foreground/80">可用房间</h2>
         {rooms.length === 0 ? (
-          <p className="text-center text-muted-foreground">暂无可用房间。{user ? "创建一个吧？" : ""}</p>
+          <p className="text-center text-muted-foreground">暂无可用房间。创建一个吧？</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
@@ -206,10 +178,8 @@ export default function LobbyPage() {
                 displayStatusText = "等待中";
                 displayStatusVariant = "outline";
                 displayStatusClass = "border-yellow-500 text-yellow-600";
-              } else if (room.status === GameRoomStatus.Finished) {
-                displayStatusText = "游戏结束"; // This should ideally not be shown due to filtering
               }
-
+              // Finished rooms are filtered out
 
               return (
                 <Link key={room.id} href={`/rooms/${room.id}`} passHref legacyBehavior>
@@ -236,7 +206,7 @@ export default function LobbyPage() {
                             )}
                           </div>
                         </div>
-                        <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
+                         <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
                             <Users className="mr-2 h-4 w-4" /> {room.players?.length || 0} / {room.maxPlayers} 玩家
                         </CardDescription>
                       </CardHeader>
