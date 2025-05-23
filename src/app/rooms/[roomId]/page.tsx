@@ -151,17 +151,16 @@ export default function GameRoomPage() {
               if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < currentRoomData.players.length) {
                 setManualRoleRevealIndex(parsedIndex);
               } else {
-                // Invalid stored index, default to 0 or handle as error
                 console.warn("Invalid manual role reveal index found in localStorage, defaulting to 0.");
                 setManualRoleRevealIndex(0); 
                 localStorage.setItem(revealIndexKey, "0");
               }
             } else {
-              setManualRoleRevealIndex(0); // Start from the beginning if no index is stored
+              setManualRoleRevealIndex(0); 
               localStorage.setItem(revealIndexKey, "0");
             }
           }
-          setIsManualRoleVisible(false); // Always start with role hidden for the current turn
+          setIsManualRoleVisible(false); 
         } else {
           setManualRoleRevealCompleted(false);
           setManualRoleRevealIndex(null);
@@ -278,7 +277,7 @@ export default function GameRoomPage() {
         gameSummaryMessage: gameSummaryMessage,
         finalScores: { ...(finalRoomState.teamScores || { teamMemberWins: 0, undercoverWins: 0 }) },
         playersInGame: allPlayersInGame.map(p => {
-          const playerDetail: { id: string; name: string; role: Role; avatarUrl?: string } = {
+          const playerDetail: { id: string; name: string; role: Role; avatarUrl?: string; } = {
             id: p.id,
             name: p.name,
             role: p.role || Role.TeamMember,
@@ -1087,9 +1086,6 @@ export default function GameRoomPage() {
   const handleShowMyRoleManual = useCallback(() => {
     if (!room || manualRoleRevealIndex === null || !room.id || !room.currentGameInstanceId) return;
     setIsManualRoleVisible(true);
-    // Advance the persistent turn *after* showing the role.
-    // This means if refresh happens now, it's still this player's turn to *see* the prompt.
-    // But if they click "View" and then refresh, it *should* advance.
     const nextPlayerIndexInSequence = (manualRoleRevealIndex ?? -1) + 1;
     if (nextPlayerIndexInSequence < room.players.length) {
         localStorage.setItem(getManualRevealCurrentIndexKey(room.id, room.currentGameInstanceId), nextPlayerIndexInSequence.toString());
@@ -1103,20 +1099,24 @@ export default function GameRoomPage() {
   const handleNextPlayerForRoleReveal = () => {
     setIsManualRoleVisible(false); 
     if (room && manualRoleRevealIndex !== null && room.id && room.currentGameInstanceId) {
-      const nextIndexForReactState = manualRoleRevealIndex + 1; // This is the index for the *next* player's prompt.
+      const nextIndexForReactState = manualRoleRevealIndex + 1;
       
       if (nextIndexForReactState < room.players.length) {
         setManualRoleRevealIndex(nextIndexForReactState);
-        // localStorage for currentIndexKey was already updated in handleShowMyRoleManual
-        // to point to this nextIndexForReactState.
       } else {
         setManualRoleRevealCompleted(true);
-        // localStorage for completedKey was already updated in handleShowMyRoleManual
-        // if this was the last player viewing their role.
         setManualRoleRevealIndex(null); 
       }
     }
   };
+
+  useEffect(() => { // Added explicit `useEffect` to reinforce `isManualRoleVisible` reset on relevant state changes
+    if (room?.mode === RoomMode.ManualInput && room.status === GameRoomStatus.InProgress && !manualRoleRevealCompleted) {
+      // This ensures that if manualRoleRevealIndex changes (e.g., after a refresh and loading from localStorage),
+      // the role visibility is reset to false for the new "turn" being displayed.
+      setIsManualRoleVisible(false);
+    }
+  }, [manualRoleRevealIndex, room?.mode, room?.status, manualRoleRevealCompleted]);
 
   if (isLoading || authLoading) return <div className="text-center py-10">载入房间...</div>;
   if (!room || !user) return <div className="text-center py-10 text-destructive">载入房间错误或用户未验证。请尝试返回大厅。</div>;
@@ -1151,8 +1151,8 @@ export default function GameRoomPage() {
 
     assassinationTargetOptions = room.players.filter(p => {
       if (!successfulCaptainIds.has(p.id)) return false;
-      if (room.mode === RoomMode.Online && p.id === user.id) return false; // Cannot target self in Online mode
-      if (currentUserRole === Role.Undercover && p.role === Role.Undercover) return false; // Undercover cannot target another Undercover
+      if (room.mode === RoomMode.Online && p.id === user.id) return false; 
+      if (currentUserRole === Role.Undercover && p.role === Role.Undercover) return false; 
       return true;
     });
   }
@@ -1265,7 +1265,13 @@ export default function GameRoomPage() {
             selectedPlayersForMission={selectedMissionTeam}
             onTogglePlayerForMission={handlePlayerSelectionForMission}
             selectionLimitForMission={requiredPlayersForCurrentMission}
-            isCoachAssassinationModeActive={room.currentPhase === 'coach_assassination' && ((room.mode === RoomMode.Online && currentUserRole === Role.Undercover) || (room.mode === RoomMode.ManualInput && isHostCurrentUser)) }
+            isCoachAssassinationModeActive={
+              room.currentPhase === 'coach_assassination' &&
+              (
+                (room.mode === RoomMode.Online && currentUserRole === Role.Undercover) ||
+                (room.mode === RoomMode.ManualInput && isHostCurrentUser)
+              )
+            }
             selectedCoachCandidateId={selectedCoachCandidate}
             onSelectCoachCandidate={setSelectedCoachCandidate}
             assassinationTargetOptionsPlayerIds={assassinationTargetOptions.map(p => p.id)}
@@ -1401,3 +1407,4 @@ export default function GameRoomPage() {
     </div>
   );
 }
+
