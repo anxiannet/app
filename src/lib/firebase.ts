@@ -4,7 +4,7 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 // Firebase Auth is not currently proxied or used by mock login in this version
 // import { getAuth, type Auth } from "firebase/auth";
-// Firestore is being removed
+// Firestore is being removed/not actively used for room data; app uses localStorage.
 // import { getFirestore, initializeFirestore, connectFirestoreEmulator, type Firestore } from "firebase/firestore";
 
 
@@ -20,9 +20,10 @@ const firebaseConfig = {
 
 let app: FirebaseApp | undefined = undefined;
 // let auth: Auth | undefined = undefined; // Auth not used with mock login
-// let db: Firestore | undefined = undefined; // Firestore removed
+// let db: Firestore | undefined = undefined; // Firestore not actively used for room data
 
-const NGROK_HOSTNAME = "ef12-121-7-209-188.ngrok-free.app"; // Hostname only
+// NGROK_HOSTNAME is not used as Firestore connection is not active for room data
+// const NGROK_HOSTNAME = "ef12-121-7-209-188.ngrok-free.app"; // Hostname only
 
 if (typeof window !== "undefined") {
   console.log("Firebase Config about to be used by client (CHECK apiKey and projectId HERE):", JSON.stringify({
@@ -58,24 +59,23 @@ if (typeof window !== "undefined") {
   if (!criticalConfigMissing) {
     if (!getApps().length) {
       try {
-        console.log(`Attempting to initialize Firebase for project ID: ${firebaseConfig.projectId}`);
+        console.log(`Attempting to initialize Firebase app for project ID: ${firebaseConfig.projectId}`);
         app = initializeApp(firebaseConfig);
-        console.log(`Firebase initialized successfully for project ID: ${firebaseConfig.projectId}. Firestore NOT initialized as per user request.`);
-        // Firestore initialization removed
+        console.log(`Firebase app initialized successfully for project ID: ${firebaseConfig.projectId}.`);
+        console.warn("Firestore is NOT currently being initialized or used for room data in this application. Room data is handled by localStorage.");
+        // Firestore initialization logic (including emulator/proxy) is removed as per current app state.
+        // If Firestore were to be used:
         // if (process.env.NODE_ENV === 'development') {
-        //    console.warn(
-        //     "DEVELOPMENT MODE: Firestore would be configured to use ngrok host IF IT WAS ENABLED. \n" +
-        //     `Intended Firestore host: ${NGROK_HOSTNAME} (SSL: true). \n`
+        //   db = initializeFirestore(app, {
+        //     host: "black-rain-7f1e.bostage.workers.dev", // Your simplified worker domain
+        //     ssl: true, // Assuming your worker is HTTPS
+        //   });
+        //   console.warn(
+        //     `DEVELOPMENT MODE: Firestore configured to use proxy: black-rain-7f1e.bostage.workers.dev. Ensure your worker is active and correctly forwarding to Firestore.`
         //   );
-        //   // db = initializeFirestore(app, {
-        //   //   host: NGROK_HOSTNAME, // Only domain, no "https://"" or path
-        //   //   ssl: true,
-        //   // });
-        //   // console.log(`Firestore configured to use ngrok host: ${NGROK_HOSTNAME}.`);
         // } else {
-        //   // Production mode or non-dev environment
-        //   // db = getFirestore(app);
-        //   // console.log(`Firestore configured to use default Google endpoints (production/non-dev mode).`);
+        //   db = getFirestore(app);
+        //   console.log(`Firestore configured to use default Google endpoints (production/non-dev mode).`);
         // }
       } catch (error) {
         console.error("Firebase client app initialization error:", error);
@@ -89,13 +89,12 @@ if (typeof window !== "undefined") {
       }
     } else {
       app = getApps()[0];
-      console.log("Firebase app instance already exists. Firestore NOT initialized as per user request.");
-      // Firestore re-initialization logic removed
+      console.log("Firebase app instance already exists. Firestore is NOT currently being used for room data.");
     }
   } else {
-    console.error("Firebase initialization SKIPPED due to missing critical configuration (API Key or Project ID). The app will not function correctly.");
+    console.error("Firebase app initialization SKIPPED due to missing critical configuration (API Key or Project ID). The app will not function correctly if Firebase services were intended to be used.");
   }
 }
 
 
-export { app }; // db is not exported
+export { app }; // db and auth are not exported as they are not actively used or are part of mock systems
