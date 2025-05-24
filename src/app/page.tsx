@@ -18,14 +18,13 @@ import {
   GameRoomStatus,
   RoomMode,
   type Player,
-  Role,
 } from "@/lib/types";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { STANDARD_PRESET_TEMPLATES, OFFLINE_KEYWORD_PRESET_TEMPLATES, MISSIONS_CONFIG, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, PRE_GENERATED_AVATARS, ROLES_CONFIG } from "@/lib/game-config";
+import { STANDARD_PRESET_TEMPLATES, OFFLINE_KEYWORD_PRESET_TEMPLATES, MISSIONS_CONFIG, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, PRE_GENERATED_AVATARS } from "@/lib/game-config";
 
 const ROOMS_LOCAL_STORAGE_KEY = "anxian-rooms";
 
@@ -55,11 +54,11 @@ export default function LobbyPage() {
         const storedRoomsRaw = localStorage.getItem(ROOMS_LOCAL_STORAGE_KEY);
         let allRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
         
+        // Filter out finished rooms and empty rooms
         allRooms = allRooms.filter(room => 
-          room.players && 
-          room.players.length > 0 && 
           room.status !== GameRoomStatus.Finished &&
-          room.mode !== RoomMode.ManualInput // Filter out ManualInput rooms
+          room.players && 
+          room.players.length > 0
         );
         
         localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms));
@@ -76,7 +75,7 @@ export default function LobbyPage() {
   }, [loadRoomsFromLocalStorage]);
 
   const handleCreateRoom = useCallback(
-    (mode: RoomMode.Online /* Only Online mode creation supported now */) => {
+    (mode: RoomMode.Online | RoomMode.ManualInput) => {
       if (!user) {
         toast({
           title: "需要登录",
@@ -88,7 +87,7 @@ export default function LobbyPage() {
       }
 
       const baseName = `${user.name}的`;
-      const roomName = mode === RoomMode.Online ? `${baseName}模拟游戏` : `${baseName}游戏`; // Simplified name
+      const roomName = mode === RoomMode.Online ? `${baseName}模拟游戏` : `${baseName}线下游戏`;
       
       const newRoomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const playerCountForConfig = 5; 
@@ -102,7 +101,7 @@ export default function LobbyPage() {
         status: GameRoomStatus.Waiting,
         hostId: user.id,
         createdAt: new Date().toISOString(),
-        mode: mode, // Set mode based on button clicked
+        mode: mode,
         teamScores: { teamMemberWins: 0, undercoverWins: 0 },
         missionHistory: [],
         fullVoteHistory: [],
@@ -114,7 +113,7 @@ export default function LobbyPage() {
         missionCardPlaysForCurrentMission: [],
       };
 
-      const currentRooms = localStorageRooms.filter(r => r.mode !== RoomMode.ManualInput); // Ensure we don't re-add manual rooms
+      const currentRooms = [...localStorageRooms]; // Get current rooms from state
       currentRooms.push(newRoom);
       localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(currentRooms));
       setLocalStorageRooms(currentRooms); // Update local state to reflect new room
@@ -125,7 +124,7 @@ export default function LobbyPage() {
       });
       router.push(`/rooms/${newRoom.id}`);
     },
-    [user, router, toast, localStorageRooms]
+    [user, router, toast, localStorageRooms] // Added localStorageRooms as dependency
   );
 
   if (authLoading) {
@@ -134,11 +133,12 @@ export default function LobbyPage() {
 
   const dynamicallyCreatedRoomsToDisplay = localStorageRooms.filter(room => {
     const isPlayerInRoom = user && room.players.some(p => p.id === user.id);
-    if (room.mode === RoomMode.ManualInput) return false; // Explicitly filter out manual input rooms
+    // Filter logic: show waiting rooms, or in-progress rooms if user is part of them
+    // This includes manual input mode rooms again if they are created
     if (room.status === GameRoomStatus.InProgress) {
       return isPlayerInRoom;
     }
-    return room.status === GameRoomStatus.Waiting;
+    return room.status === GameRoomStatus.Waiting; // Shows all waiting rooms regardless of mode
   }).sort((a, b) => {
     const aIsJoined = user && a.players.some(p => p.id === user.id);
     const bIsJoined = user && b.players.some(p => p.id === user.id);
@@ -152,12 +152,12 @@ export default function LobbyPage() {
     return b.players.length - a.players.length;
   });
 
-  const getRoomModeDisplayName = (mode?: RoomMode) => { // Optional mode
+  const getRoomModeDisplayName = (mode?: RoomMode) => {
     switch (mode) {
       case RoomMode.Online: return "在线模式";
-      // case RoomMode.ManualInput: return "手动模式"; // Not displayed
+      case RoomMode.ManualInput: return "手动模式";
       case RoomMode.OfflineKeyword: return "暗语模式";
-      default: return ""; // Return empty for undefined or ManualInput for filtering
+      default: return ""; 
     }
   };
 
@@ -181,7 +181,13 @@ export default function LobbyPage() {
           >
             <PlusCircle className="mr-2 h-6 w-6" /> 创建模拟游戏
           </Button>
-          {/* "创建线下游戏" button for ManualInput mode is removed */}
+          <Button
+            size="lg"
+            onClick={() => handleCreateRoom(RoomMode.ManualInput)}
+            className="bg-purple-600 hover:bg-purple-700 text-white transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
+          >
+            <KeyRoundIcon className="mr-2 h-6 w-6" /> 线下游戏
+          </Button>
         </div>
       )}
 
@@ -196,7 +202,7 @@ export default function LobbyPage() {
             {combinedPresetTemplates.map((roomTemplate) => {
                const isUserInThisPresetInstance = user && localStorageRooms.find(r => r.id === roomTemplate.id)?.players.some(p => p.id === user.id);
                const roomModeName = getRoomModeDisplayName(roomTemplate.mode);
-               if (!roomModeName) return null; // Skip rendering if mode is not displayable
+               if (!roomModeName) return null;
 
                const roomIcon = roomTemplate.mode === RoomMode.OfflineKeyword ? <KeyRoundIcon className="mr-2 h-4 w-4 text-yellow-600" /> : <Users className="mr-2 h-4 w-4" />;
               
@@ -260,7 +266,7 @@ export default function LobbyPage() {
                const isUserInRoom = user && room.players.some(p => p.id === user.id);
                const roomIcon = <Users className="mr-2 h-4 w-4" />;
                const roomModeName = getRoomModeDisplayName(room.mode);
-               if (!roomModeName) return null; // Skip rendering if mode is not displayable (i.e., ManualInput)
+               if (!roomModeName) return null;
                
                return (
                 <Link
@@ -286,7 +292,7 @@ export default function LobbyPage() {
                             className={cn("ml-auto text-xs", 
                                 room.status === GameRoomStatus.InProgress ? "bg-green-500 text-white" :
                                 room.status === GameRoomStatus.Waiting ? "border-yellow-500 text-yellow-600" :
-                                "bg-gray-500 text-white" // Should not happen due to filter
+                                "bg-gray-500 text-white"
                             )}
                           >
                             {room.status === GameRoomStatus.InProgress ? "游戏中" :
@@ -297,6 +303,9 @@ export default function LobbyPage() {
                         <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
                           {roomIcon}
                           {room.players.length} / {room.maxPlayers} 玩家
+                          <Badge variant="outline" className={cn("ml-2 text-xs", getRoomModeDisplayName(room.mode) === "手动模式" ? "border-purple-500 text-purple-600" : "border-blue-500 text-blue-600")}>
+                            {getRoomModeDisplayName(room.mode)}
+                          </Badge>
                           {isUserInRoom && (
                             <Badge variant="secondary" className="ml-auto text-green-700 bg-green-100 border-green-300">
                               <CheckSquare className="mr-1 h-3 w-3"/> 已加入
