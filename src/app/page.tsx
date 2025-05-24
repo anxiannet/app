@@ -49,7 +49,12 @@ export default function LobbyPage() {
       let fetchedRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
       
       // Filter out finished rooms and empty rooms
-      fetchedRooms = fetchedRooms.filter(room => room.status !== GameRoomStatus.Finished && room.players && room.players.length > 0);
+      fetchedRooms = fetchedRooms.filter(room => 
+        room.status !== GameRoomStatus.Finished && 
+        room.players && 
+        room.players.length > 0 &&
+        room.mode !== RoomMode.OfflineKeyword // Don't show OfflineKeyword templates here
+      );
 
       // Sort rooms: 
       // 1. User's joined rooms first
@@ -158,6 +163,8 @@ export default function LobbyPage() {
     }
   };
 
+  const joinedRooms = localStorageRooms.filter(room => user && room.players.some(p => p.id === user.id));
+
   return (
     <div className="space-y-8">
       <section className="text-center py-10 bg-card shadow-lg rounded-lg">
@@ -169,36 +176,38 @@ export default function LobbyPage() {
         </p>
       </section>
 
-      {user && (
-        <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-          <Button
-            size="lg"
-            onClick={() => handleCreateRoom(RoomMode.Online)}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
-          >
-            <Gamepad2 className="mr-2 h-6 w-6" /> 模拟游戏
-          </Button>
-          <Button
-            size="lg"
-            onClick={() => handleCreateRoom(RoomMode.ManualInput)}
-            className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
-          >
-            <KeyRoundIcon className="mr-2 h-6 w-6" /> 线下游戏
-          </Button>
-        </div>
-      )}
       
-      {localStorageRooms.length > 0 && (
+      <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+        <Button
+          size="lg"
+          onClick={() => handleCreateRoom(RoomMode.Online)}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
+        >
+          <Gamepad2 className="mr-2 h-6 w-6" /> 模拟游戏
+        </Button>
+        <Button
+          size="lg"
+          onClick={() => handleCreateRoom(RoomMode.ManualInput)}
+          className="bg-accent hover:bg-accent/90 text-accent-foreground transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
+        >
+          <KeyRoundIcon className="mr-2 h-6 w-6" /> 线下游戏
+        </Button>
+      </div>
+      
+      {user && joinedRooms.length > 0 && (
         <section>
           <h2 className="text-3xl font-semibold mb-6 text-center text-foreground/80">
-            进行中的房间
+            你加入的房间
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {localStorageRooms.map((room) => {
-              if (room.mode === RoomMode.OfflineKeyword) return null; // Don't display offline keyword rooms here
+            {joinedRooms.map((room) => {
+              if (room.mode === RoomMode.OfflineKeyword) return null; 
 
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
-              const canViewRoom = room.status === GameRoomStatus.Waiting || (room.status === GameRoomStatus.InProgress && isUserInRoom);
+              
+              // Condition to display: Waiting OR (In Progress AND user is in room)
+              const canViewRoom = room.status === GameRoomStatus.Waiting || 
+                                 (room.status === GameRoomStatus.InProgress && isUserInRoom);
               
               if (!canViewRoom) return null;
 
@@ -229,13 +238,14 @@ export default function LobbyPage() {
                           </CardTitle>
                           {isUserInRoom && <Badge variant="secondary" className="border-primary text-primary"><CheckSquare className="mr-1 h-3 w-3" /> 已加入</Badge>}
                         </div>
-                        <CardDescription className="flex items-center text-xs text-muted-foreground pt-1">
+                         <CardDescription className="flex items-center text-xs text-muted-foreground pt-1">
                           {roomIcon} {roomModeName}
+                          <span className="ml-auto flex items-center"><Users className="mr-1 h-3 w-3" /> {room.players.length} / {room.maxPlayers} 玩家</span>
                         </CardDescription>
                       </CardHeader>
-                      <CardContent className="space-y-1">
+                       <CardContent className="space-y-1">
                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="flex items-center"><Users className="mr-1 h-3 w-3" /> {room.players.length} / {room.maxPlayers} 玩家</span>
+                            
                             <Badge
                                 variant={room.status === GameRoomStatus.Waiting ? "outline" : "default"}
                                 className={cn(
@@ -256,6 +266,13 @@ export default function LobbyPage() {
           </div>
         </section>
       )}
+      {user && joinedRooms.length === 0 && (
+        <p className="text-center text-muted-foreground mt-8">你还没有加入任何进行中的房间。</p>
+      )}
+      {!user && (
+        <p className="text-center text-muted-foreground mt-8">请先<Link href="/login" className="text-primary hover:underline">登录</Link>以查看你加入的房间。</p>
+      )}
+
 
       <section className="mt-12">
         <h2 className="text-3xl font-semibold mb-6 text-center text-foreground/80">
