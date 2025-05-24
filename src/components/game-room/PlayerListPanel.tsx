@@ -2,7 +2,7 @@
 "use client";
 
 import type { User } from "@/lib/types";
-import { type GameRoom, type Player, Role, type PlayerVote, GameRoomStatus, type MissionCardPlay } from "@/lib/types";
+import { type GameRoom, type Player, Role, GameRoomStatus, RoomMode } from "@/lib/types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +19,7 @@ type PlayerListPanelProps = {
   votesToDisplay: PlayerVote[];
   fellowUndercovers: Player[];
   knownUndercoversByCoach: Player[];
-  isSelectionModeActive?: boolean;
+  isInSelectionMode?: boolean;
   selectedPlayersForMission?: string[];
   onTogglePlayerForMission?: (playerId: string) => void;
   selectionLimitForMission?: number;
@@ -27,7 +27,8 @@ type PlayerListPanelProps = {
   selectedCoachCandidateId?: string | null;
   onSelectCoachCandidate?: (playerId: string) => void;
   assassinationTargetOptionsPlayerIds?: string[];
-  onRemoveVirtualPlayer?: (playerId: string) => void;
+  onRemovePlayer?: (playerId: string) => void;
+  isHostCurrentUser?: boolean;
 };
 
 export function PlayerListPanel({
@@ -38,7 +39,7 @@ export function PlayerListPanel({
   votesToDisplay,
   fellowUndercovers,
   knownUndercoversByCoach,
-  isSelectionModeActive = false,
+  isInSelectionMode = false,
   selectedPlayersForMission = [],
   onTogglePlayerForMission,
   selectionLimitForMission = 0,
@@ -46,10 +47,11 @@ export function PlayerListPanel({
   selectedCoachCandidateId,
   onSelectCoachCandidate,
   assassinationTargetOptionsPlayerIds = [],
-  onRemoveVirtualPlayer,
+  onRemovePlayer,
+  isHostCurrentUser,
 }: PlayerListPanelProps) {
 
-  const getRoleIcon = (role?: Role, iconSizeClass = "h-2 w-2 mr-0.5") => {
+  const getRoleIcon = (role?: Role, iconSizeClass = "h-3 w-3") => {
     switch (role) {
       case Role.Undercover: return <Swords className={cn(iconSizeClass, "text-destructive")} />;
       case Role.TeamMember: return <Shield className={cn(iconSizeClass, "text-blue-500")} />;
@@ -59,7 +61,7 @@ export function PlayerListPanel({
   };
 
   const getRoleBadgeClassName = (role?: Role): string => {
-    let baseClass = "flex items-center gap-1 text-[9px] px-1 py-0.5 border";
+    let baseClass = "flex items-center gap-0.5 text-[10px] px-1 py-0 border rounded-full";
     if (role === Role.TeamMember) {
       return cn(baseClass, "bg-blue-100 text-blue-700 border-blue-300");
     } else if (role === Role.Coach) {
@@ -67,21 +69,24 @@ export function PlayerListPanel({
     } else if (role === Role.Undercover) {
       return cn(baseClass, "bg-red-100 text-red-700 border-red-300");
     }
-    return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300"); // Default/unknown
+    return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300");
   };
 
   const handlePlayerCardClick = (playerId: string) => {
-    if (isSelectionModeActive && onTogglePlayerForMission && user.id === room.currentCaptainId) {
+    if (isInSelectionMode && onTogglePlayerForMission) {
       const canBeSelectedCurrently = selectedPlayersForMission.length < selectionLimitForMission || selectedPlayersForMission.includes(playerId);
       if (canBeSelectedCurrently) {
         onTogglePlayerForMission(playerId);
       }
-    } else if (isCoachAssassinationModeActive && onSelectCoachCandidate && assassinationTargetOptionsPlayerIds.includes(playerId) && currentUserRole === Role.Undercover) {
-      onSelectCoachCandidate(playerId);
+    } else if (isCoachAssassinationModeActive && onSelectCoachCandidate && assassinationTargetOptionsPlayerIds.includes(playerId)) {
+      const isUndercoverOnline = room.mode === RoomMode.Online && currentUserRole === Role.Undercover;
+      const isHostManual = room.mode === RoomMode.ManualInput && user.id === room.hostId;
+
+      if (isUndercoverOnline || isHostManual) {
+        onSelectCoachCandidate(playerId);
+      }
     }
   };
-
-  const isHost = user.id === room.hostId;
 
   let panelTitleNode: React.ReactNode;
   if (room.status === GameRoomStatus.Waiting) {
@@ -92,39 +97,24 @@ export function PlayerListPanel({
       </>
     );
   } else {
-    let teamMemberCount = 0;
-    let coachCount = 0;
-    let undercoverCount = 0;
-
-    if (room.status === GameRoomStatus.InProgress || room.status === GameRoomStatus.Finished) {
-        localPlayers.forEach(player => {
-        if (player.role === Role.TeamMember) teamMemberCount++;
-        else if (player.role === Role.Coach) coachCount++;
-        else if (player.role === Role.Undercover) undercoverCount++;
-        });
-    }
-    panelTitleNode = (
-        <div className="flex items-center gap-x-2 text-xs">
-            <span>角色分布:</span>
-            <span className="flex items-center" title="队员">
-                <Shield className="mr-0.5 h-3 w-3 text-blue-500" /> {teamMemberCount}
-            </span>
-            {coachCount > 0 && (
-            <span className="flex items-center" title="教练">
-                <HelpCircle className="mr-0.5 h-3 w-3 text-yellow-500" /> {coachCount}
-            </span>
-            )}
-            <span className="flex items-center" title="卧底">
-                <Swords className="mr-0.5 h-3 w-3 text-destructive" /> {undercoverCount}
-            </span>
-        </div>
+     panelTitleNode = (
+      <>
+        <UsersIcon className="mr-1 h-4 w-4 text-primary" />
+         角色分布:
+        <span className="ml-2 flex items-center gap-x-1.5">
+            <span className="flex items-center text-sm"><Shield className="mr-0.5 h-3 w-3 text-blue-500" />队员: {localPlayers.filter(p => p.role === Role.TeamMember).length}</span>
+            <span className="flex items-center text-sm"><HelpCircle className="mr-0.5 h-3 w-3 text-yellow-500" />教练: {localPlayers.filter(p => p.role === Role.Coach).length}</span>
+            <span className="flex items-center text-sm"><Swords className="mr-0.5 h-3 w-3 text-destructive" />卧底: {localPlayers.filter(p => p.role === Role.Undercover).length}</span>
+        </span>
+      </>
     );
   }
+
 
   return (
     <Card className="md:col-span-1 h-full flex flex-col">
       <CardHeader>
-        <CardTitle className="flex items-center text-xs">
+        <CardTitle className="flex items-center text-sm">
           {panelTitleNode}
         </CardTitle>
       </CardHeader>
@@ -134,8 +124,7 @@ export function PlayerListPanel({
             {localPlayers.map((p) => {
               const isCurrentUser = p.id === user.id;
               const playerVoteInfo = votesToDisplay.find(v => v.playerId === p.id);
-              
-              const allVotesInForCurrentTeam = (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && votesToDisplay.length === room.players.length && room.players.length > 0;
+              const allVotesIn = room.currentPhase === 'team_voting' && votesToDisplay.length === room.players.length && room.players.length > 0;
 
               const isOnMissionTeamForDisplay = (
                 room.currentPhase === 'team_selection' ||
@@ -144,44 +133,45 @@ export function PlayerListPanel({
                 room.currentPhase === 'mission_reveal'
               ) && room.selectedTeamForMission?.includes(p.id);
 
-
-              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished) &&
+              const missionCardPlayInfo = (room.status === GameRoomStatus.Finished && room.mode !== RoomMode.ManualInput) &&
                 room.missionHistory?.find(mh => mh.round === room.currentRound)?.cardPlays?.find(cp => cp.playerId === p.id);
               const missionCardPlayed = missionCardPlayInfo?.card;
 
-
               const isVirtualPlayer = p.id.startsWith("virtual_");
-              const isSelectedForMissionByCaptain = isSelectionModeActive && selectedPlayersForMission.includes(p.id);
+              const isSelectedForMissionByCaptain = isInSelectionMode && selectedPlayersForMission.includes(p.id);
               const isSelectableForCoachAssassination = isCoachAssassinationModeActive && assassinationTargetOptionsPlayerIds.includes(p.id);
               const isSelectedAsCoachCandidate = isCoachAssassinationModeActive && selectedCoachCandidateId === p.id;
 
-              const canBeClickedForTeamSelection = isSelectionModeActive && user.id === room.currentCaptainId &&
-                                               (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
+              const canBeClickedForTeamSelection = isInSelectionMode && (selectedPlayersForMission.length < selectionLimitForMission || isSelectedForMissionByCaptain);
+              const canBeClicked = (isInSelectionMode && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
 
-              const canBeClicked = (isSelectionModeActive && canBeClickedForTeamSelection) || (isCoachAssassinationModeActive && isSelectableForCoachAssassination);
-
-              let cardClassName = "relative flex flex-col items-center justify-start p-1 rounded-lg border-2 bg-card shadow-sm h-auto transition-all text-[10px]";
+              let cardClassName = "relative flex flex-col items-center p-1.5 rounded-md border bg-card shadow-sm h-auto transition-all text-xs";
 
               if (isOnMissionTeamForDisplay) {
                  cardClassName = cn(cardClassName, "bg-accent/20 border-accent");
-              } else if (isCurrentUser) {
-                cardClassName = cn(cardClassName, "border-primary ring-1 ring-primary");
               } else {
                 cardClassName = cn(cardClassName, "border-muted");
               }
 
-              if (isSelectionModeActive && user.id === room.currentCaptainId) {
+              if (isInSelectionMode) {
                 if (canBeClickedForTeamSelection) cardClassName = cn(cardClassName, "cursor-pointer hover:border-accent");
                 if (isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "border-primary ring-2 ring-primary bg-primary/10");
                 if (!canBeClickedForTeamSelection && !isSelectedForMissionByCaptain) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
-              } else if (isCoachAssassinationModeActive && currentUserRole === Role.Undercover) {
+              } else if (isCoachAssassinationModeActive) {
                   if (isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "cursor-pointer hover:border-destructive");
                   if (isSelectedAsCoachCandidate) cardClassName = cn(cardClassName, "border-destructive ring-2 ring-destructive bg-destructive/10");
                   if (!isSelectableForCoachAssassination) cardClassName = cn(cardClassName, "opacity-50 cursor-not-allowed");
               }
 
-              const canRemoveVirtualPlayer = isHost && room.status === GameRoomStatus.Waiting && isVirtualPlayer && onRemoveVirtualPlayer;
-              
+              const canRemoveThisPlayer =
+                isHostCurrentUser &&
+                room.status === GameRoomStatus.Waiting &&
+                p.id !== user.id &&
+                (
+                  (room.mode === RoomMode.Online && isVirtualPlayer) ||
+                  (room.mode === RoomMode.ManualInput)
+                ) &&
+                onRemovePlayer;
 
               return (
                 <div
@@ -189,80 +179,78 @@ export function PlayerListPanel({
                   onClick={canBeClicked ? () => handlePlayerCardClick(p.id) : undefined}
                   className={cardClassName}
                 >
-                  {canRemoveVirtualPlayer && (
+                  {canRemoveThisPlayer && (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="absolute top-0 right-0 h-4 w-4 text-destructive hover:bg-destructive/10 z-10 p-0.5"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onRemoveVirtualPlayer) onRemoveVirtualPlayer(p.id);
+                        if (onRemovePlayer) onRemovePlayer(p.id);
                       }}
                       title={`移除 ${p.name}`}
                     >
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   )}
-                  <div className="relative">
-                    <Avatar className="h-8 w-8 border-2 border-primary/30">
-                      <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
-                      <AvatarFallback>{p.name.charAt(0).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
-                      <Crown className="absolute -top-1 -right-1 h-3 w-3 text-yellow-500 bg-background rounded-full p-0.5" title="Captain" />
-                    )}
-                    {isSelectedForMissionByCaptain && !isOnMissionTeamForDisplay && ( // Show selection check only during captain's active selection phase
-                      <SelectedIcon className="absolute -bottom-1 -left-1 h-3 w-3 text-green-500 bg-background rounded-full p-0.5" title="Selected for Mission"/>
-                    )}
-                    {isSelectedAsCoachCandidate && (
-                      <Target className="absolute -bottom-1 -left-1 h-3 w-3 text-red-500 bg-background rounded-full p-0.5" title="Targeted Candidate"/>
-                    )}
-                  </div>
-
-                  <span className="font-medium text-center mt-0.5 truncate w-full text-xs">{p.name}</span>
-
-                  <div className="flex items-center space-x-1 mt-0.5 h-4">
-                  { (room.currentPhase === 'team_voting' || room.currentPhase === 'mission_reveal') && playerVoteInfo ? (
-                        allVotesInForCurrentTeam ? (
+                   <div className="relative mb-1"> {/* Avatar container */}
+                        <Avatar className="h-8 w-8 border-2 border-primary/30">
+                          <AvatarImage src={p.avatarUrl} alt={p.name} data-ai-hint="avatar person"/>
+                          <AvatarFallback className="text-sm">{p.name.charAt(0).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        {room.status === GameRoomStatus.InProgress && p.id === room.currentCaptainId && (
+                          <Crown className="absolute -top-1 -right-1 h-3 w-3 text-yellow-500 bg-background rounded-full p-0.5" title="队长" />
+                        )}
+                        {isSelectedForMissionByCaptain && (
+                          <SelectedIcon className="absolute -bottom-1 -left-1 h-3 w-3 text-green-500 bg-background rounded-full p-0.5" title="已选择出战"/>
+                        )}
+                        {isSelectedAsCoachCandidate && (
+                          <Target className="absolute -bottom-1 -left-1 h-3 w-3 text-red-500 bg-background rounded-full p-0.5" title="指认目标"/>
+                        )}
+                    </div>
+                  <span className="font-medium truncate text-[11px] text-center">{p.name}</span>
+                  <div className="flex items-center justify-center space-x-1 mt-0.5 h-auto min-h-[1rem] flex-wrap">
+                    {(room.currentPhase === 'team_voting' || (room.currentPhase === 'mission_reveal' && room.mode === RoomMode.Online)) && playerVoteInfo ? (
+                        (allVotesIn || room.currentPhase === 'mission_reveal') ? (
                             playerVoteInfo.vote === 'approve' ? (
-                            <Badge variant="default" className="px-1 py-0 text-[9px] bg-green-500 hover:bg-green-600 text-white" title="同意">
-                                <ThumbsUp className="h-2 w-2" />
+                            <Badge variant="default" className="px-1 py-0 text-[10px] bg-green-500 hover:bg-green-600 text-white" title="同意">
+                                <ThumbsUp className="h-2.5 w-2.5" />
                             </Badge>
                             ) : (
-                            <Badge variant="destructive" className="px-1 py-0 text-[9px]" title="反对">
-                                <ThumbsDown className="h-2 w-2" />
+                            <Badge variant="destructive" className="px-1 py-0 text-[10px]" title="反对">
+                                <ThumbsDown className="h-2.5 w-2.5" />
                             </Badge>
                             )
-                        ) : ( 
-                            votesToDisplay.some(v => v.playerId === p.id) && ( 
-                                <Badge variant="default" className="px-1 py-0 text-[9px] bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
-                                <VotedIcon className="h-2 w-2" />
+                        ) : (
+                            votesToDisplay.some(v => v.playerId === p.id) && (
+                                <Badge variant="default" className="px-1 py-0 text-[10px] bg-blue-500 hover:bg-blue-600 text-white" title="已投票">
+                                <VotedIcon className="h-2.5 w-2.5" />
                                 </Badge>
                             )
                         )
-                        ) : null}
+                    ) : null}
 
-                    {p.role && (
-                      (isCurrentUser && room.status === GameRoomStatus.InProgress) || 
-                      (room.status === GameRoomStatus.Finished) || 
-                      (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) || 
-                      (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover) 
+                    {room.mode !== RoomMode.ManualInput && p.role && (
+                      (isCurrentUser && room.status === GameRoomStatus.InProgress) ||
+                      (room.status === GameRoomStatus.Finished) ||
+                      (!isCurrentUser && currentUserRole === Role.Coach && knownUndercoversByCoach.some(kuc => kuc.id === p.id) && p.role === Role.Undercover) ||
+                      (!isCurrentUser && currentUserRole === Role.Undercover && fellowUndercovers.some(fu => fu.id === p.id) && p.role === Role.Undercover)
                     ) && (
-                      <Badge className={cn(getRoleBadgeClassName(p.role), "text-[9px]")}>
-                        {getRoleIcon(p.role, "h-2 w-2 mr-0.5")}
+                      <Badge className={cn(getRoleBadgeClassName(p.role))}>
+                        {getRoleIcon(p.role)}
                         {p.role}
                       </Badge>
                     )}
 
-                    {room.status === GameRoomStatus.Finished && missionCardPlayed && (
+                    {room.status === GameRoomStatus.Finished && room.mode !== RoomMode.ManualInput && missionCardPlayed && (
                       <Badge
                         className={cn(
-                          "px-1 py-0 text-[9px]",
-                          missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-orange-500 text-white"
+                          "px-1 py-0 text-[10px]",
+                          missionCardPlayed === 'success' ? "bg-blue-500 text-white" : "bg-red-500 text-white"
                         )}
                         title={missionCardPlayed === 'success' ? "成功" : "破坏"}
                       >
-                        {missionCardPlayed === 'success' ? <VotedIcon className="h-2 w-2" /> : <MissionCardFailIcon className="h-2 w-2" />}
+                        {missionCardPlayed === 'success' ? <VotedIcon className="h-2.5 w-2.5" /> : <MissionCardFailIcon className="h-2.5 w-2.5" />}
                       </Badge>
                     )}
                   </div>
@@ -271,7 +259,7 @@ export function PlayerListPanel({
             })}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground text-center">Waiting for players to join...</p>
+          <p className="text-sm text-muted-foreground text-center">等待玩家加入...</p>
         )}
       </CardContent>
     </Card>

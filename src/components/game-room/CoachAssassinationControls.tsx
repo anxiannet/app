@@ -1,35 +1,55 @@
 
 "use client";
 
-import type { Player } from "@/lib/types";
-import { Role } from "@/lib/types";
+import type { Player } from "@/lib/types"; // Player can remain a type-only import if only used for type annotations
+import { Role as RoleEnum, RoomMode } from "@/lib/types"; // Import Role (as RoleEnum) and RoomMode as values
 import { Button } from "@/components/ui/button";
-// import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // No longer needed
-// import { Label } from "@/components/ui/label"; // No longer needed
-// import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // No longer needed
 import { Target } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 type CoachAssassinationControlsProps = {
-  currentUserRole?: Role;
-  selectedCoachCandidateId: string | null; // Changed from selectedCoachCandidate
-  // onSetSelectedCoachCandidate: (value: string | null) => void; // No longer needed, selection handled by PlayerListPanel
-  // assassinationTargetOptions: Player[]; // No longer needed, handled by PlayerListPanel
+  roomMode: RoomMode;
+  isHostCurrentUser: boolean;
+  currentUserRole?: RoleEnum;
+  selectedCoachCandidateId: string | null;
   onConfirmCoachAssassination: () => void;
 };
 
 export function CoachAssassinationControls({
+  roomMode,
+  isHostCurrentUser,
   currentUserRole,
-  selectedCoachCandidateId, // Changed
+  selectedCoachCandidateId,
   onConfirmCoachAssassination,
 }: CoachAssassinationControlsProps) {
+
+  let showActiveControls = false;
+  let instructionText = "等待指认教练...";
+
+  if (roomMode === RoomMode.ManualInput) {
+    if (isHostCurrentUser) {
+      showActiveControls = true;
+      instructionText = "主持人请为卧底选择要指认的教练。请在上方玩家列表中选择目标。";
+    } else {
+      instructionText = "等待主持人为卧底指认教练...";
+    }
+  } else { // Online Mode
+    if (currentUserRole === RoleEnum.Undercover) {
+      showActiveControls = true;
+      instructionText = "请在上方玩家列表中选择你认为是教练的玩家。";
+    } else {
+      instructionText = "等待卧底指认教练...";
+    }
+  }
+
   return (
     <div className="space-y-4 text-center">
-      <h3 className="text-xl font-semibold flex items-center justify-center text-destructive"><Target className="mr-2 h-6 w-6" /> 卧底指认教练</h3>
-      {currentUserRole === Role.Undercover ? (
+      <h3 className="text-xl font-semibold flex items-center justify-center text-destructive">
+        <Target className="mr-2 h-6 w-6" /> 卧底指认教练
+      </h3>
+      
+      {showActiveControls ? (
         <>
-          <p className="text-muted-foreground">请在上方玩家列表中选择你认为是教练的玩家。</p>
-          {/* RadioGroup removed */}
+          <p className="text-muted-foreground">{instructionText}</p>
           <Button 
             onClick={onConfirmCoachAssassination} 
             disabled={!selectedCoachCandidateId} 
@@ -39,7 +59,7 @@ export function CoachAssassinationControls({
           </Button>
         </>
       ) : (
-        <p className="text-muted-foreground py-4">等待卧底指认教练...</p>
+        <p className="text-muted-foreground py-4">{instructionText}</p>
       )}
     </div>
   );

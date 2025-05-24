@@ -7,11 +7,22 @@ import { useAuth } from "@/contexts/auth-context";
 import { type PlayerGameRecord, Role, type VoteHistoryEntry, type Mission, type MissionCardPlay, type GeneratedFailureReason } from "@/lib/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { CalendarDays, Users, Award, Shield, Swords, HelpCircle, TrendingUp, TrendingDown, MinusCircle, ListChecks, Info, ThumbsUp, ThumbsDown, History as HistoryIcon, CheckCircle2, XCircle, AlertTriangle, Trash2 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import * as React from "react";
+import { useToast } from "@/hooks/use-toast";
 
 
 function getRoleChineseName(role: Role): string {
@@ -23,37 +34,13 @@ function getRoleChineseName(role: Role): string {
   }
 }
 
-// getRoleIcon and getRoleBadgeClassName are no longer needed for direct display of roles in history,
-// but might be kept if other parts still use them or for future reference.
-// For this change, I will comment them out to ensure they are not accidentally used for role display.
-/*
-const getRoleIcon = (role?: Role, iconSizeClass = "h-3 w-3 mr-1") => { 
-  switch (role) {
-    case Role.Undercover: return <Swords className={cn(iconSizeClass, "text-destructive")} />;
-    case Role.TeamMember: return <Shield className={cn(iconSizeClass, "text-blue-500")} />;
-    case Role.Coach: return <HelpCircle className={cn(iconSizeClass, "text-yellow-500")} />;
-    default: return null;
-  }
-};
-
-const getRoleBadgeClassName = (role?: Role): string => {
-  let baseClass = "flex items-center gap-1 text-xs px-2 py-0.5 border"; 
-  if (role === Role.TeamMember) {
-    return cn(baseClass, "bg-blue-100 text-blue-700 border-blue-300");
-  } else if (role === Role.Coach) {
-    return cn(baseClass, "bg-yellow-100 text-yellow-700 border-yellow-300");
-  } else if (role === Role.Undercover) {
-    return cn(baseClass, "bg-red-100 text-red-700 border-red-300");
-  }
-  return cn(baseClass, "bg-gray-100 text-gray-700 border-gray-300"); 
-};
-*/
-
 export default function GameHistoryPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [gameRecords, setGameRecords] = useState<PlayerGameRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showClearConfirmDialog, setShowClearConfirmDialog] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -83,12 +70,27 @@ export default function GameHistoryPage() {
     setIsLoading(false);
   }, [user, authLoading, router]);
 
+  const handleClearHistory = () => {
+    if (!user) return;
+    try {
+      const historyKey = `anxian-history-${user.id}`;
+      localStorage.removeItem(historyKey);
+      setGameRecords([]);
+      toast({ title: "游戏记录已清空", description: "您的所有游戏记录已被成功移除。" });
+    } catch (e) {
+      console.error("Failed to clear game history from localStorage:", e);
+      toast({ title: "清空失败", description: "无法清空游戏记录，请稍后再试。", variant: "destructive" });
+    }
+    setShowClearConfirmDialog(false);
+  };
+
+
   if (authLoading || isLoading) {
     return <div className="text-center py-10">加载游戏记录...</div>;
   }
 
   if (!user) {
-    return null; 
+    return null;
   }
 
   if (gameRecords.length === 0) {
@@ -112,7 +114,7 @@ export default function GameHistoryPage() {
         </p>
       </section>
 
-      <ScrollArea className="h-[calc(100vh-20rem)]">
+      <ScrollArea className="h-[calc(100vh-22rem)]"> {/* Adjusted height for button */}
         <div className="space-y-6 pr-4">
           {gameRecords.map((record, index) => (
             <Card key={record.gameInstanceId ? `record-${record.gameInstanceId}-${index}` : `record-index-${index}`} className="shadow-lg hover:shadow-xl transition-shadow">
@@ -139,7 +141,7 @@ export default function GameHistoryPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm flex items-center">
-                  <strong>你的角色:</strong> 
+                  <strong>你的角色:</strong>
                   <span className="ml-2 font-medium">{getRoleChineseName(record.myRole)}</span>
                 </div>
                 <div className="text-sm">
@@ -151,12 +153,12 @@ export default function GameHistoryPage() {
                 {record.coachAssassinationAttempt && (
                   <div className="text-xs p-2 border border-dashed rounded-md bg-muted/30">
                     <div className="font-semibold flex items-center"><Info className="mr-1 h-3 w-3"/>教练指认环节:</div>
-                    <div>目标: {record.coachAssassinationAttempt.targetPlayerName} <span className="text-muted-foreground text-xs">({getRoleChineseName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role || Role.TeamMember )})</span></div>
+                    <div>目标: {record.coachAssassinationAttempt.targetPlayerName} ({getRoleChineseName(record.playersInGame.find(p => p.id === record.coachAssassinationAttempt?.targetPlayerId)?.role || Role.TeamMember )})</div>
                     <p>结果: {record.coachAssassinationAttempt.assassinationSucceeded ? "指认成功 (卧底胜利)" : "指认失败 (战队胜利)"}</p>
                   </div>
                 )}
                 <Accordion type="multiple" className="w-full">
-                  <AccordionItem value="players-in-game">
+                  <AccordionItem value={`players-in-game-${record.gameInstanceId}`}>
                     <AccordionTrigger className="text-sm hover:no-underline">
                         <Users className="mr-2 h-4 w-4 text-muted-foreground" /> 查看当局玩家 ({record.playersInGame.length}人)
                     </AccordionTrigger>
@@ -186,7 +188,7 @@ export default function GameHistoryPage() {
                                 <div className="space-y-2">
                                     {record.missionHistory.map((mission, mIdx) => (
                                     <div key={`mission-hist-${record.gameInstanceId}-${mIdx}`} className="p-2 border rounded-md bg-muted/20 text-xs">
-                                        <p className="font-semibold">第 {mission.round} 场比赛: 
+                                        <p className="font-semibold">第 {mission.round} 场比赛:
                                         <span className={cn(mission.outcome === 'success' ? "text-green-600" : "text-red-500")}>
                                             {mission.outcome === 'success' ? " 比赛成功" : " 比赛失败"}
                                         </span>
@@ -197,15 +199,20 @@ export default function GameHistoryPage() {
                                             <span className="text-muted-foreground text-xs"> (因 {mission.failCardsPlayed} 个破坏行动而失败)</span>
                                         )}
                                         </p>
-                                        <p>出战队伍: {mission.teamPlayerIds.map(pid => {
+                                        <div className="mt-1">出战队伍: {mission.teamPlayerIds.map((pid, idx) => {
                                             const player = record.playersInGame.find(p => p.id === pid);
-                                            return player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家';
-                                        }).join(', ')}
-                                        </p>
+                                            return (
+                                                <React.Fragment key={pid}>
+                                                    {idx > 0 && ", "}
+                                                    <span className="mr-1">{player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家'}</span>
+                                                </React.Fragment>
+                                            );
+                                        }).filter(Boolean)}
+                                        </div>
                                         {mission.outcome === 'fail' && mission.cardPlays && mission.cardPlays.length > 0 && (
-                                        <p>破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
+                                        <p className="mt-1">破坏者: {mission.cardPlays.filter(cp => cp.card === 'fail').map(cp => {
                                             const player = record.playersInGame.find(p => p.id === cp.playerId);
-                                            return player ? player.name : '未知玩家'; 
+                                            return player ? player.name : '未知玩家';
                                         }).join(', ')}</p>
                                         )}
                                     </div>
@@ -213,7 +220,7 @@ export default function GameHistoryPage() {
                                 </div>
                                 </section>
                             )}
-                           
+
                             {(record.fullVoteHistory && record.fullVoteHistory.length > 0) && (
                                 <section>
                                     <ScrollArea className="h-[300px] pr-4">
@@ -244,7 +251,7 @@ export default function GameHistoryPage() {
                                                         missionOutcomeText += ` (因 ${missionForRound.failCardsPlayed} 个破坏行动而失败)`;
                                                     }
                                                 }
-                                                
+
                                                 return (
                                                     <AccordionItem value={`round-history-${record.gameInstanceId}-${roundNum}`} key={`round-history-${record.gameInstanceId}-${roundNum}`}>
                                                         <AccordionTrigger className="text-sm font-medium hover:no-underline p-2 bg-muted/50 rounded-t-md text-left">
@@ -295,9 +302,9 @@ export default function GameHistoryPage() {
                                                                     return (
                                                                     <li key={`mission-play-${record.gameInstanceId}-${roundNum}-${playIdx}`}>
                                                                         {player ? `${player.name} (${getRoleChineseName(player.role)})` : '未知玩家'}
-                                                                        : 
-                                                                        {play.card === 'success' ? 
-                                                                            <span className="ml-1 text-green-600 inline-flex items-center"><CheckCircle2 className="inline-block mr-0.5 h-3 w-3"/> 成功</span> : 
+                                                                        :
+                                                                        {play.card === 'success' ?
+                                                                            <span className="ml-1 text-green-600 inline-flex items-center"><CheckCircle2 className="inline-block mr-0.5 h-3 w-3"/> 成功</span> :
                                                                             <span className="ml-1 text-red-600 inline-flex items-center"><XCircle className="inline-block mr-0.5 h-3 w-3"/> 破坏</span>
                                                                         }
                                                                     </li>
@@ -329,11 +336,39 @@ export default function GameHistoryPage() {
           ))}
         </div>
       </ScrollArea>
-       <div className="text-center mt-8">
+       <div className="text-center mt-6 mb-2 flex flex-col sm:flex-row justify-center items-center gap-4">
           <Button onClick={() => router.push("/")} variant="outline">返回大厅</Button>
+          {gameRecords.length > 0 && (
+            <Button
+              variant="destructive"
+              onClick={() => setShowClearConfirmDialog(true)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> 清空记录
+            </Button>
+          )}
         </div>
+
+        <AlertDialog open={showClearConfirmDialog} onOpenChange={setShowClearConfirmDialog}>
+            <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>确认清空记录?</AlertDialogTitle>
+                <AlertDialogDescription>
+                此操作将永久删除您的所有游戏记录，无法撤销。您确定要继续吗？
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setShowClearConfirmDialog(false)}>取消</AlertDialogCancel>
+                <AlertDialogAction
+                    onClick={handleClearHistory}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                >
+                确认清空
+                </AlertDialogAction>
+            </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 }
 
-    
+      

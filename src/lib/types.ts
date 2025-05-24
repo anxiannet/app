@@ -1,9 +1,7 @@
 
-// import type { Timestamp } from "firebase/firestore"; // Firestore Timestamp removed
-
 export type User = {
-  id: string; 
-  name: string; 
+  id: string; // For mock login, this will be the nickname
+  name: string; // Nickname
   avatarUrl?: string;
   isAdmin?: boolean;
 };
@@ -22,6 +20,12 @@ export enum GameRoomStatus {
   Waiting = "waiting",
   InProgress = "in-progress",
   Finished = "finished",
+}
+
+export enum RoomMode {
+  Online = "online",
+  ManualInput = "manual_input",
+  OfflineKeyword = "offline_keyword", // New mode
 }
 
 export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
@@ -51,7 +55,6 @@ export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_executio
 export type PlayerVote = {
   playerId: string;
   vote: 'approve' | 'reject';
-  // reasoning?: string; // Removed AI reasoning
 };
 
 export type VoteHistoryEntry = {
@@ -63,14 +66,23 @@ export type VoteHistoryEntry = {
   outcome: 'approved' | 'rejected';
 };
 
+// For OfflineKeyword mode
+export type KeywordThemeName = string;
+export type OfflineKeywordPlayerSetup = Player & {
+  keywordTheme: KeywordThemeName;
+  successKeywords: string[];
+  failKeywords: string[];
+};
+
 export type GameRoom = {
-  id: string; 
+  id: string;
   name: string;
   players: Player[];
   maxPlayers: number;
   status: GameRoomStatus;
   hostId: string;
-  createdAt: string; // Changed from Timestamp to string for localStorage
+  createdAt: string;
+  mode: RoomMode;
 
   currentGameInstanceId?: string;
   currentCaptainId?: string;
@@ -97,6 +109,9 @@ export type GameRoom = {
 
   missionPlayerCounts?: number[];
   coachCandidateId?: string;
+
+  // For OfflineKeyword mode, stores the generated setup for display
+  offlinePlayerSetups?: OfflineKeywordPlayerSetup[];
 };
 
 export type WinningFactionType = Role.TeamMember | Role.Undercover | 'Draw' | null;
@@ -105,7 +120,7 @@ export type PlayerGameRecord = {
   gameInstanceId: string;
   roomId: string;
   roomName: string;
-  playedAt: string; 
+  playedAt: string;
   myRole: Role;
   gameOutcome: 'win' | 'loss' | 'draw';
   winningFaction: WinningFactionType;

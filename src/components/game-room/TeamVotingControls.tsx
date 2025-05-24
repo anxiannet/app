@@ -1,70 +1,154 @@
 
 "use client";
 
-import type { PlayerVote } from "@/lib/types";
+import type { Player, PlayerVote, User as AuthUser } from "@/lib/types"; // Removed RoomMode from type-only
+import { RoomMode } from "@/lib/types"; // Added RoomMode as a value import
 import { Button } from "@/components/ui/button";
-import { ThumbsUp, ThumbsDown } from "lucide-react"; 
+import { ThumbsUp, ThumbsDown, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 type TeamVotingControlsProps = {
+  roomMode: RoomMode;
+  allPlayersInRoom: Player[];
+  currentUser: AuthUser;
   votesToDisplay: PlayerVote[];
-  hasUserVotedOnCurrentTeam: boolean;
-  isCurrentUserVirtual: boolean;
-  onPlayerVote: (vote: 'approve' | 'reject') => void;
-  userVote?: 'approve' | 'reject';
+  onPlayerVote: (vote: 'approve' | 'reject') => void; // For Online mode
+  onBulkSubmitVotes: (votes: PlayerVote[]) => void; // For Manual Input mode
+  currentPhase: string | undefined; // Used to reset manualVotes if phase changes
   totalPlayerCountInRoom: number;
-  totalHumanPlayersInRoom: number; // Added prop
+  totalHumanPlayersInRoom: number;
 };
 
 export function TeamVotingControls({
+  roomMode,
+  allPlayersInRoom,
+  currentUser,
   votesToDisplay,
-  hasUserVotedOnCurrentTeam,
-  isCurrentUserVirtual,
   onPlayerVote,
-  userVote,
+  onBulkSubmitVotes,
+  currentPhase,
   totalPlayerCountInRoom,
-  totalHumanPlayersInRoom, // Use new prop
+  totalHumanPlayersInRoom,
 }: TeamVotingControlsProps) {
+  const [manualVotes, setManualVotes] = useState<{ [playerId: string]: 'approve' | 'reject' }>({});
 
-  const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom && totalPlayerCountInRoom > 0;
+  useEffect(() => {
+    if (roomMode === RoomMode.ManualInput) {
+        setManualVotes({});
+    }
+  }, [currentPhase, roomMode]);
 
-  if (allVotesIn) {
-    const approveVotes = votesToDisplay.filter(v => v.vote === 'approve').length;
-    const rejectVotes = votesToDisplay.filter(v => v.vote === 'reject').length;
-    const outcomeText = approveVotes > rejectVotes ? "队伍已批准!" : "队伍被否决!";
+  const handleManualVote = (playerId: string, vote: 'approve' | 'reject') => {
+    setManualVotes(prev => ({ ...prev, [playerId]: vote }));
+  };
 
+  const allManualVotesEntered = allPlayersInRoom.length > 0 && Object.keys(manualVotes).length === allPlayersInRoom.length;
+
+  const handleSubmitAllManualVotes = () => {
+    if (!allManualVotesEntered) return;
+    const collectedVotes: PlayerVote[] = allPlayersInRoom.map(player => ({
+      playerId: player.id,
+      vote: manualVotes[player.id] || 'reject', // Default to reject if somehow missing, though UI should prevent this
+    }));
+    onBulkSubmitVotes(collectedVotes);
+  };
+
+  const hasUserVotedOnCurrentTeam = votesToDisplay.some(v => v.playerId === currentUser.id);
+  const isCurrentUserVirtual = currentUser.id.startsWith("virtual_"); // Assuming virtual player IDs start with "virtual_"
+  const humanPlayersVotedCount = votesToDisplay.filter(v => !v.playerId.startsWith("virtual_")).length;
+  const allVotesIn = votesToDisplay.length === totalPlayerCountInRoom;
+
+  if (roomMode === RoomMode.ManualInput) {
     return (
-      <div className="text-center space-y-2 p-4">
-        <p className="text-lg font-semibold">
-          投票结果: {approveVotes} 同意, {rejectVotes} 拒绝
+      <div className="space-y-3 pt-4">
+        <h3 className="text-lg font-semibold text-center">手动输入队伍投票结果</h3>
+        <p className="text-sm text-center text-muted-foreground">
+          请为每位玩家选择其投票意向。
         </p>
-        <p className={`text-md font-bold ${approveVotes > rejectVotes ? 'text-green-600' : 'text-red-500'}`}>
-          {outcomeText}
-        </p>
-        <p className="text-sm text-muted-foreground">正在进入下一阶段...</p>
+        <ScrollArea className="h-[300px] pr-3">
+          <div className="space-y-2">
+            {allPlayersInRoom.map(player => (
+              <div key={player.id} className="flex items-center justify-between p-2 border rounded-md">
+                <div className="flex items-center space-x-2">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={player.avatarUrl} alt={player.name} data-ai-hint="avatar person"/>
+                    <AvatarFallback>{player.name.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span className="font-medium text-sm">{player.name}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    size="sm"
+                    variant={manualVotes[player.id] === 'approve' ? "default" : "outline"}
+                    onClick={() => handleManualVote(player.id, 'approve')}
+                    className={cn(
+                      manualVotes[player.id] === 'approve' ? "bg-green-500 hover:bg-green-600 text-white" : ""
+                    )}
+                  >
+                    <ThumbsUp className="mr-1 h-4 w-4" /> 同意
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={manualVotes[player.id] === 'reject' ? "destructive" : "outline"}
+                    onClick={() => handleManualVote(player.id, 'reject')}
+                  >
+                    <ThumbsDown className="mr-1 h-4 w-4" /> 拒绝
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {allPlayersInRoom.length > 0 && (
+          <Button
+            onClick={handleSubmitAllManualVotes}
+            disabled={!allManualVotesEntered}
+            className="w-full mt-4"
+          >
+            <CheckCircle2 className="mr-2 h-5 w-5" /> 提交所有投票 ({Object.keys(manualVotes).length}/{allPlayersInRoom.length})
+          </Button>
+        )}
       </div>
     );
   }
 
-  const humanPlayersVotedCount = votesToDisplay.filter(v => !v.playerId.startsWith("virtual_")).length;
-
+  // Online Mode UI
   return (
-    <div className="space-y-3 pt-4"> 
+    <div className="space-y-3 pt-4 text-center">
+      {!isCurrentUserVirtual && !hasUserVotedOnCurrentTeam && (
+        <div className="flex gap-4 justify-center">
+          <Button onClick={() => onPlayerVote('approve')} className="bg-green-500 hover:bg-green-600 text-white">
+            <ThumbsUp className="mr-2 h-5 w-5"/> 同意
+          </Button>
+          <Button onClick={() => onPlayerVote('reject')} variant="destructive">
+            <ThumbsDown className="mr-2 h-5 w-5"/> 拒绝
+          </Button>
+        </div>
+      )}
+      {hasUserVotedOnCurrentTeam && <p className="text-green-600 font-semibold">你已投票。</p>}
       
-      {votesToDisplay.length > 0 && humanPlayersVotedCount < totalHumanPlayersInRoom && totalHumanPlayersInRoom > 0 && (
-        <p className="text-xs text-center text-muted-foreground">
-          ({totalHumanPlayersInRoom - humanPlayersVotedCount} 名真实玩家未投票)
+      {allVotesIn ? (
+        <div>
+          <p className="font-semibold mt-2">
+            投票结果: {votesToDisplay.filter(v => v.vote === 'approve').length} 同意, {votesToDisplay.filter(v => v.vote === 'reject').length} 拒绝
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {votesToDisplay.filter(v => v.vote === 'approve').length > votesToDisplay.filter(v => v.vote === 'reject').length
+              ? "队伍已批准! 正在进入下一阶段..."
+              : "队伍被否决! 正在进入下一阶段..."}
+          </p>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground mt-2">
+          {totalHumanPlayersInRoom - humanPlayersVotedCount > 0
+            ? `等待 ${totalHumanPlayersInRoom - humanPlayersVotedCount} 名真实玩家投票...`
+            : "等待虚拟玩家投票..."}
         </p>
       )}
-      {!hasUserVotedOnCurrentTeam && !isCurrentUserVirtual ? (
-        <div className="flex gap-4 justify-center">
-          <Button onClick={() => onPlayerVote('approve')} className="bg-green-500 hover:bg-green-600 text-white"><ThumbsUp className="mr-2 h-5 w-5"/> 同意</Button>
-          <Button onClick={() => onPlayerVote('reject')} variant="destructive"><ThumbsDown className="mr-2 h-5 w-5"/> 拒绝</Button>
-        </div>
-      ) : (!isCurrentUserVirtual && userVote &&
-        <p className="text-center text-green-600 font-semibold">你已投票: {userVote === 'approve' ? '同意' : '拒绝'}</p>
-      )}
-      {totalHumanPlayersInRoom > 0 && humanPlayersVotedCount < totalHumanPlayersInRoom && <p className="text-sm text-center text-muted-foreground">等待其他真实玩家投票...</p>}
-      {totalHumanPlayersInRoom === 0 && votesToDisplay.length < totalPlayerCountInRoom && <p className="text-sm text-center text-muted-foreground">等待虚拟玩家投票...</p>}
     </div>
   );
 }
