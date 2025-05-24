@@ -1,9 +1,7 @@
 
-// import type { Timestamp } from "firebase/firestore"; // Firestore Timestamp removed
-
 export type User = {
-  id: string;
-  name: string;
+  id: string; // For mock login, this will be the nickname
+  name: string; // Nickname
   avatarUrl?: string;
   isAdmin?: boolean;
 };
@@ -27,6 +25,7 @@ export enum GameRoomStatus {
 export enum RoomMode {
   Online = "online",
   ManualInput = "manual_input",
+  OfflineKeyword = "offline_keyword", // New mode
 }
 
 export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
@@ -67,6 +66,14 @@ export type VoteHistoryEntry = {
   outcome: 'approved' | 'rejected';
 };
 
+// For OfflineKeyword mode
+export type KeywordThemeName = string;
+export type OfflineKeywordPlayerSetup = Player & {
+  keywordTheme: KeywordThemeName;
+  successKeywords: string[];
+  failKeywords: string[];
+};
+
 export type GameRoom = {
   id: string;
   name: string;
@@ -74,8 +81,8 @@ export type GameRoom = {
   maxPlayers: number;
   status: GameRoomStatus;
   hostId: string;
-  createdAt: string; // Changed from Timestamp to string for localStorage
-  mode: RoomMode; // Added room mode
+  createdAt: string;
+  mode: RoomMode;
 
   currentGameInstanceId?: string;
   currentCaptainId?: string;
@@ -102,6 +109,9 @@ export type GameRoom = {
 
   missionPlayerCounts?: number[];
   coachCandidateId?: string;
+
+  // For OfflineKeyword mode, stores the generated setup for display
+  offlinePlayerSetups?: OfflineKeywordPlayerSetup[];
 };
 
 export type WinningFactionType = Role.TeamMember | Role.Undercover | 'Draw' | null;
