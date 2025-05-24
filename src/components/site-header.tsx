@@ -23,15 +23,7 @@ export function SiteHeader() {
           <Button variant="ghost" asChild>
             <Link href="/">大厅</Link>
           </Button>
-          {user?.isAdmin && (
-            <Button variant="ghost" asChild>
-              <Link href="/admin/users" className="flex items-center">
-                <Users className="mr-1 h-4 w-4 sm:mr-2 sm:h-5 sm:w-5" />
-                <span className="hidden sm:inline">玩家管理</span>
-                <span className="sm:hidden">玩家</span>
-              </Link>
-            </Button>
-          )}
+          {/* Admin link removed */}
           <AuthButton />
         </nav>
       </div>

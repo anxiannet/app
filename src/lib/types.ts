@@ -3,7 +3,7 @@ export type User = {
   id: string; // For mock login, this will be the nickname
   name: string; // Nickname
   avatarUrl?: string;
-  isAdmin?: boolean;
+  // isAdmin?: boolean; // Removed isAdmin
 };
 
 export enum Role {
@@ -25,7 +25,7 @@ export enum GameRoomStatus {
 export enum RoomMode {
   Online = "online",
   ManualInput = "manual_input",
-  OfflineKeyword = "offline_keyword", // New mode
+  OfflineKeyword = "offline_keyword",
 }
 
 export type MissionOutcome = 'success' | 'fail' | 'pending' | 'sabotaged';
@@ -55,6 +55,7 @@ export type GameRoomPhase = 'team_selection' | 'team_voting' | 'mission_executio
 export type PlayerVote = {
   playerId: string;
   vote: 'approve' | 'reject';
+  // reasoning?: string; // Reasoning was previously removed
 };
 
 export type VoteHistoryEntry = {
@@ -66,7 +67,6 @@ export type VoteHistoryEntry = {
   outcome: 'approved' | 'rejected';
 };
 
-// For OfflineKeyword mode
 export type KeywordThemeName = string;
 export type OfflineKeywordPlayerSetup = Player & {
   keywordTheme: KeywordThemeName;
@@ -81,7 +81,7 @@ export type GameRoom = {
   maxPlayers: number;
   status: GameRoomStatus;
   hostId: string;
-  createdAt: string;
+  createdAt: string; // Changed from Timestamp
   mode: RoomMode;
 
   currentGameInstanceId?: string;
@@ -110,7 +110,6 @@ export type GameRoom = {
   missionPlayerCounts?: number[];
   coachCandidateId?: string;
 
-  // For OfflineKeyword mode, stores the generated setup for display
   offlinePlayerSetups?: OfflineKeywordPlayerSetup[];
 };
 
@@ -120,7 +119,7 @@ export type PlayerGameRecord = {
   gameInstanceId: string;
   roomId: string;
   roomName: string;
-  playedAt: string;
+  playedAt: string; // Changed from Timestamp
   myRole: Role;
   gameOutcome: 'win' | 'loss' | 'draw';
   winningFaction: WinningFactionType;

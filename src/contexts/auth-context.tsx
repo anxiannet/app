@@ -5,19 +5,17 @@ import type { User } from "@/lib/types";
 import { useRouter } from "next/navigation";
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { PRE_GENERATED_AVATARS } from "@/lib/game-config"; // Import from game-config
+import { PRE_GENERATED_AVATARS } from "@/lib/game-config";
 
 interface AuthContextType {
   user: User | null;
   login: (nickname: string) => Promise<void>;
-  signup: (nickname: string) => Promise<void>; // For mock, signup can be same as login
+  // signup: (nickname: string) => Promise<void>; // Signup is same as login for mock
   logout: () => Promise<void>;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// PRE_GENERATED_AVATARS moved to src/lib/game-config.ts
 
 const MOCK_USER_STORAGE_KEY = "anxian-mock-user";
 
@@ -37,19 +35,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (e) {
       console.error("Failed to load mock user from localStorage:", e);
-      localStorage.removeItem(MOCK_USER_STORAGE_KEY); // Clear corrupted data
+      localStorage.removeItem(MOCK_USER_STORAGE_KEY);
     }
     setLoading(false);
   }, []);
 
   const createMockUser = (nickname: string): User => {
-    const randomAvatar = PRE_GENERATED_AVATARS[Math.floor(Math.random() * PRE_GENERATED_AVATARS.length)];
-    const isAdmin = nickname.toLowerCase() === "admin";
+    const randomAvatarIndex = Math.floor(Math.random() * PRE_GENERATED_AVATARS.length);
+    const randomAvatar = PRE_GENERATED_AVATARS[randomAvatarIndex];
+    // const isAdmin = nickname.toLowerCase() === "admin"; // isAdmin logic removed
     return {
-      id: nickname,
+      id: nickname, // Using nickname as ID for mock
       name: nickname,
       avatarUrl: randomAvatar,
-      isAdmin: isAdmin,
+      // isAdmin: isAdmin, // isAdmin logic removed
     };
   };
 
@@ -71,10 +70,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(false);
   };
 
-  const signup = async (nickname: string) => {
-    // For mock purposes, signup is the same as login
-    await login(nickname);
-  };
+  // Signup is effectively the same as login in this mock system
+  // const signup = async (nickname: string) => {
+  //   await login(nickname);
+  // };
 
   const logout = async () => {
     setLoading(true);
@@ -86,11 +85,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
     toast({ title: "已登出" });
     setLoading(false);
-    router.push("/"); // Redirect to home or login page after logout
+    router.push("/");
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, /*signup,*/ logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

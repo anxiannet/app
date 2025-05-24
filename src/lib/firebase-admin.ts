@@ -1,43 +1,7 @@
 
-import * as admin from 'firebase-admin';
+// This file is intentionally left blank as Firebase Admin SDK functionality has been removed.
+// Keeping the file might prevent build errors if other parts of the system
+// (e.g., old import paths in build caches) still expect it to exist,
+// but its content is no longer used.
 
-// Check if GOOGLE_APPLICATION_CREDENTIALS is set in the environment,
-// especially relevant for local development or non-Firebase hosted server environments.
-if (!process.env.GOOGLE_APPLICATION_CREDENTIALS && !admin.apps.length && process.env.NODE_ENV === 'development') {
-  console.warn(
-    "Firebase Admin SDK Warning: GOOGLE_APPLICATION_CREDENTIALS environment variable is not set. " +
-    "For local development, this is required. If deploying to Firebase/Google Cloud, " +
-    "this is usually handled by Application Default Credentials."
-  );
-}
-
-if (!admin.apps.length) {
-  try {
-    console.log("Attempting to initialize Firebase Admin SDK...");
-    admin.initializeApp({
-      // When deployed to Firebase (e.g., Cloud Functions, App Hosting),
-      // the SDK automatically discovers credentials if the service account has appropriate permissions.
-      // For local development, you MUST set the GOOGLE_APPLICATION_CREDENTIALS
-      // environment variable to the path of your service account key JSON file.
-    });
-    console.log("Firebase Admin SDK initialized successfully.");
-  } catch (error) {
-    console.error('CRITICAL Firebase Admin SDK initialization error:', error);
-  }
-}
-
-// Firestore Admin db removed
-// let db: admin.firestore.Firestore;
-let authAdmin: admin.auth.Auth;
-
-try {
-  // db = admin.firestore(); // Firestore removed
-  authAdmin = admin.auth();
-} catch (error) {
-  console.error("Failed to get Auth instance from Firebase Admin. Was initializeApp successful?", error);
-  // @ts-ignore
-  authAdmin = null;
-}
-
-
-export { authAdmin, admin }; // db is not exported
+// console.warn("Firebase Admin SDK related code has been removed from this project.");
