@@ -30,6 +30,7 @@ import {
   MAX_CAPTAIN_CHANGES_PER_ROUND, 
   PRE_GENERATED_AVATARS,
   OFFLINE_KEYWORD_PRESET_TEMPLATES,
+  STANDARD_PRESET_TEMPLATES,
   MIN_PLAYERS_TO_START
 } from "@/lib/game-config";
 
@@ -48,18 +49,14 @@ export default function LobbyPage() {
       const storedRoomsRaw = localStorage.getItem(ROOMS_LOCAL_STORAGE_KEY);
       let fetchedRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
       
-      // Filter out finished rooms and empty rooms
       fetchedRooms = fetchedRooms.filter(room => 
         room.status !== GameRoomStatus.Finished && 
         room.players && 
         room.players.length > 0 &&
-        room.mode !== RoomMode.OfflineKeyword // Don't show OfflineKeyword templates here
+        room.mode !== RoomMode.OfflineKeyword && // Don't show OfflineKeyword templates here
+        room.mode !== RoomMode.ManualInput // Don't show Manual Input rooms from localStorage for now
       );
 
-      // Sort rooms: 
-      // 1. User's joined rooms first
-      // 2. Then by status (In Progress > Waiting)
-      // 3. Then by player count (descending)
       fetchedRooms.sort((a, b) => {
         const aIsJoined = user && a.players.some(p => p.id === user.id);
         const bIsJoined = user && b.players.some(p => p.id === user.id);
@@ -83,8 +80,9 @@ export default function LobbyPage() {
   }, [user]);
 
   useEffect(() => {
+    if (authLoading) return; // Wait for auth to settle before loading rooms
     loadRoomsFromLocalStorage();
-  }, [loadRoomsFromLocalStorage]);
+  }, [loadRoomsFromLocalStorage, authLoading]);
 
 
   const handleCreateRoom = async (mode: RoomMode) => {
@@ -96,7 +94,7 @@ export default function LobbyPage() {
 
     let newRoomName = "";
     if (mode === RoomMode.Online) {
-      newRoomName = `${user.name}的模拟游戏`;
+      newRoomName = `${user.name}的房间`;
     } else if (mode === RoomMode.ManualInput) {
       newRoomName = `${user.name}的线下游戏`;
     } else {
@@ -107,11 +105,13 @@ export default function LobbyPage() {
     const newRoomId = `room_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const newPlayer: Player = { id: user.id, name: user.name, avatarUrl: user.avatarUrl || PRE_GENERATED_AVATARS[0] };
     
+    const playerCountForConfig = Math.max(MIN_PLAYERS_TO_START, Math.min(10, 5)); // Default to 5 player config for missions
+
     const newRoom: GameRoom = {
       id: newRoomId,
       name: newRoomName,
       players: [newPlayer],
-      maxPlayers: 10, // Default max players for these types
+      maxPlayers: 10, 
       status: GameRoomStatus.Waiting,
       hostId: user.id,
       createdAt: new Date().toISOString(),
@@ -119,7 +119,7 @@ export default function LobbyPage() {
       teamScores: { teamMemberWins: 0, undercoverWins: 0 },
       missionHistory: [],
       fullVoteHistory: [],
-      missionPlayerCounts: MISSIONS_CONFIG[10], // Default to 10 player mission config
+      missionPlayerCounts: MISSIONS_CONFIG[playerCountForConfig] || MISSIONS_CONFIG[MIN_PLAYERS_TO_START],
       totalRounds: TOTAL_ROUNDS_PER_GAME,
       maxCaptainChangesPerRound: MAX_CAPTAIN_CHANGES_PER_ROUND,
       selectedTeamForMission: [],
@@ -133,7 +133,7 @@ export default function LobbyPage() {
       const allRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
       allRooms.push(newRoom);
       localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms));
-      loadRoomsFromLocalStorage(); // Refresh list
+      loadRoomsFromLocalStorage(); 
       router.push(`/rooms/${newRoomId}`);
     } catch (e) {
       console.error("Error saving new room to localStorage:", e);
@@ -183,7 +183,7 @@ export default function LobbyPage() {
           onClick={() => handleCreateRoom(RoomMode.Online)}
           className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
         >
-          <Gamepad2 className="mr-2 h-6 w-6" /> 模拟游戏
+          <Gamepad2 className="mr-2 h-6 w-6" /> 开始游戏
         </Button>
         <Button
           size="lg"
@@ -201,11 +201,7 @@ export default function LobbyPage() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {joinedRooms.map((room) => {
-              if (room.mode === RoomMode.OfflineKeyword) return null; 
-
               const isUserInRoom = user && room.players.some(p => p.id === user.id);
-              
-              // Condition to display: Waiting OR (In Progress AND user is in room)
               const canViewRoom = room.status === GameRoomStatus.Waiting || 
                                  (room.status === GameRoomStatus.InProgress && isUserInRoom);
               
@@ -222,7 +218,7 @@ export default function LobbyPage() {
                   key={room.id}
                   href={`/rooms/${room.id}`}
                   passHref
-                  legacyBehavior // Required for non-<a> child of Link
+                  legacyBehavior
                 >
                   <a className="block group">
                     <Card
@@ -284,7 +280,7 @@ export default function LobbyPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {OFFLINE_KEYWORD_PRESET_TEMPLATES.map((roomTemplate) => {
                const roomModeName = getRoomModeDisplayName(roomTemplate.mode);
-               if (!roomModeName) return null; 
+               if (roomTemplate.mode !== RoomMode.OfflineKeyword) return null; 
 
                const roomIcon = <KeyRoundIcon className="mr-2 h-4 w-4 text-yellow-600" />;
 
