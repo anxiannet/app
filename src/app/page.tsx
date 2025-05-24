@@ -24,7 +24,7 @@ import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { STANDARD_PRESET_TEMPLATES, OFFLINE_KEYWORD_PRESET_TEMPLATES, MISSIONS_CONFIG, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, PRE_GENERATED_AVATARS } from "@/lib/game-config";
+import { MISSIONS_CONFIG, TOTAL_ROUNDS_PER_GAME, MAX_CAPTAIN_CHANGES_PER_ROUND, PRE_GENERATED_AVATARS, OFFLINE_KEYWORD_PRESET_TEMPLATES } from "@/lib/game-config";
 
 const ROOMS_LOCAL_STORAGE_KEY = "anxian-rooms";
 
@@ -36,15 +36,13 @@ export default function LobbyPage() {
   const [localStorageRooms, setLocalStorageRooms] = useState<GameRoom[]>([]);
 
   const combinedPresetTemplates = [
-    // STANDARD_PRESET_TEMPLATES are currently for ManualInput mode or Online, we will filter these if they are ManualInput
-    ...STANDARD_PRESET_TEMPLATES.filter(template => template.mode !== RoomMode.ManualInput), // Exclude manual input standard templates
     ...OFFLINE_KEYWORD_PRESET_TEMPLATES.map(template => ({
       id: template.id,
       name: template.name,
       maxPlayers: template.playerCount,
       mode: template.mode,
-      players: [],
-      status: GameRoomStatus.Waiting,
+      players: [], // For display purposes, actual players are defined in template or added on join
+      status: GameRoomStatus.Waiting, // Presets are always waiting initially
     }))
   ];
 
@@ -54,11 +52,11 @@ export default function LobbyPage() {
         const storedRoomsRaw = localStorage.getItem(ROOMS_LOCAL_STORAGE_KEY);
         let allRooms: GameRoom[] = storedRoomsRaw ? JSON.parse(storedRoomsRaw) : [];
         
-        // Filter out finished rooms and empty rooms
         allRooms = allRooms.filter(room => 
           room.status !== GameRoomStatus.Finished &&
           room.players && 
-          room.players.length > 0
+          room.players.length > 0 &&
+          room.mode !== RoomMode.ManualInput // Do not display manual input mode rooms from local storage
         );
         
         localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(allRooms));
@@ -113,10 +111,10 @@ export default function LobbyPage() {
         missionCardPlaysForCurrentMission: [],
       };
 
-      const currentRooms = [...localStorageRooms]; // Get current rooms from state
+      const currentRooms = [...localStorageRooms]; 
       currentRooms.push(newRoom);
       localStorage.setItem(ROOMS_LOCAL_STORAGE_KEY, JSON.stringify(currentRooms));
-      setLocalStorageRooms(currentRooms); // Update local state to reflect new room
+      setLocalStorageRooms(currentRooms); 
 
       toast({
         title: "房间已创建",
@@ -124,33 +122,38 @@ export default function LobbyPage() {
       });
       router.push(`/rooms/${newRoom.id}`);
     },
-    [user, router, toast, localStorageRooms] // Added localStorageRooms as dependency
+    [user, router, toast, localStorageRooms] 
   );
 
   if (authLoading) {
     return <div className="text-center py-10">加载中...</div>;
   }
 
+  // Filter dynamically created rooms to display
   const dynamicallyCreatedRoomsToDisplay = localStorageRooms.filter(room => {
     const isPlayerInRoom = user && room.players.some(p => p.id === user.id);
-    // Filter logic: show waiting rooms, or in-progress rooms if user is part of them
-    // This includes manual input mode rooms again if they are created
+    if (room.mode === RoomMode.ManualInput) return false; // Never show manual input rooms from localStorage here
+
     if (room.status === GameRoomStatus.InProgress) {
-      return isPlayerInRoom;
+      return isPlayerInRoom; // Only show in-progress rooms if user is part of them
     }
-    return room.status === GameRoomStatus.Waiting; // Shows all waiting rooms regardless of mode
+    return room.status === GameRoomStatus.Waiting; // Shows all other waiting rooms
   }).sort((a, b) => {
+    // Prioritize rooms the user is in
     const aIsJoined = user && a.players.some(p => p.id === user.id);
     const bIsJoined = user && b.players.some(p => p.id === user.id);
     if (aIsJoined && !bIsJoined) return -1;
     if (!aIsJoined && bIsJoined) return 1;
 
+    // Then sort by status: In-Progress > Waiting
     const statusOrder = { [GameRoomStatus.InProgress]: 1, [GameRoomStatus.Waiting]: 2, [GameRoomStatus.Finished]: 3 };
     if (statusOrder[a.status] !== statusOrder[b.status]) {
       return statusOrder[a.status] - statusOrder[b.status];
     }
+    // Finally, sort by number of players (descending)
     return b.players.length - a.players.length;
   });
+
 
   const getRoomModeDisplayName = (mode?: RoomMode) => {
     switch (mode) {
@@ -172,24 +175,22 @@ export default function LobbyPage() {
         </p>
       </section>
       
-      {user && (
-        <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
-          <Button
-            size="lg"
-            onClick={() => handleCreateRoom(RoomMode.Online)}
-            className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
-          >
-            <PlusCircle className="mr-2 h-6 w-6" /> 创建模拟游戏
-          </Button>
-          <Button
+      <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-4">
+        <Button
+          size="lg"
+          onClick={() => handleCreateRoom(RoomMode.Online)}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
+        >
+          <PlusCircle className="mr-2 h-6 w-6" /> 模拟游戏
+        </Button>
+        <Button
             size="lg"
             onClick={() => handleCreateRoom(RoomMode.ManualInput)}
             className="bg-purple-600 hover:bg-purple-700 text-white transition-transform hover:scale-105 active:scale-95 shadow-md w-full sm:w-auto"
           >
             <KeyRoundIcon className="mr-2 h-6 w-6" /> 线下游戏
-          </Button>
-        </div>
-      )}
+        </Button>
+      </div>
 
       <section>
         <h2 className="text-3xl font-semibold mb-6 text-center text-foreground/80">
@@ -199,12 +200,11 @@ export default function LobbyPage() {
           <p className="text-center text-muted-foreground">暂无预设房间或可加入的房间。</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {combinedPresetTemplates.map((roomTemplate) => {
-               const isUserInThisPresetInstance = user && localStorageRooms.find(r => r.id === roomTemplate.id)?.players.some(p => p.id === user.id);
+            {combinedPresetTemplates.filter(template => template.mode === RoomMode.OfflineKeyword).map((roomTemplate) => {
                const roomModeName = getRoomModeDisplayName(roomTemplate.mode);
                if (!roomModeName) return null;
 
-               const roomIcon = roomTemplate.mode === RoomMode.OfflineKeyword ? <KeyRoundIcon className="mr-2 h-4 w-4 text-yellow-600" /> : <Users className="mr-2 h-4 w-4" />;
+               const roomIcon = <KeyRoundIcon className="mr-2 h-4 w-4 text-yellow-600" />;
               
               return (
                 <Link
@@ -216,8 +216,7 @@ export default function LobbyPage() {
                   <a className="block group">
                     <Card
                       className={cn(
-                        "hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1 cursor-pointer",
-                        isUserInThisPresetInstance && roomTemplate.mode !== RoomMode.OfflineKeyword && "border-primary ring-2 ring-primary/50"
+                        "hover:shadow-xl transition-shadow duration-300 ease-in-out transform hover:-translate-y-1 cursor-pointer"
                       )}
                     >
                       <CardHeader>
@@ -227,9 +226,7 @@ export default function LobbyPage() {
                           </CardTitle>
                           <Badge
                             variant="outline"
-                            className={cn("text-xs", 
-                              roomTemplate.mode === RoomMode.OfflineKeyword ? "border-yellow-500 text-yellow-600" : "border-blue-500 text-blue-600"
-                            )}
+                            className="text-xs border-yellow-500 text-yellow-600"
                           >
                             {roomModeName}
                           </Badge>
@@ -237,11 +234,6 @@ export default function LobbyPage() {
                         <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
                           {roomIcon}
                           {roomTemplate.maxPlayers} 人
-                          {isUserInThisPresetInstance && roomTemplate.mode !== RoomMode.OfflineKeyword && (
-                            <Badge variant="secondary" className="ml-auto text-green-700 bg-green-100 border-green-300">
-                              <CheckSquare className="mr-1 h-3 w-3"/> 已加入
-                            </Badge>
-                          )}
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-2">
@@ -266,7 +258,7 @@ export default function LobbyPage() {
                const isUserInRoom = user && room.players.some(p => p.id === user.id);
                const roomIcon = <Users className="mr-2 h-4 w-4" />;
                const roomModeName = getRoomModeDisplayName(room.mode);
-               if (!roomModeName) return null;
+               if (!roomModeName) return null; // Should not happen if mode is set
                
                return (
                 <Link
@@ -297,14 +289,14 @@ export default function LobbyPage() {
                           >
                             {room.status === GameRoomStatus.InProgress ? "游戏中" :
                              room.status === GameRoomStatus.Waiting ? "等待中" :
-                             ""}
+                             "游戏结束"}
                           </Badge>
                         </div>
                         <CardDescription className="flex items-center text-sm text-muted-foreground pt-1">
                           {roomIcon}
                           {room.players.length} / {room.maxPlayers} 玩家
-                          <Badge variant="outline" className={cn("ml-2 text-xs", getRoomModeDisplayName(room.mode) === "手动模式" ? "border-purple-500 text-purple-600" : "border-blue-500 text-blue-600")}>
-                            {getRoomModeDisplayName(room.mode)}
+                          <Badge variant="outline" className="ml-2 text-xs border-blue-500 text-blue-600">
+                            {roomModeName}
                           </Badge>
                           {isUserInRoom && (
                             <Badge variant="secondary" className="ml-auto text-green-700 bg-green-100 border-green-300">
